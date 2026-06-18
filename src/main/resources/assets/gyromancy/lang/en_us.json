@@ -1,0 +1,13 @@
+{
+  "itemGroup.gyromancy": "Example Mod Tab",
+  "block.gyromancy.example_block": "Example Block",
+  "item.gyromancy.example_item": "Example Item",
+
+  "gyromancy.configuration.title": "Gyromancy Configs",
+  "gyromancy.configuration.section.gyromancy.common.toml": "Gyromancy Configs",
+  "gyromancy.configuration.section.gyromancy.common.toml.title": "Gyromancy Configs",
+  "gyromancy.configuration.items": "Item List",
+  "gyromancy.configuration.logDirtBlock": "Log Dirt Block",
+  "gyromancy.configuration.magicNumberIntroduction": "Magic Number Text",
+  "gyromancy.configuration.magicNumber": "Magic Number"
+}
