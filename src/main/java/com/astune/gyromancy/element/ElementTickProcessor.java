@@ -1,52 +1,70 @@
 package com.astune.gyromancy.element;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.network.SyncDebugElementPacket;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 
-/**
- * Drives element concentration processing each server tick.
- * Iterates all loaded chunks with overrides and delegates to {@link ElementChunkProcessor}.
- */
-@EventBusSubscriber(modid = Gyromancy.MODID)
+import java.util.ArrayList;
+
 public final class ElementTickProcessor {
 
     private ElementTickProcessor() {}
+    private static int tick = 0;
 
-    private static int tickCounter = 0;
-
-    @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
-        tickCounter++;
-        int totalProcessed = 0;
-
+        tick++;
+        int total = 0;
         for (ServerLevel level : event.getServer().getAllLevels()) {
-            totalProcessed += processLevel(level);
+            total += process(level);
         }
+        if (tick % 20 == 0)
+            Gyromancy.LOGGER.info("[Gyromancy] tick #{}: {} chunks", tick, total);
 
-        if (totalProcessed > 0 && tickCounter % 200 == 0) {
-            Gyromancy.LOGGER.debug("[Gyromancy] Element tick: {} chunks processed",
-                    totalProcessed);
+        // Full snapshot sync every 10 ticks — collect across ALL levels,
+        // then send once so clients don't get overwritten by empty levels.
+        if (tick % 10 == 0) {
+            var poses = new ArrayList<BlockPos>();
+            var vals = new ArrayList<Long>();
+            var derivs = new ArrayList<Long>();
+
+            for (ServerLevel level : event.getServer().getAllLevels()) {
+                for (ChunkPos cp : ElementChunkEventHandler.getActiveChunkPositions(level.dimension())) {
+                    LevelChunk chunk = level.getChunk(cp.x, cp.z);
+                    if (chunk instanceof IElementChunkAccessor a && a.gyromancy$hasElementOverrides()) {
+                        for (var e : a.gyromancy$getElementOverrides().entrySet()) {
+                            poses.add(e.getKey());
+                            for (long v : e.getValue().values()) vals.add(v);
+                            for (long d : e.getValue().derivatives()) derivs.add(d);
+                        }
+                    }
+                }
+            }
+
+            long[] flatVals = new long[vals.size()];
+            long[] flatDerivs = new long[derivs.size()];
+            for (int i = 0; i < vals.size(); i++) flatVals[i] = vals.get(i);
+            for (int i = 0; i < derivs.size(); i++) flatDerivs[i] = derivs.get(i);
+            PacketDistributor.sendToAllPlayers(
+                    new SyncDebugElementPacket(poses, flatVals, flatDerivs));
         }
     }
 
-    private static int processLevel(ServerLevel level) {
-        int processed = 0;
-        for (ChunkPos chunkPos : ElementChunkEventHandler.getActiveChunkPositions(level.dimension())) {
-            // Active chunks are tracked by load/unload events, so they should be loaded
-            net.minecraft.world.level.chunk.ChunkAccess chunkAccess =
-                    level.getChunkSource().getChunk(chunkPos.x, chunkPos.z,
-                            net.minecraft.world.level.chunk.status.ChunkStatus.FULL, false);
-            if (!(chunkAccess instanceof LevelChunk chunk)) continue;
-            if (chunk instanceof IElementChunkAccessor accessor && accessor.gyromancy$hasElementOverrides()) {
-                ElementChunkProcessor.processChunk(chunk, level);
-                processed++;
+    private static int process(ServerLevel level) {
+        int n = 0;
+        if (tick % 10 == 0) {
+            for (ChunkPos cp : ElementChunkEventHandler.getActiveChunkPositions(level.dimension())) {
+                LevelChunk chunk = level.getChunk(cp.x, cp.z);
+                if (chunk instanceof IElementChunkAccessor a && a.gyromancy$hasElementOverrides()) {
+                    ElementChunkProcessor.processChunk(chunk, level);
+                    n++;
+                }
             }
         }
-        return processed;
+        return n;
     }
 }

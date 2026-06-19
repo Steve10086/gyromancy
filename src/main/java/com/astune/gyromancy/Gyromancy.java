@@ -1,14 +1,13 @@
 package com.astune.gyromancy;
 
 import com.astune.gyromancy.command.DebugCommands;
+import com.astune.gyromancy.element.ElementChunkEventHandler;
+import com.astune.gyromancy.element.ElementTickProcessor;
 import com.astune.gyromancy.registry.*;
 import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.item.CreativeModeTabs;
-import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
@@ -18,6 +17,8 @@ import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.event.level.ChunkEvent;
 
 @Mod(Gyromancy.MODID)
 public class Gyromancy {
@@ -38,30 +39,37 @@ public class Gyromancy {
         ModAttachments.ATTACHMENTS.register(modEventBus);
         ModDataComponents.DATA_COMPONENTS.register(modEventBus);
 
-        // ── NeoForge event bus (server lifecycle) ──
-        NeoForge.EVENT_BUS.register(this);
+        // ── NeoForge.EVENT_BUS — explicit (no @EventBusSubscriber) ──
+        NeoForge.EVENT_BUS.register(this); // picks up @SubscribeEvent instance methods
+
+        // Server tick for element processing
+        NeoForge.EVENT_BUS.<ServerTickEvent.Post>addListener(
+                e -> ElementTickProcessor.onServerTick(e));
+
+        // Chunk lifecycle for element tracking
+        NeoForge.EVENT_BUS.<ChunkEvent.Load>addListener(
+                e -> ElementChunkEventHandler.onChunkLoad(e));
+        NeoForge.EVENT_BUS.<ChunkEvent.Unload>addListener(
+                e -> ElementChunkEventHandler.onChunkUnload(e));
+
+        LOGGER.info("[Gyromancy] Registered on NeoForge.EVENT_BUS: tick, chunk, commands");
 
         // ── Config ──
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
-        LOGGER.info("[Gyromancy] Initializing magical array systems...");
-
-        if (Config.LOG_DIRT_BLOCK.getAsBoolean()) {
-            LOGGER.info("[Gyromancy] DIRT BLOCK >> {}", BuiltInRegistries.BLOCK.getKey(Blocks.DIRT));
-        }
-        LOGGER.info("{}{}", Config.MAGIC_NUMBER_INTRODUCTION.get(), Config.MAGIC_NUMBER.getAsInt());
-        Config.ITEM_STRINGS.get().forEach(item -> LOGGER.info("[Gyromancy] ITEM >> {}", item));
+        LOGGER.info("[Gyromancy] commonSetup — element system ready");
     }
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-        LOGGER.info("[Gyromancy] Server starting — element system initializing...");
+        LOGGER.info("[Gyromancy] Server starting");
     }
 
     @SubscribeEvent
     public void onRegisterCommands(RegisterCommandsEvent event) {
         DebugCommands.registerServer(event);
+        LOGGER.info("[Gyromancy] Server /gyromancy set registered");
     }
 }

@@ -11,8 +11,8 @@ public record ElementChangeEvent(
         Level level,
         BlockPos pos,
         ElementType element,
-        float delta,
-        float rateOfChange,
-        float previousValue,
-        float currentValue
+        long delta,
+        long rateOfChange,
+        long previousValue,
+        long currentValue
 ) {}

@@ -22,10 +22,6 @@ public record SymbolMatch(
         /** Classified role based on position and matching */
         SymbolRole role
 ) {
-    public enum SymbolRole {
-        OUTER_CIRCLE, CENTER_SYMBOL, PARAMETER_RUNE, UNKNOWN
-    }
-
     /** Returns true if this match has sufficient confidence for activation */
     public boolean isConfident(float threshold) {
         return confidence >= threshold;

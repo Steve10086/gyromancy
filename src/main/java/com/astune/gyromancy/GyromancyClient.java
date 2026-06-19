@@ -1,31 +1,49 @@
 package com.astune.gyromancy;
 
-import net.minecraft.client.Minecraft;
+import com.astune.gyromancy.client.ElementDebugRenderer;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.common.NeoForge;
 
-// This class will not load on dedicated servers. Accessing client side code from here is safe.
 @Mod(value = Gyromancy.MODID, dist = Dist.CLIENT)
-// You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
-@EventBusSubscriber(modid = Gyromancy.MODID, value = Dist.CLIENT)
 public class GyromancyClient {
-    public GyromancyClient(ModContainer container) {
-        // Allows NeoForge to create a config screen for this mod's configs.
-        // The config screen is accessed by going to the Mods screen > clicking on your mod > clicking on config.
-        // Do not forget to add translations for your config options to the en_us.json file.
-        container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
-    }
 
-    @SubscribeEvent
-    static void onClientSetup(FMLClientSetupEvent event) {
-        // Some client setup code
-        Gyromancy.LOGGER.info("HELLO FROM CLIENT SETUP");
-        Gyromancy.LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
+    public GyromancyClient(ModContainer container) {
+        container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
+
+        // ── Client commands — /gyromancy debug ──
+        NeoForge.EVENT_BUS.<RegisterClientCommandsEvent>addListener(event -> {
+            var node = Commands.literal("gyromancy")
+                    .then(Commands.literal("debug")
+                            .then(Commands.argument("state", BoolArgumentType.bool())
+                                    .executes(ctx -> {
+                                        boolean state = BoolArgumentType.getBool(ctx, "state");
+                                        ElementDebugRenderer.setEnabled(state);
+                                        ctx.getSource().sendSuccess(
+                                                () -> Component.literal("Element debug overlay: "
+                                                        + (state ? "ON" : "OFF")),
+                                                false
+                                        );
+                                        return 1;
+                                    })
+                            )
+                    );
+            event.getDispatcher().register(node);
+            Gyromancy.LOGGER.info("[Gyromancy] Client /gyromancy debug registered");
+        });
+
+        // ── Debug renderer — AFTER_PARTICLES overlay ──
+        NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(
+                e -> ElementDebugRenderer.onRenderLevelStage(e));
+
+        Gyromancy.LOGGER.info("[Gyromancy] Client handlers wired on NeoForge.EVENT_BUS");
     }
 }

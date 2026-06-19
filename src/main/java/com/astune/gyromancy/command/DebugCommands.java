@@ -3,10 +3,11 @@ package com.astune.gyromancy.command;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.element.ElementConcentrations;
 import com.astune.gyromancy.api.element.ElementType;
-import com.astune.gyromancy.client.ElementDebugRenderer;
+import com.astune.gyromancy.element.ElementChunkEventHandler;
 import com.astune.gyromancy.element.ElementStorageManager;
-import com.mojang.brigadier.arguments.BoolArgumentType;
-import com.mojang.brigadier.arguments.FloatArgumentType;
+import com.astune.gyromancy.element.IElementChunkAccessor;
+import com.astune.gyromancy.network.SyncDebugElementPacket;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
@@ -14,37 +15,35 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.server.command.EnumArgument;
 
-/**
- * Debug commands for the Gyromancy element system.
- * <ul>
- *   <li>{@code /gyromancy debug true|false} — toggle element concentration debug overlay (client-side)</li>
- *   <li>{@code /gyromancy set <element> <value> <pos>} — set element concentration at a position (server-side)</li>
- * </ul>
- */
+import java.util.ArrayList;
+import java.util.List;
+
 public final class DebugCommands {
 
     private DebugCommands() {}
-
-    // ── Server command: /gyromancy set ──
 
     public static void registerServer(RegisterCommandsEvent event) {
         var node = Commands.literal("gyromancy")
                 .then(Commands.literal("set")
                         .requires(src -> src.hasPermission(2))
                         .then(Commands.argument("element", EnumArgument.enumArgument(ElementType.class))
-                                .then(Commands.argument("value", FloatArgumentType.floatArg(0f, 1f))
+                                .then(Commands.argument("value", IntegerArgumentType.integer(0))
                                         .then(Commands.argument("pos", BlockPosArgument.blockPos())
                                                 .executes(DebugCommands::executeSet)
                                         )
                                 )
                         )
+                )
+                .then(Commands.literal("clear")
+                        .requires(src -> src.hasPermission(2))
+                        .executes(DebugCommands::executeClear)
                 );
 
         event.getDispatcher().register(node);
@@ -53,47 +52,54 @@ public final class DebugCommands {
     private static int executeSet(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         CommandSourceStack source = ctx.getSource();
         ElementType element = ctx.getArgument("element", ElementType.class);
-        float value = FloatArgumentType.getFloat(ctx, "value");
+        long value = IntegerArgumentType.getInteger(ctx, "value");
         BlockPos pos = BlockPosArgument.getLoadedBlockPos(ctx, "pos");
 
         ElementConcentrations current = ElementStorageManager.INSTANCE.get(source.getLevel(), pos);
-        ElementConcentrations updated = current.withValue(element, Math.clamp(value, 0f, 1f));
+        ElementConcentrations updated = current.withValue(element, value);
         ElementStorageManager.INSTANCE.set(source.getLevel(), pos, updated);
 
-        source.sendSuccess(() -> Component.translatable(
-                "commands.gyromancy.set.success",
-                element.name(), String.format("%.2f", value), pos.toShortString()
+        // Send to client for debug overlay
+        ServerPlayer player = source.getPlayerOrException();
+        long[] vals = updated.values();
+        long[] derivs = updated.derivatives();
+        PacketDistributor.sendToPlayer(player,
+                new SyncDebugElementPacket(List.of(pos), vals, derivs));
+
+        boolean isOverridden = ElementStorageManager.INSTANCE.isOverridden(source.getLevel(), pos);
+        Gyromancy.LOGGER.info("[Gyromancy] Set {}={} at {} | overridden={} | sent to {}",
+                element, value, pos.toShortString(), isOverridden, player.getName().getString());
+
+        source.sendSuccess(() -> Component.literal(
+                "[Gyromancy] Set " + element.name() + " = " + value + " at " + pos.toShortString()
         ), true);
 
-        Gyromancy.LOGGER.info("[Gyromancy] Set {}={} at {}", element.name(), value, pos.toShortString());
         return 1;
     }
 
-    // ── Client command: /gyromancy debug ──
+    private static int executeClear(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        int cleared = 0;
 
-    @EventBusSubscriber(modid = Gyromancy.MODID, value = Dist.CLIENT)
-    public static final class ClientCommands {
-
-        private ClientCommands() {}
-
-        @SubscribeEvent
-        static void onRegisterClientCommands(RegisterClientCommandsEvent event) {
-            var node = Commands.literal("gyromancy")
-                    .then(Commands.literal("debug")
-                            .then(Commands.argument("state", BoolArgumentType.bool())
-                                    .executes(ctx -> {
-                                        boolean state = BoolArgumentType.getBool(ctx, "state");
-                                        ElementDebugRenderer.setEnabled(state);
-                                        ctx.getSource().sendSuccess(
-                                                () -> Component.literal("Element debug overlay: " + (state ? "ON" : "OFF")),
-                                                false
-                                        );
-                                        return 1;
-                                    })
-                            )
-                    );
-
-            event.getDispatcher().register(node);
+        for (var level : source.getServer().getAllLevels()) {
+            for (ChunkPos cp : ElementChunkEventHandler.getActiveChunkPositions(level.dimension())) {
+                LevelChunk chunk = level.getChunk(cp.x, cp.z);
+                if (chunk instanceof IElementChunkAccessor a) {
+                    a.gyromancy$setElementOverrides(null);
+                    ElementChunkEventHandler.markInactive(chunk);
+                    cleared++;
+                }
+            }
         }
+
+        PacketDistributor.sendToAllPlayers(
+                new SyncDebugElementPacket(List.of(), new long[0], new long[0]));
+
+        final int finalCleared = cleared;
+        Gyromancy.LOGGER.info("[Gyromancy] Cleared {} chunks — all element overrides reset", finalCleared);
+        source.sendSuccess(() -> Component.literal(
+                "[Gyromancy] Cleared " + finalCleared + " chunks"
+        ), true);
+        return finalCleared;
     }
 }

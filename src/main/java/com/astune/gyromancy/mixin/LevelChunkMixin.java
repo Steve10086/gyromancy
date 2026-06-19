@@ -10,19 +10,16 @@ import org.spongepowered.asm.mixin.Mixin;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Mixin to LevelChunk to implement IElementChunkAccessor.
- * Delegates to the NeoForge AttachmentType for persistent storage.
- */
 @Mixin(LevelChunk.class)
 public abstract class LevelChunkMixin implements IElementChunkAccessor {
 
     @Override
     public Map<BlockPos, ElementConcentrations> gyromancy$getElementOverrides() {
         LevelChunk self = (LevelChunk) (Object) this;
-        Map<BlockPos, ElementConcentrations> data = self.getData(ModAttachments.ELEMENT_OVERRIDES.get());
-        // Return the attachment's map directly — mutations persist
-        return data;
+        if (!self.hasData(ModAttachments.ELEMENT_OVERRIDES.get())) {
+            return new HashMap<>();
+        }
+        return new HashMap<>(self.getData(ModAttachments.ELEMENT_OVERRIDES.get()));
     }
 
     @Override

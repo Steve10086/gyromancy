@@ -53,7 +53,7 @@ public final class ElementEventBus {
      */
     public static ElementEventSubscription registerThresholdListener(
             ElementType element,
-            float threshold,
+            long threshold,
             ThresholdDirection direction,
             BiConsumer<ServerLevel, ElementThresholdEvent> listener) {
 
@@ -73,7 +73,7 @@ public final class ElementEventBus {
      */
     public static ElementEventSubscription registerChangeListener(
             ElementType element,
-            float minDelta,
+            long minDelta,
             BiConsumer<ServerLevel, ElementChangeEvent> listener) {
 
         ChangeEntry entry = new ChangeEntry(minDelta, listener);
@@ -137,7 +137,7 @@ public final class ElementEventBus {
     // ── Internal types ──
 
     private record ThresholdEntry(
-            float threshold,
+            long threshold,
             ThresholdDirection direction,
             BiConsumer<ServerLevel, ElementThresholdEvent> listener
     ) {
@@ -151,7 +151,7 @@ public final class ElementEventBus {
     }
 
     private record ChangeEntry(
-            float minDelta,
+            long minDelta,
             BiConsumer<ServerLevel, ElementChangeEvent> listener
     ) {}
 

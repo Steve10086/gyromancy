@@ -1,8 +1,8 @@
 package com.astune.gyromancy.client;
 
+import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.element.ElementConcentrations;
 import com.astune.gyromancy.api.element.ElementType;
-import com.astune.gyromancy.element.ElementStorageManager;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Camera;
@@ -10,116 +10,113 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
- * Debug overlay renderer for element concentrations.
- *
- * <p>Renders a flat translucent quad on top of each overridden block,
- * colored by the dominant element and alpha-scaled by its concentration value.
- * Also renders floating text showing the element abbreviation and value.</p>
- *
- * <p>Toggle with {@code /gyromancy debug true|false}.</p>
+ * Debug overlay for element concentrations. Renders flat translucent quads.
+ * Reads from a client-side mirror map populated by {@code SyncDebugElementPacket}.
  */
-@EventBusSubscriber(value = Dist.CLIENT, modid = "gyromancy")
 public final class ElementDebugRenderer {
 
     private ElementDebugRenderer() {}
 
     private static volatile boolean enabled = false;
 
-    /** Render radius in blocks */
     private static final int RADIUS = 12;
-
-    /** Height offset above block surface for the flat overlay quad */
     private static final float OVERLAY_Y_OFFSET = 0.03f;
+    private static final long ALPHA_REFERENCE = 6000L;
+    private static final float MAX_ALPHA = 0.5f;
 
-    /** Multiplier for alpha = concentration * ALPHA_SCALE */
-    private static final float ALPHA_SCALE = 0.5f;
+    // ── Client-side mirror of overrides (populated by network packet) ──
+    private static final Map<BlockPos, ElementConcentrations> debugData = new ConcurrentHashMap<>();
 
-    // ── Element colors (ARGB) ──
     private static final int[] ELEMENT_COLORS = {
-            0xFF_7EC8E3,  // WIND  — 天蓝
-            0xFF_FF6B35,  // FIRE  — 橙红
-            0xFF_4CAF50,  // WOOD  — 绿色
-            0xFF_8D6E63,  // EARTH — 棕色
-            0xFF_FFF176,  // LIGHT — 金黄
-            0xFF_7B1FA2,  // DARK  — 紫色
-            0xFF_42A5F5,  // SPACE — 蓝色
-            0xFF_EC407A,  // TIME  — 品红
-            0xFF_26C6DA,  // MANA  — 青色
+            0xFF_7EC8E3, 0xFF_FF6B35, 0xFF_4CAF50, 0xFF_8D6E63,
+            0xFF_FFF176, 0xFF_7B1FA2, 0xFF_42A5F5, 0xFF_EC407A,
+            0xFF_26C6DA
     };
 
-    public static void setEnabled(boolean enabled) {
-        ElementDebugRenderer.enabled = enabled;
+    public static void setEnabled(boolean e) { enabled = e; }
+    public static boolean isEnabled() { return enabled; }
+
+    /** Called by the client packet handler to store a debug data point */
+    public static void putDebugData(BlockPos pos, ElementConcentrations conc) {
+        debugData.put(pos, conc);
     }
 
-    public static boolean isEnabled() {
-        return enabled;
+    /** Atomically replace the entire debug dataset (used by batch sync). */
+    public static void replaceDebugData(Map<BlockPos, ElementConcentrations> newData) {
+        debugData.clear();
+        debugData.putAll(newData);
     }
 
-    @SubscribeEvent
-    static void onRenderLevelStage(RenderLevelStageEvent event) {
+    /** Returns an unmodifiable view of debug data */
+    public static Map<BlockPos, ElementConcentrations> getDebugData() {
+        return Collections.unmodifiableMap(debugData);
+    }
+
+    public static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (!enabled) return;
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) return;
 
         Minecraft mc = Minecraft.getInstance();
-        Level level = mc.level;
-        if (level == null || mc.player == null) return;
+        if (mc.level == null || mc.player == null || debugData.isEmpty()) return;
+
+        BlockPos center = mc.player.blockPosition();
+        int minY = Math.max(mc.level.getMinBuildHeight(), center.getY() - RADIUS);
+        int maxY = Math.min(mc.level.getMaxBuildHeight(), center.getY() + RADIUS);
+
+        PoseStack poseStack = event.getPoseStack();
+        MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
+        VertexConsumer quadConsumer = bufferSource.getBuffer(RenderType.debugQuads());
 
         Camera camera = event.getCamera();
         Vec3 camPos = camera.getPosition();
-        PoseStack poseStack = event.getPoseStack();
+        int drawn = 0;
 
-        MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
-
-        BlockPos center = BlockPos.containing(camPos);
-        int minY = Math.max(level.getMinBuildHeight(), center.getY() - RADIUS);
-        int maxY = Math.min(level.getMaxBuildHeight(), center.getY() + RADIUS);
-
-        // ── Phase 1: Flat quad overlay ──
-        VertexConsumer quadConsumer = bufferSource.getBuffer(RenderType.debugQuads());
+        poseStack.pushPose();
+        poseStack.translate(-camPos.x, -camPos.y, -camPos.z);
 
         for (BlockPos pos : BlockPos.betweenClosed(
                 center.getX() - RADIUS, minY, center.getZ() - RADIUS,
                 center.getX() + RADIUS, maxY, center.getZ() + RADIUS)) {
-            if (!level.isLoaded(pos)) continue;
-            if (!ElementStorageManager.INSTANCE.isOverridden(level, pos)) continue;
+            ElementConcentrations conc = debugData.get(pos);
+            if (conc == null) continue;
 
-            ElementConcentrations conc = ElementStorageManager.INSTANCE.get(level, pos);
             int dominantIdx = findDominantElement(conc);
-            float alpha = Math.clamp(conc.values()[dominantIdx] * ALPHA_SCALE, 0.05f, 0.9f);
+            long dominantValue = conc.values()[dominantIdx];
+            float alpha = Math.clamp((float) dominantValue / (float) ALPHA_REFERENCE, 0f, 1f) * MAX_ALPHA;
+            if (alpha < 0.02f) continue;
 
             int color = ELEMENT_COLORS[dominantIdx];
             float r = ((color >> 16) & 0xFF) / 255f;
             float g = ((color >> 8) & 0xFF) / 255f;
             float b = (color & 0xFF) / 255f;
+            float x = pos.getX(), y = pos.getY() + OVERLAY_Y_OFFSET, z = pos.getZ();
 
-            float x = pos.getX();
-            float y = pos.getY() + OVERLAY_Y_OFFSET;
-            float z = pos.getZ();
-
-            quadConsumer.addVertex(x,     y, z).setColor(r, g, b, alpha);
-            quadConsumer.addVertex(x,     y, z + 1).setColor(r, g, b, alpha);
-            quadConsumer.addVertex(x + 1, y, z + 1).setColor(r, g, b, alpha);
-            quadConsumer.addVertex(x + 1, y, z).setColor(r, g, b, alpha);
+            quadConsumer.addVertex(poseStack.last(), x, y, z).setColor(r, g, b, alpha);
+            quadConsumer.addVertex(poseStack.last(), x, y, z + 1).setColor(r, g, b, alpha);
+            quadConsumer.addVertex(poseStack.last(), x + 1, y, z + 1).setColor(r, g, b, alpha);
+            quadConsumer.addVertex(poseStack.last(), x + 1, y, z).setColor(r, g, b, alpha);
+            drawn++;
         }
 
-        // ── Phase 2: End batch and optional text rendering ──
+        poseStack.popPose();
         bufferSource.endBatch();
+
+        if (drawn > 0) {
+            // Silent — working
+        }
     }
 
-    /**
-     * Finds the index of the element with the highest concentration at this position.
-     */
     private static int findDominantElement(ElementConcentrations conc) {
         int dominant = 0;
-        float maxVal = 0f;
+        long maxVal = 0;
         for (int i = 0; i < ElementType.COUNT; i++) {
             if (conc.values()[i] > maxVal) {
                 maxVal = conc.values()[i];
