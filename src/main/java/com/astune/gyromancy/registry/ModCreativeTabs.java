@@ -5,7 +5,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
-import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -24,9 +23,9 @@ public final class ModCreativeTabs {
             CREATIVE_TABS.register("gyromancy", () -> CreativeModeTab.builder()
                     .title(Component.translatable("itemGroup.gyromancy"))
                     .withTabsBefore(CreativeModeTabs.COMBAT)
-                    .icon(() -> Items.BOOK.getDefaultInstance()) // Placeholder — will use pen/ink icon
+                    .icon(() -> ModItems.DEBUG_BRUSH.get().getDefaultInstance())
                     .displayItems((parameters, output) -> {
-                        // Items added here in Phase 4+
+                        output.accept(ModItems.DEBUG_BRUSH.get());
                     })
                     .build());
 }

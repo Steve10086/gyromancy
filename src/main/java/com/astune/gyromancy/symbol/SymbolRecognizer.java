@@ -8,6 +8,7 @@ import com.astune.gyromancy.registry.GyromancyRegistries;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
 import com.astune.gyromancy.symbol.GeometricMatcher.MatchResult;
 import net.minecraft.core.Registry;
+import org.slf4j.Logger;
 
 import java.util.*;
 
@@ -23,6 +24,8 @@ import java.util.*;
  * </ol>
  */
 public final class SymbolRecognizer {
+
+    private static final Logger LOGGER = Gyromancy.LOGGER;
 
     private SymbolRecognizer() {}
 
@@ -53,28 +56,74 @@ public final class SymbolRecognizer {
             RecognizerConfig config) {
 
         if (glyph.pixels().isEmpty()) {
+            LOGGER.debug("[SymbolRecognizer] Empty glyph — no pixels to recognize");
             return Collections.emptyList();
         }
 
         // 1. Normalize the glyph to 32×32
         int[][] normalized = FloodFillExtractor.normalizeGlyph(glyph);
+        int glyphArea = glyph.pixels().size();
+        int glyphBlocks = glyph.blockCount();
+
+        LOGGER.debug("[SymbolRecognizer] Matching glyph: {} pixels across {} blocks (bbox: {},{} → {},{})",
+                glyphArea, glyphBlocks,
+                String.format("%.1f", glyph.minWorldX()), String.format("%.1f", glyph.minWorldY()),
+                String.format("%.1f", glyph.maxWorldX()), String.format("%.1f", glyph.maxWorldY()));
+
+        // Debug: print 8×8 downsampled glyph
+        printDebugGrid(normalized);
 
         // 2. Match against all templates from both registries
         List<ScoredMatch> candidates = new ArrayList<>();
+        int symbolTotal = 0, runeTotal = 0;
+        int symbolHits = 0, runeHits = 0;
 
         for (SymbolTemplate template : symbolRegistry) {
+            symbolTotal++;
             MatchResult result = GeometricMatcher.match(normalized, template);
             if (result.confidence() >= config.confidenceThreshold()) {
+                symbolHits++;
                 candidates.add(new ScoredMatch(template, result));
+                LOGGER.debug("[SymbolRecognizer] + SYMBOL {} | conf={} hu={} overlap={} edge={} | rot={}° mir={}",
+                        template.id(),
+                        String.format("%.3f", result.confidence()),
+                        String.format("%.2f", result.huScore()),
+                        String.format("%.2f", result.overlapScore()),
+                        String.format("%.2f", result.edgeScore()),
+                        String.format("%.1f", result.rotationDegrees()),
+                        result.mirrored());
+            } else if (result.confidence() > 0.2f) {
+                LOGGER.debug("[SymbolRecognizer] - SYMBOL {} below threshold | conf={} (threshold={})",
+                        template.id(),
+                        String.format("%.3f", result.confidence()),
+                        String.format("%.2f", config.confidenceThreshold()));
             }
         }
 
         for (SymbolTemplate template : runeRegistry) {
+            runeTotal++;
             MatchResult result = GeometricMatcher.match(normalized, template);
             if (result.confidence() >= config.confidenceThreshold()) {
+                runeHits++;
                 candidates.add(new ScoredMatch(template, result));
+                LOGGER.debug("[SymbolRecognizer] + RUNE   {} | conf={} hu={} overlap={} edge={} | rot={}° mir={}",
+                        template.id(),
+                        String.format("%.3f", result.confidence()),
+                        String.format("%.2f", result.huScore()),
+                        String.format("%.2f", result.overlapScore()),
+                        String.format("%.2f", result.edgeScore()),
+                        String.format("%.1f", result.rotationDegrees()),
+                        result.mirrored());
+            } else if (result.confidence() > 0.2f) {
+                LOGGER.debug("[SymbolRecognizer] - RUNE   {} below threshold | conf={} (threshold={})",
+                        template.id(),
+                        String.format("%.3f", result.confidence()),
+                        String.format("%.2f", config.confidenceThreshold()));
             }
         }
+
+        LOGGER.debug("[SymbolRecognizer] Scanned {} SYMBOL ({} hits) + {} RUNE ({} hits) -> {} candidates",
+                symbolTotal, symbolHits, runeTotal, runeHits, candidates.size());
 
         // 3. Sort by confidence descending
         candidates.sort((a, b) -> Float.compare(b.result.confidence(), a.result.confidence()));
@@ -102,10 +151,17 @@ public final class SymbolRecognizer {
         }
 
         if (!matches.isEmpty()) {
-            Gyromancy.LOGGER.debug("[SymbolRecognizer] Recognized {}: confidence={} role={}",
-                    matches.getFirst().symbolId(),
-                    String.format("%.2f", matches.getFirst().confidence()),
-                    matches.getFirst().role());
+            SymbolMatch best = matches.getFirst();
+            LOGGER.debug("[SymbolRecognizer] >> BEST MATCH: {} (conf={}, role={}, rot={}°, mir={}, scale={})",
+                    best.symbolId(),
+                    String.format("%.3f", best.confidence()),
+                    best.role(),
+                    String.format("%.1f", best.rotationDegrees()),
+                    best.mirrored(),
+                    String.format("%.2f", best.scale()));
+        } else {
+            LOGGER.debug("[SymbolRecognizer] >> NO MATCH — no template exceeded confidence threshold {}",
+                    String.format("%.2f", config.confidenceThreshold()));
         }
 
         return matches;
@@ -140,4 +196,23 @@ public final class SymbolRecognizer {
     // ═══════════════════════════════════════════════════════════════
 
     private record ScoredMatch(SymbolTemplate template, MatchResult result) {}
+
+    /** Downsample 32×32 → 8×8 and print to debug log */
+    private static void printDebugGrid(int[][] pattern) {
+        StringBuilder sb = new StringBuilder("\n[SymbolRecognizer] Glyph 8×8:\n");
+        for (int by = 0; by < 8; by++) {
+            sb.append("  ");
+            for (int bx = 0; bx < 8; bx++) {
+                int count = 0;
+                for (int y = by * 4; y < (by + 1) * 4; y++)
+                    for (int x = bx * 4; x < (bx + 1) * 4; x++)
+                        if (pattern[y][x] != 0) count++;
+                // █≥12  ▓≥8  ▒≥4  ░≥1  ·0
+                char c = count >= 12 ? '█' : count >= 8 ? '▓' : count >= 4 ? '▒' : count >= 1 ? '░' : '·';
+                sb.append(c);
+            }
+            sb.append('\n');
+        }
+        LOGGER.debug(sb.toString());
+    }
 }
