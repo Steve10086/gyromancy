@@ -84,19 +84,13 @@ public final class SymbolRecognizer {
             if (result.confidence() >= config.confidenceThreshold()) {
                 symbolHits++;
                 candidates.add(new ScoredMatch(template, result));
-                LOGGER.debug("[SymbolRecognizer] + SYMBOL {} | conf={} hu={} overlap={} edge={} | rot={}° mir={}",
+            }
+            if (result.confidence() > 0.2f) {
+                LOGGER.debug("[SymbolRecognizer] {} SYMBOL {} | conf={} fd={}",
+                        result.confidence() >= config.confidenceThreshold() ? "+" : "-",
                         template.id(),
-                        String.format("%.3f", result.confidence()),
-                        String.format("%.2f", result.huScore()),
-                        String.format("%.2f", result.overlapScore()),
-                        String.format("%.2f", result.edgeScore()),
-                        String.format("%.1f", result.rotationDegrees()),
-                        result.mirrored());
-            } else if (result.confidence() > 0.2f) {
-                LOGGER.debug("[SymbolRecognizer] - SYMBOL {} below threshold | conf={} (threshold={})",
-                        template.id(),
-                        String.format("%.3f", result.confidence()),
-                        String.format("%.2f", config.confidenceThreshold()));
+                        fmt(result.confidence()),
+                        fmt(result.fdScore()));
             }
         }
 
@@ -106,19 +100,13 @@ public final class SymbolRecognizer {
             if (result.confidence() >= config.confidenceThreshold()) {
                 runeHits++;
                 candidates.add(new ScoredMatch(template, result));
-                LOGGER.debug("[SymbolRecognizer] + RUNE   {} | conf={} hu={} overlap={} edge={} | rot={}° mir={}",
+            }
+            if (result.confidence() > 0.2f) {
+                LOGGER.debug("[SymbolRecognizer] {} RUNE   {} | conf={} fd={}",
+                        result.confidence() >= config.confidenceThreshold() ? "+" : "-",
                         template.id(),
-                        String.format("%.3f", result.confidence()),
-                        String.format("%.2f", result.huScore()),
-                        String.format("%.2f", result.overlapScore()),
-                        String.format("%.2f", result.edgeScore()),
-                        String.format("%.1f", result.rotationDegrees()),
-                        result.mirrored());
-            } else if (result.confidence() > 0.2f) {
-                LOGGER.debug("[SymbolRecognizer] - RUNE   {} below threshold | conf={} (threshold={})",
-                        template.id(),
-                        String.format("%.3f", result.confidence()),
-                        String.format("%.2f", config.confidenceThreshold()));
+                        fmt(result.confidence()),
+                        fmt(result.fdScore()));
             }
         }
 
@@ -214,5 +202,9 @@ public final class SymbolRecognizer {
             sb.append('\n');
         }
         LOGGER.debug(sb.toString());
+    }
+
+    private static String fmt(float v) {
+        return String.format("%.3f", v);
     }
 }

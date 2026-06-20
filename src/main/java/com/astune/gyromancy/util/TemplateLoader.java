@@ -41,15 +41,16 @@ public final class TemplateLoader {
     private static int[][] fromImage(BufferedImage img) {
         int w = img.getWidth();
         int h = img.getHeight();
-        int[][] pattern = new int[32][32];
+        int[][] raw = new int[32][32];
 
         for (int y = 0; y < 32 && y < h; y++) {
             for (int x = 0; x < 32 && x < w; x++) {
                 int rgb = img.getRGB(x, y) & 0xFFFFFF;
                 // black → 1, non-black → 0
-                pattern[y][x] = (rgb < 0x202020) ? 1 : 0;
+                raw[y][x] = (rgb < 0x202020) ? 1 : 0;
             }
         }
-        return pattern;
+        // Apply same normalization as drawn glyphs (center + pad)
+        return GeometryUtils.normalize(raw, 32, 32);
     }
 }

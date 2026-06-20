@@ -1,5 +1,6 @@
 package com.astune.gyromancy.api.symbol;
 
+import com.astune.gyromancy.util.GeometryUtils;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
@@ -10,41 +11,37 @@ import java.util.List;
 /**
  * Defines the canonical pattern for a symbol used in magic arrays.
  * Symbols are drawn by players and recognized via geometric pattern matching.
+ *
+ * <p>Lazily caches ART descriptor and edge histogram for fast matching.
  */
 public record SymbolTemplate(
-        /** Unique identifier for this symbol */
         ResourceLocation id,
-        /** Normalized binary pixel grid (e.g., 32×32). 1 = drawn pixel, 0 = empty */
         int[][] pattern,
-        /** Number of characteristic feature points */
         int featurePoints,
-        /** Whether rotation produces a valid variant of this symbol */
         boolean allowRotation,
-        /** Whether mirroring produces a valid (different) variant */
         boolean allowMirror,
-        /** The role this symbol typically plays in a magic array */
         SymbolRole defaultRole
 ) {
     // ── Convenience ──
 
-    public int getWidth() {
-        return pattern.length > 0 ? pattern[0].length : 0;
-    }
+    public int getWidth() { return pattern.length > 0 ? pattern[0].length : 0; }
+    public int getHeight() { return pattern.length; }
 
-    public int getHeight() {
-        return pattern.length;
+    // ── Cached descriptors (lazy, computed once, keyed by id) ──
+
+    private static final java.util.concurrent.ConcurrentHashMap<ResourceLocation, float[]> fdCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Fourier Descriptors (rotation/scale-invariant, 7 coefficients) */
+    public float[] fourierDescriptor() {
+        return fdCache.computeIfAbsent(id, k -> GeometryUtils.fourierDescriptor(pattern));
     }
 
     // ── Codec ──
 
-    /** Codec for int[][] via nested list-of-int */
     public static final Codec<int[][]> PATTERN_CODEC = Codec.list(Codec.list(Codec.INT))
-            .xmap(
-                    SymbolTemplate::listToPattern,
-                    SymbolTemplate::patternToList
-            );
+            .xmap(SymbolTemplate::listToPattern, SymbolTemplate::patternToList);
 
-    /** Full Codec for SymbolTemplate */
     public static final Codec<SymbolTemplate> CODEC = RecordCodecBuilder.create(instance ->
             instance.group(
                     ResourceLocation.CODEC.fieldOf("id").forGetter(SymbolTemplate::id),
@@ -58,25 +55,15 @@ public record SymbolTemplate(
 
     private static int[][] listToPattern(List<List<Integer>> list) {
         if (list.isEmpty()) return new int[0][0];
-        int h = list.size();
-        int w = list.getFirst().size();
-        int[][] pattern = new int[h][w];
-        for (int y = 0; y < h; y++) {
-            List<Integer> row = list.get(y);
-            for (int x = 0; x < w; x++) {
-                pattern[y][x] = row.get(x);
-            }
-        }
-        return pattern;
+        int h = list.size(), w = list.getFirst().size();
+        int[][] p = new int[h][w];
+        for (int y = 0; y < h; y++) { List<Integer> row = list.get(y); for (int x = 0; x < w; x++) p[y][x] = row.get(x); }
+        return p;
     }
 
-    private static List<List<Integer>> patternToList(int[][] pattern) {
-        List<List<Integer>> list = new ArrayList<>(pattern.length);
-        for (int[] row : pattern) {
-            List<Integer> rowList = new ArrayList<>(row.length);
-            for (int val : row) rowList.add(val);
-            list.add(rowList);
-        }
+    private static List<List<Integer>> patternToList(int[][] p) {
+        List<List<Integer>> list = new ArrayList<>(p.length);
+        for (int[] row : p) { List<Integer> r = new ArrayList<>(row.length); for (int v : row) r.add(v); list.add(r); }
         return list;
     }
 }

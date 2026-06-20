@@ -1,5 +1,8 @@
 package com.astune.gyromancy.api.array;
 
+import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.api.symbol.SymbolRole;
+import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -13,41 +16,35 @@ public class MagicArrayManager {
 
     private final Map<UUID, MagicArrayState> arrays = new HashMap<>();
     private final Map<BlockPos, UUID> positionIndex = new HashMap<>();
+    private final Map<Integer, PositionedGlyph> glyphIndex = new LinkedHashMap<>();
 
     public MagicArrayManager() {}
 
-    /** Registers a newly activated array */
+    // ═══════════════════ arrays ═══════════════════
+
     public void registerArray(MagicArrayState state) {
         arrays.put(state.getArrayId(), state);
         positionIndex.put(state.getCanvasPos(), state.getArrayId());
     }
 
-    /** Unregisters a deactivated array */
     public void unregisterArray(UUID arrayId) {
         MagicArrayState state = arrays.remove(arrayId);
-        if (state != null) {
-            positionIndex.remove(state.getCanvasPos());
-        }
+        if (state != null) positionIndex.remove(state.getCanvasPos());
     }
 
-    /** Gets the array at a specific position, if any */
     public Optional<MagicArrayState> getArrayAt(BlockPos pos) {
         UUID id = positionIndex.get(pos);
-        if (id == null) return Optional.empty();
-        return Optional.ofNullable(arrays.get(id));
+        return id != null ? Optional.ofNullable(arrays.get(id)) : Optional.empty();
     }
 
-    /** Gets an array by its ID */
     public Optional<MagicArrayState> getArray(UUID id) {
         return Optional.ofNullable(arrays.get(id));
     }
 
-    /** Returns all active arrays */
     public Collection<MagicArrayState> getAllArrays() {
         return Collections.unmodifiableCollection(arrays.values());
     }
 
-    /** Ticks all active arrays, removing any that are no longer intact */
     public void tickAll(ServerLevel level) {
         Iterator<Map.Entry<UUID, MagicArrayState>> it = arrays.entrySet().iterator();
         while (it.hasNext()) {
@@ -63,7 +60,23 @@ public class MagicArrayManager {
         }
     }
 
-    public int getActiveCount() {
-        return arrays.size();
+    public int getActiveCount() { return arrays.size(); }
+
+    // ═══════════════════ glyphs ═══════════════════
+
+    public void registerGlyph(PositionedGlyph glyph) {
+        glyphIndex.put(glyph.glyphId(), glyph);
+    }
+
+    public PositionedGlyph getGlyph(int id) {
+        return glyphIndex.get(id);
+    }
+
+    public Collection<PositionedGlyph> getAllGlyphs() {
+        return Collections.unmodifiableCollection(glyphIndex.values());
+    }
+
+    public Map<Integer, PositionedGlyph> getGlyphIndex() {
+        return glyphIndex;
     }
 }

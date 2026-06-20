@@ -1,32 +1,43 @@
 package com.astune.gyromancy.array;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.symbol.PixelPos;
+import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolRole;
+import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.symbol.*;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
 import com.astune.painter.api.CanvasData;
 import com.astune.painter.event.ServerCanvasUpdateEvent;
+import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.util.List;
 
 /**
- * Listens for Pigmentum canvas updates and kicks off the full symbol
- * detection → flood fill → recognition pipeline.
+ * Bridge between Pigmentum canvas events and the symbol recognition pipeline.
  *
- * <p>This is the bridge between Pigmentum events and Phase 3's recognition engine.
+ * <p>Flow:
+ * <ol>
+ *   <li>{@code ServerCanvasUpdateEvent} → scan for mana seeds</li>
+ *   <li>Submit seeds to {@link FloodFillScheduler} (with merging)</li>
+ *   <li>On glyph extracted → recognize</li>
+ *   <li>Interior validation → mark ONLY on success</li>
+ *   <li>Store recognized glyphs as {@link PositionedGlyph}</li>
+ *   <li>If outer circle + inner glyphs → ready for Phase 5</li>
+ * </ol>
  */
 @EventBusSubscriber(modid = Gyromancy.MODID)
 public final class MagicArrayDetector {
 
     private MagicArrayDetector() {}
 
-    /** Glyph counter for unique IDs */
-    private static int nextGlyphId = 1;
+    static {
+        FloodFillScheduler.onGlyphExtracted(MagicArrayDetector::onGlyphExtracted);
+    }
 
     @SubscribeEvent
     static void onCanvasUpdate(ServerCanvasUpdateEvent event) {
@@ -36,82 +47,94 @@ public final class MagicArrayDetector {
         Gyromancy.LOGGER.debug("[MagicArrayDetector] Canvas updated at {} ({} faces)",
                 event.getPos(), data.faces().size());
 
-        // ① Scan for mana pixel seeds
         List<PixelPos> seeds = ManaPixelDetector.scanForMana(
                 event.getPlayer().level(), event.getPos(), data);
 
-        if (seeds.isEmpty()) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] No mana seeds found at {}", event.getPos());
-            return;
-        }
+        if (seeds.isEmpty()) return;
 
-        Gyromancy.LOGGER.debug("[MagicArrayDetector] Found {} mana seed(s) at {}",
-                seeds.size(), event.getPos());
+        Gyromancy.LOGGER.debug("[MagicArrayDetector] {} mana seed(s) at {}", seeds.size(), event.getPos());
 
-        // ② Submit each seed for flood fill extraction
-        for (PixelPos seed : seeds) {
-            if (event.getPlayer().level() instanceof net.minecraft.server.level.ServerLevel sl) {
-                FloodFillScheduler.submit(sl, seed);
-            }
+        if (event.getPlayer().level() instanceof ServerLevel sl) {
+            FloodFillScheduler.submitBatch(sl, seeds);
         }
     }
 
-    /**
-     * Callback registered with FloodFillScheduler — invoked when a glyph
-     * extraction completes. Runs recognition and marks consumed pixels.
-     */
-    static {
-        FloodFillScheduler.onGlyphExtracted(MagicArrayDetector::onGlyphExtracted);
-    }
+    // ═══════════════════════════════════════════════════════════════
+    // Glyph completion callback
+    // ═══════════════════════════════════════════════════════════════
 
-    private static void onGlyphExtracted(
-            net.minecraft.server.level.ServerLevel level, ExtractedGlyph glyph) {
-
+    private static void onGlyphExtracted(ServerLevel level, ExtractedGlyph glyph) {
         Gyromancy.LOGGER.debug("[MagicArrayDetector] Glyph extracted: {} pixels across {} blocks",
                 glyph.pixels().size(), glyph.blockCount());
 
-        // ③ Check for circular structure (outer ring)
-        if (CircleStructureValidator.isCircularStructure(glyph)) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circular structure detected, validating...");
-            boolean valid = CircleStructureValidator.validateCircle(glyph, level);
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle validation: {}", valid);
-        }
-
-        // ④ Normalize and recognize
+        // 1. Recognize
         List<SymbolMatch> matches = SymbolRecognizer.recognize(glyph);
-
         if (matches.isEmpty()) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] No template matched this glyph");
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] No match — pixels NOT marked");
             return;
         }
 
-        // ⑤ Mark consumed pixels
-        int glyphId = nextGlyphId++;
-        GlyphMarker.markConsumed(glyph, glyphId, level);
+        SymbolMatch best = matches.getFirst();
+        SymbolRole role = best.role();
+        Gyromancy.LOGGER.debug("[MagicArrayDetector] Best match: {} conf={} role={}",
+                best.symbolId(), String.format("%.3f", best.confidence()), role);
 
-        // Log results
-        Gyromancy.LOGGER.debug("[MagicArrayDetector] Glyph #{} recognized:", glyphId);
-        for (SymbolMatch m : matches) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector]   {} -> conf={} role={} rot={}°",
-                    m.symbolId(),
-                    String.format("%.3f", m.confidence()),
-                    m.role(),
-                    String.format("%.1f", m.rotationDegrees()));
+        // 2. Interior validation + conditional marking
+        if (role == SymbolRole.CENTER_SYMBOL || role == SymbolRole.PARAMETER_RUNE) {
+            handleRuneMatch(level, glyph, best);
+
+        } else if (role == SymbolRole.OUTER_CIRCLE) {
+            handleCircleMatch(level, glyph, best);
+        }
+    }
+
+    // ═══════════════════════ RUNE ═══════════════════════
+    private static void handleRuneMatch(ServerLevel level, ExtractedGlyph glyph, SymbolMatch best) {
+        if (InteriorValidator.hasRawManaInside(glyph, level)) {
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} REJECTED: raw mana inside",
+                    best.symbolId());
+            return;
         }
 
-        // ⑥ If outer circle found, check for center symbol inside
-        // (Phase 5 will handle compilation from here)
-        boolean hasOuterCircle = matches.stream()
-                .anyMatch(m -> m.role() == SymbolRole.OUTER_CIRCLE);
-        boolean hasCenterSymbol = matches.stream()
-                .anyMatch(m -> m.role() == SymbolRole.CENTER_SYMBOL);
+        // Clean → mark + store
+        int id = GlyphMarker.nextGlyphId();
+        GlyphMarker.markConsumed(glyph, id, level);
 
-        if (hasOuterCircle && hasCenterSymbol) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Complete array detected! (circle + center) → Phase 5 compile");
-        } else if (hasOuterCircle) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Outer circle only — waiting for center symbol");
-        } else if (hasCenterSymbol) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Center symbol only — waiting for outer circle");
+        PositionedGlyph pg = new PositionedGlyph(
+                id, best.symbolId(), best.confidence(), best.role(),
+                glyph.pixels().iterator().next().pos(), // representative position
+                glyph.minWorldX(), glyph.maxWorldX(),
+                glyph.minWorldY(), glyph.maxWorldY()
+        );
+
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        mgr.registerGlyph(pg);
+
+        Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} ACCEPTED → glyph #{} stored",
+                best.symbolId(), id);
+    }
+
+    // ═══════════════════════ CIRCLE ═══════════════════════
+    private static void handleCircleMatch(ServerLevel level, ExtractedGlyph glyph, SymbolMatch best) {
+        if (InteriorValidator.hasRawManaInside(glyph, level)) {
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle REJECTED: raw mana inside");
+            return;
+        }
+
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        List<PositionedGlyph> innerGlyphs = InteriorValidator.findGlyphsInside(
+                glyph, level, mgr.getGlyphIndex());
+
+        if (!innerGlyphs.isEmpty()) {
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle + {} inner glyph(s) → Phase 5 ready!",
+                    innerGlyphs.size());
+            for (PositionedGlyph pg : innerGlyphs) {
+                Gyromancy.LOGGER.debug("[MagicArrayDetector]   inner: {} conf={} at {}",
+                        pg.symbolId(), String.format("%.3f", pg.confidence()), pg.worldPos());
+            }
+            // Phase 5 hook will go here
+        } else {
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle found, no inner glyphs yet — waiting");
         }
     }
 }

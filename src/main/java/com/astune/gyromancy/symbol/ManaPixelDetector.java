@@ -1,5 +1,6 @@
 package com.astune.gyromancy.symbol;
 
+import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.painter.api.CanvasData;
 import com.astune.painter.api.CanvasFace;
@@ -85,10 +86,19 @@ public final class ManaPixelDetector {
                 for (int x = 0; x < w; x++) {
                     if (isManaPixel(face, x, y) && !isMarked(face, x, y)) {
                         int color = pixels.getPixel(x, y);
-                        seeds.add(new PixelPos(pos, face.primaryFace(), x, y, color));
+                        PixelPos seed = new PixelPos(pos, face.primaryFace(), x, y, color);
+                        seeds.add(seed);
+                        Gyromancy.LOGGER.debug("[ManaSeed] + seed ({},{}) face={} pos={} color={}",
+                                x, y, face.primaryFace(), pos, String.format("0x%08X", color));
                     }
                 }
             }
+        }
+
+        if (seeds.isEmpty()) {
+            Gyromancy.LOGGER.debug("[ManaSeed] no seeds at {} ({} faces scanned)", pos, data.faces().size());
+        } else {
+            Gyromancy.LOGGER.debug("[ManaSeed] {} seed(s) total at {}", seeds.size(), pos);
         }
 
         return seeds;

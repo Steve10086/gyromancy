@@ -22,8 +22,8 @@ public final class ElementTickProcessor {
         for (ServerLevel level : event.getServer().getAllLevels()) {
             total += process(level);
         }
-        if (tick % 20 == 0)
-            Gyromancy.LOGGER.info("[Gyromancy] tick #{}: {} chunks", tick, total);
+        //if (tick % 20 == 0)
+            //Gyromancy.LOGGER.info("[Gyromancy] tick #{}: {} chunks", tick, total);
 
         // Full snapshot sync every 10 ticks — collect across ALL levels,
         // then send once so clients don't get overwritten by empty levels.
