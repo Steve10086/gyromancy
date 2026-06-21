@@ -7,59 +7,53 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class GeometryUtilsTest {
 
-    // ═══════════════════ Fourier Descriptors ═══════════════════
-
     @Test
-    @DisplayName("FD of identical shapes should have zero distance")
-    void testFdIdentical() {
+    @DisplayName("SSIM of identical images should be 1.0")
+    void testSsimIdentical() {
         int[][] img = createCircleShape();
-        float[] d1 = GeometryUtils.fourierDescriptor(img);
-        float[] d2 = GeometryUtils.fourierDescriptor(img);
-        assertEquals(0f, GeometryUtils.fdDistance(d1, d2), 0.01f);
+        assertEquals(1f, GeometryUtils.ssim(img, img), 0.01f);
     }
 
     @Test
-    @DisplayName("FD of circle vs square should differ")
-    void testFdDifferent() {
-        float[] d1 = GeometryUtils.fourierDescriptor(createCircleShape());
-        float[] d2 = GeometryUtils.fourierDescriptor(createSquareShape());
-        float dist = GeometryUtils.fdDistance(d1, d2);
-        assertTrue(dist > 0.01f,
-                "Circle vs square FD should differ, got " + dist);
+    @DisplayName("SSIM of circle vs square should be &lt; 0.9")
+    void testSsimDifferent() {
+        float s = GeometryUtils.ssim(createCircleShape(), createSquareShape());
+        assertTrue(s < 0.9f, "Circle vs square SSIM should be < 0.9, got " + s);
     }
 
     @Test
-    @DisplayName("FD score should be 1.0 for zero distance")
-    void testFdScore() {
-        assertEquals(1f, GeometryUtils.fdScore(0f), 0.01f);
-        assertTrue(GeometryUtils.fdScore(1f) < 0.6f);
+    @DisplayName("SSIM of empty vs empty should be 1.0")
+    void testSsimEmpty() {
+        int[][] e = new int[32][32];
+        assertEquals(1f, GeometryUtils.ssim(e, e), 0.01f);
     }
 
     @Test
-    @DisplayName("FD of symmetric shapes (circle) should be repeatable")
-    void testFdCircleRepeatable() {
-        float[] d1 = GeometryUtils.fourierDescriptor(createCircleShape());
-        float[] d2 = GeometryUtils.fourierDescriptor(createCircleShape());
-        assertArrayEquals(d1, d2, 0.001f);
-    }
-
-    // ═══════════════════ Boundary tracing ═══════════════════
-
-    @Test
-    @DisplayName("traceBoundary of circle should produce 50+ points")
-    void testBoundaryCircle() {
-        var contour = GeometryUtils.traceBoundary(createCircleShape());
-        assertTrue(contour.size() > 50, "Circle boundary should have 50+ points, got " + contour.size());
+    @DisplayName("SSIM of full vs empty should be low")
+    void testSsimFullVsEmpty() {
+        int[][] e = new int[32][32];
+        int[][] f = new int[32][32];
+        for (int y = 0; y < 32; y++) for (int x = 0; x < 32; x++) f[y][x] = 1;
+        assertTrue(GeometryUtils.ssim(e, f) < 0.1f);
     }
 
     @Test
-    @DisplayName("traceBoundary of empty image should be empty")
-    void testBoundaryEmpty() {
-        var contour = GeometryUtils.traceBoundary(new int[32][32]);
-        assertTrue(contour.isEmpty());
+    @DisplayName("PCA of horizontal bar should give angle near 0")
+    void testPcaHorizontal() {
+        int[][] img = horizontalBar();
+        var pca = GeometryUtils.computePCA(img);
+        assertTrue(pca.angleDegrees() < 20 || pca.angleDegrees() > 160,
+                "Horizontal bar angle should be 0±20 or 180±20, got " + pca.angleDegrees());
     }
 
-    // ═══════════════════ Bounding box & centroid ═══════════════════
+    @Test
+    @DisplayName("PCA of vertical bar should give angle near 90")
+    void testPcaVertical() {
+        int[][] img = verticalBar();
+        var pca = GeometryUtils.computePCA(img);
+        assertTrue(pca.angleDegrees() > 70 && pca.angleDegrees() < 110,
+                "Vertical bar angle should be 90±20, got " + pca.angleDegrees());
+    }
 
     @Test
     @DisplayName("Bounding box should be correct")
@@ -80,13 +74,13 @@ class GeometryUtilsTest {
         assertEquals(15.5, c[1], 0.5);
     }
 
-    // ═══════════════════ Helpers ═══════════════════
+    // helpers
 
     private static int[][] createSquareShape() {
         int[][] img = new int[32][32];
         int m = 6, s = 20;
         for (int y = m; y < m + s; y++)
-            for (int x = m; x < m + s; x++)  // hollow: outline only
+            for (int x = m; x < m + s; x++)
                 if (y == m || y == m + s - 1 || x == m || x == m + s - 1) img[y][x] = 1;
         return img;
     }
@@ -99,6 +93,18 @@ class GeometryUtilsTest {
                 double d = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
                 if (d >= inner && d <= outer) img[y][x] = 1;
             }
+        return img;
+    }
+
+    private static int[][] horizontalBar() {
+        int[][] img = new int[32][32];
+        for (int x = 4; x < 28; x++) { img[14][x] = 1; img[15][x] = 1; img[16][x] = 1; }
+        return img;
+    }
+
+    private static int[][] verticalBar() {
+        int[][] img = new int[32][32];
+        for (int y = 4; y < 28; y++) { img[y][14] = 1; img[y][15] = 1; img[y][16] = 1; }
         return img;
     }
 }

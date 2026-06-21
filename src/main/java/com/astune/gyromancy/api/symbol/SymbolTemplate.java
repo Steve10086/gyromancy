@@ -27,15 +27,38 @@ public record SymbolTemplate(
     public int getWidth() { return pattern.length > 0 ? pattern[0].length : 0; }
     public int getHeight() { return pattern.length; }
 
-    // ── Cached descriptors (lazy, computed once, keyed by id) ──
+    // ── Cached descriptors (lazy, computed once per template) ──
 
-    private static final java.util.concurrent.ConcurrentHashMap<ResourceLocation, float[]> fdCache =
+    /** Combined cache: contour + TF + CDF + corners computed once */
+    private record TemplateDescriptors(GeometryUtils.Contour contour, double[] tf,
+                                       double[] cdf,
+                                       List<GeometryUtils.Corner> corners) {}
+
+    private static final java.util.concurrent.ConcurrentHashMap<ResourceLocation, TemplateDescriptors> descCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<ResourceLocation, GeometryUtils.PCAResult> pcaCache =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    /** Fourier Descriptors (rotation/scale-invariant, 7 coefficients) */
-    public float[] fourierDescriptor() {
-        return fdCache.computeIfAbsent(id, k -> GeometryUtils.fourierDescriptor(pattern));
+    private TemplateDescriptors descriptors() {
+        return descCache.computeIfAbsent(id, k -> {
+            GeometryUtils.Contour contour = GeometryUtils.traceContour(pattern);
+            double[] tf = GeometryUtils.turningFunction(contour, 72);
+            double[] cdf = GeometryUtils.centroidDistanceFunction(contour, 72);
+            GeometryUtils.Contour thinned = GeometryUtils.traceThinnedContour(pattern);
+            List<GeometryUtils.Corner> corners = GeometryUtils.detectCorners(thinned, 4);
+            return new TemplateDescriptors(contour, tf, cdf, corners);
+        });
     }
+
+    public GeometryUtils.PCAResult pca() {
+        return pcaCache.computeIfAbsent(id, k -> GeometryUtils.computePCA(pattern));
+    }
+
+    public double[] turningFunction() { return descriptors().tf(); }
+    public double[] centroidDistanceFunction() { return descriptors().cdf(); }
+    public List<GeometryUtils.Corner> corners() { return descriptors().corners(); }
+
+    public static void clearCaches() { pcaCache.clear(); descCache.clear(); }
 
     // ── Codec ──
 

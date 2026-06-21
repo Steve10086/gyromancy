@@ -147,6 +147,8 @@ configurations {
     runtimeClasspath.extendsFrom localRuntime
 }
 
+sourceSets { test { compileClasspath += sourceSets.main.compileClasspath; runtimeClasspath += sourceSets.main.runtimeClasspath } }
+
 dependencies {
     implementation "maven.modrinth:pigmentum:0.5.7-1beta"
     // Example optional mod dependency with JEI

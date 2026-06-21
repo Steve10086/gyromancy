@@ -36,7 +36,7 @@ public final class SymbolRecognizer {
             /** Minimum confidence to accept a match (default 0.65) */
             float confidenceThreshold
     ) {
-        public static final RecognizerConfig DEFAULT = new RecognizerConfig(0.65f);
+        public static final RecognizerConfig DEFAULT = new RecognizerConfig(0.5f);
     }
 
     /**
@@ -70,7 +70,6 @@ public final class SymbolRecognizer {
                 String.format("%.1f", glyph.minWorldX()), String.format("%.1f", glyph.minWorldY()),
                 String.format("%.1f", glyph.maxWorldX()), String.format("%.1f", glyph.maxWorldY()));
 
-        // Debug: print 8×8 downsampled glyph
         printDebugGrid(normalized);
 
         // 2. Match against all templates from both registries
@@ -85,13 +84,11 @@ public final class SymbolRecognizer {
                 symbolHits++;
                 candidates.add(new ScoredMatch(template, result));
             }
-            if (result.confidence() > 0.2f) {
-                LOGGER.debug("[SymbolRecognizer] {} SYMBOL {} | conf={} fd={}",
-                        result.confidence() >= config.confidenceThreshold() ? "+" : "-",
-                        template.id(),
-                        fmt(result.confidence()),
-                        fmt(result.fdScore()));
-            }
+            LOGGER.debug("[SymbolRecognizer] {} SYMBOL {} | conf={} tf={}",
+                    result.confidence() >= config.confidenceThreshold() ? "+" : "-",
+                    template.id(),
+                    fmt(result.confidence()),
+                    fmt(result.tfScore()));
         }
 
         for (SymbolTemplate template : runeRegistry) {
@@ -101,13 +98,11 @@ public final class SymbolRecognizer {
                 runeHits++;
                 candidates.add(new ScoredMatch(template, result));
             }
-            if (result.confidence() > 0.2f) {
-                LOGGER.debug("[SymbolRecognizer] {} RUNE   {} | conf={} fd={}",
-                        result.confidence() >= config.confidenceThreshold() ? "+" : "-",
-                        template.id(),
-                        fmt(result.confidence()),
-                        fmt(result.fdScore()));
-            }
+            LOGGER.debug("[SymbolRecognizer] {} RUNE   {} | conf={} tf={}",
+                    result.confidence() >= config.confidenceThreshold() ? "+" : "-",
+                    template.id(),
+                    fmt(result.confidence()),
+                    fmt(result.tfScore()));
         }
 
         LOGGER.debug("[SymbolRecognizer] Scanned {} SYMBOL ({} hits) + {} RUNE ({} hits) -> {} candidates",
@@ -186,7 +181,7 @@ public final class SymbolRecognizer {
     private record ScoredMatch(SymbolTemplate template, MatchResult result) {}
 
     /** Downsample 32×32 → 8×8 and print to debug log */
-    private static void printDebugGrid(int[][] pattern) {
+    static void printDebugGrid(int[][] pattern) {
         StringBuilder sb = new StringBuilder("\n[SymbolRecognizer] Glyph 8×8:\n");
         for (int by = 0; by < 8; by++) {
             sb.append("  ");
