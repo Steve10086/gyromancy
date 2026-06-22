@@ -29,10 +29,16 @@ public record SymbolTemplate(
 
     // ── Cached descriptors (lazy, computed once per template) ──
 
-    /** Combined cache: contour + TF + CDF + corners computed once */
+    /** Combined cache: all precomputed descriptors + self-reference distances */
     private record TemplateDescriptors(GeometryUtils.Contour contour, double[] tf,
                                        double[] cdf,
-                                       List<GeometryUtils.Corner> corners) {}
+                                       double[] curv,
+                                       List<GeometryUtils.Corner> corners,
+                                       GeometryUtils.SkeletonGraph graph,
+                                       float[] edgeWeights,
+                                       int trueCycleCount,
+                                       double curvSelfDist,
+                                       double cdfSelfDist) {}
 
     private static final java.util.concurrent.ConcurrentHashMap<ResourceLocation, TemplateDescriptors> descCache =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -41,13 +47,58 @@ public record SymbolTemplate(
 
     private TemplateDescriptors descriptors() {
         return descCache.computeIfAbsent(id, k -> {
-            GeometryUtils.Contour contour = GeometryUtils.traceContour(pattern);
+            // Topology from raw pattern (pre-normalize — preserves true structure)
+            int trueCycles = GeometryUtils.detectTrueCycles(pattern);
+
+            // Prune #1: clean raw skeleton (removes drawing noise before normalize)
+            int[][] rawSkel = GeometryUtils.thin(pattern);
+            int[][] rawPruned = GeometryUtils.pruneSkeleton(rawSkel, 0.04);
+
+            // Metrics & graph from normalized pattern
+            int[][] norm = GeometryUtils.normalize(pattern, 32, 32);
+
+            // Prune #2: build graph from normalized + cleaned skeleton
+            int[][] normSkel = GeometryUtils.thin(norm);
+            int[][] normPruned = GeometryUtils.pruneSkeleton(normSkel, 0.04);
+            GeometryUtils.SkeletonGraph graph = GeometryUtils.buildSkeletonGraph(normPruned);
+            float[] weights = computeEdgeWeights(graph);
+
+            GeometryUtils.Contour contour = GeometryUtils.traceContour(norm);
             double[] tf = GeometryUtils.turningFunction(contour, 72);
             double[] cdf = GeometryUtils.centroidDistanceFunction(contour, 72);
-            GeometryUtils.Contour thinned = GeometryUtils.traceThinnedContour(pattern);
+            double[] curv = GeometryUtils.curvatureFromTurningFunction(tf, 1.5);
+            GeometryUtils.Contour thinned = GeometryUtils.traceThinnedContour(norm);
             List<GeometryUtils.Corner> corners = GeometryUtils.detectCorners(thinned, 4);
-            return new TemplateDescriptors(contour, tf, cdf, corners);
+
+            // Precomputed curv for use in match() (avoids re-deriving from TF)
+            // and curvature energy as intrinsic complexity measure
+            double curvEnergy = 0;
+            for (double c : curv) curvEnergy += c * c;
+            curvEnergy = Math.sqrt(curvEnergy / curv.length); // RMS curvature
+
+            double cdfEnergy = 0;
+            for (double c : cdf) cdfEnergy += c * c;
+            cdfEnergy = Math.sqrt(cdfEnergy / cdf.length); // RMS CDF
+
+            return new TemplateDescriptors(contour, tf, cdf, curv, corners, graph,
+                    weights, trueCycles, curvEnergy, cdfEnergy);
         });
+    }
+
+    /** Precompute template edge importance weights */
+    private static float[] computeEdgeWeights(GeometryUtils.SkeletonGraph graph) {
+        var edges = graph.edges();
+        int n = edges.size();
+        float[] w = new float[n];
+        if (n == 0) return w;
+        int totalLen = graph.totalLength();
+        for (int i = 0; i < n; i++) {
+            double ratio = (double) edges.get(i).pathLength() / Math.max(1, totalLen);
+            if (ratio > 0.25) w[i] = 1.0f;
+            else if (ratio > 0.10) w[i] = 0.6f;
+            else w[i] = 0.2f;
+        }
+        return w;
     }
 
     public GeometryUtils.PCAResult pca() {
@@ -57,6 +108,12 @@ public record SymbolTemplate(
     public double[] turningFunction() { return descriptors().tf(); }
     public double[] centroidDistanceFunction() { return descriptors().cdf(); }
     public List<GeometryUtils.Corner> corners() { return descriptors().corners(); }
+    public GeometryUtils.SkeletonGraph skeletonGraph() { return descriptors().graph(); }
+    public float[] edgeWeights() { return descriptors().edgeWeights(); }
+    public int trueCycleCount() { return descriptors().trueCycleCount(); }
+    public double[] curvature() { return descriptors().curv(); }
+    public double curvEnergy() { return descriptors().curvSelfDist(); }
+    public double cdfEnergy() { return descriptors().cdfSelfDist(); }
 
     public static void clearCaches() { pcaCache.clear(); descCache.clear(); }
 

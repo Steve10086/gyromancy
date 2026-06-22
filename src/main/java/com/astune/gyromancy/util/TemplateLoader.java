@@ -50,7 +50,8 @@ public final class TemplateLoader {
                 raw[y][x] = (rgb < 0x202020) ? 1 : 0;
             }
         }
-        // Apply same normalization as drawn glyphs (center + pad)
-        return GeometryUtils.normalize(raw, 32, 32);
+        // Return raw binary — topology extracted from raw before normalization.
+        // Metric descriptors (TF, CDF, curv) normalize internally via GeometryUtils.normalize().
+        return raw;
     }
 }

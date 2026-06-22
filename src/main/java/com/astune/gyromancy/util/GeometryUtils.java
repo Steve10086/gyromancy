@@ -1,8 +1,11 @@
 package com.astune.gyromancy.util;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Static geometric computation utilities for the symbol recognition engine.
@@ -99,7 +102,7 @@ public final class GeometryUtils {
     /**
      * Upscales a binary image by replicating pixels (nearest-neighbor).
      */
-    private static int[][] upscale(int[][] src, int factor) {
+    public static int[][] upscale(int[][] src, int factor) {
         int sh = src.length, sw = sh > 0 ? src[0].length : 0;
         int[][] dst = new int[sh * factor][sw * factor];
         for (int y = 0; y < sh; y++)
@@ -571,6 +574,89 @@ public final class GeometryUtils {
         return totalDist / M;
     }
 
+    // ═══════════════════ Corner Graph Topology ═══════════════════
+
+    /**
+     * Computes the sorted, max-normalized pairwise Euclidean distance
+     * signature of corner points. Rotation/translation/scale invariant.
+     *
+     * <p>For N corners, computes all N(N-1)/2 pairwise distances,
+     * sorts ascending, normalizes by max distance, and resamples
+     * to {@code targetLen} equally-spaced values.
+     *
+     * <p>Two shapes with similar corner spatial arrangements will have
+     * similar sorted distance distributions, regardless of contour
+     * traversal order or rotation.
+     *
+     * @param corners   detected corner points (in original image coords)
+     * @param targetLen output signature length (e.g. 15)
+     * @return sorted, normalized distance ratios [0..1], length targetLen
+     */
+    public static double[] cornerDistanceSignature(List<Corner> corners, int targetLen) {
+        int n = corners.size();
+        if (n < 2) {
+            // 0 or 1 corner → no pairwise distances → flat signature
+            double[] flat = new double[targetLen];
+            if (n == 1) java.util.Arrays.fill(flat, 0);
+            return flat;
+        }
+
+        // All pairwise Euclidean distances (in original 32×32 image coords)
+        int k = n * (n - 1) / 2;
+        double[] dists = new double[k];
+        int idx = 0;
+        for (int i = 0; i < n; i++) {
+            Corner ci = corners.get(i);
+            for (int j = i + 1; j < n; j++) {
+                Corner cj = corners.get(j);
+                double dx = ci.x() - cj.x(), dy = ci.y() - cj.y();
+                dists[idx++] = Math.sqrt(dx * dx + dy * dy);
+            }
+        }
+
+        java.util.Arrays.sort(dists);
+        double maxDist = dists[k - 1];
+        if (maxDist < 1e-9) return new double[targetLen];
+        for (int i = 0; i < k; i++) dists[i] /= maxDist;
+
+        // Linear interpolation to targetLen
+        return decimate(dists, targetLen);
+    }
+
+    /**
+     * Computes the sorted absolute curvature (turning angle) signature
+     * of corner points. Captures the distribution of corner sharpness
+     * independent of rotation.
+     *
+     * @param corners   detected corner points
+     * @param targetLen output signature length (e.g. 10)
+     * @return sorted curvature magnitudes, length targetLen
+     */
+    public static double[] cornerAngleSignature(List<Corner> corners, int targetLen) {
+        int n = corners.size();
+        double[] flat = new double[targetLen];
+        if (n == 0) return flat;
+        if (n == 1) { java.util.Arrays.fill(flat, Math.abs(corners.get(0).curvature())); return flat; }
+
+        double[] angles = new double[n];
+        for (int i = 0; i < n; i++)
+            angles[i] = Math.abs(corners.get(i).curvature());
+        java.util.Arrays.sort(angles);
+        return decimate(angles, targetLen);
+    }
+
+    /**
+     * L2 (Euclidean) distance between two equal-length arrays.
+     */
+    public static double l2Norm(double[] a, double[] b) {
+        double sum = 0;
+        for (int i = 0; i < a.length; i++) {
+            double d = a[i] - b[i];
+            sum += d * d;
+        }
+        return Math.sqrt(sum) / a.length;
+    }
+
     // ═══════════════════ Curvature Function ═══════════════════
 
     /**
@@ -924,6 +1010,567 @@ public final class GeometryUtils {
             for (int val : row)
                 if (val != 0) area++;
         return area;
+    }
+
+    // ═══════════════════ Skeleton Graph ═══════════════════
+
+    /** Type of a graph node on the skeleton */
+    public enum NodeType { ENDPOINT, JUNCTION, CORNER }
+
+    /** A node in the skeleton graph */
+    public record GraphNode(int id, int x, int y, int degree, NodeType type) {}
+
+    /** An edge connecting two nodes along the skeleton, with curvature profile */
+    public record GraphEdge(int fromId, int toId, int pathLength, List<int[]> path,
+                            double[] curvatureProfile, double totalCurvature,
+                            double curvatureStd, int inflectionCount) {}
+
+    /** Full skeleton graph */
+    public record SkeletonGraph(List<GraphNode> nodes, List<GraphEdge> edges, int totalLength) {
+        public int nodeCount() { return nodes.size(); }
+        public int edgeCount() { return edges.size(); }
+        public List<Integer> degreeSequence() {
+            return nodes.stream().map(n -> n.degree).sorted().toList();
+        }
+        public int endpointCount() {
+            return (int) nodes.stream().filter(n -> n.type == NodeType.ENDPOINT).count();
+        }
+        /** Number of enclosed regions (cycles) = E - V + 1 for connected planar graph */
+        public int cycleCount() { return Math.max(0, edges.size() - nodes.size() + 1); }
+    }
+
+    /**
+     * Counts true enclosed regions in a skeletonized binary image using
+     * flood-fill on background pixels. A true enclosed region is a
+     * 4-connected component of background (0-valued) pixels that:
+     * <ol>
+     *   <li>does not touch the image border, and</li>
+     *   <li>has area > 10 pixels (filters micro-closures from thinning/hand-drawn artifacts)</li>
+     * </ol>
+     *
+     * <p>Uses 4-connected background fill (correct topological dual to
+     * 8-connected skeleton — Rosenfeld digital topology).
+     *
+     * @param skeleton thinned binary image (1=foreground skeleton, 0=background)
+     * @return number of true enclosed regions with area > 10
+     */
+    public static int detectTrueCycles(int[][] skeleton) {
+        int h = skeleton.length, w = h > 0 ? skeleton[0].length : 0;
+        if (w == 0) return 0;
+
+        boolean[][] visited = new boolean[h][w];
+        int trueCycles = 0;
+
+        // 4-connected directions
+        int[][] DIRS4 = {{1,0},{-1,0},{0,1},{0,-1}};
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (skeleton[y][x] != 0 || visited[y][x]) continue;
+
+                // BFS flood-fill this background component
+                ArrayDeque<int[]> queue = new ArrayDeque<>();
+                queue.add(new int[]{x, y});
+                visited[y][x] = true;
+
+                boolean touchesBorder = false;
+                int area = 0;
+
+                while (!queue.isEmpty()) {
+                    int[] p = queue.pollFirst();
+                    int cx = p[0], cy = p[1];
+                    area++;
+
+                    if (cx == 0 || cx == w - 1 || cy == 0 || cy == h - 1)
+                        touchesBorder = true;
+
+                    for (int[] d : DIRS4) {
+                        int nx = cx + d[0], ny = cy + d[1];
+                        if (nx >= 0 && nx < w && ny >= 0 && ny < h
+                                && skeleton[ny][nx] == 0 && !visited[ny][nx]) {
+                            visited[ny][nx] = true;
+                            queue.add(new int[]{nx, ny});
+                        }
+                    }
+                }
+
+                if (!touchesBorder && area > 10)
+                    trueCycles++;
+            }
+        }
+        return trueCycles;
+    }
+
+    /**
+     * Returns the area of the largest enclosed region in the skeleton.
+     * Returns 0 if no enclosed region exists.
+     * Useful as a noise gate: legitimate shapes have large enclosed areas.
+     */
+    public static int maxEnclosedArea(int[][] skeleton) {
+        int h = skeleton.length, w = h > 0 ? skeleton[0].length : 0;
+        if (w == 0) return 0;
+
+        boolean[][] visited = new boolean[h][w];
+        int maxArea = 0;
+        int[][] DIRS4 = {{1,0},{-1,0},{0,1},{0,-1}};
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (skeleton[y][x] != 0 || visited[y][x]) continue;
+
+                ArrayDeque<int[]> queue = new ArrayDeque<>();
+                queue.add(new int[]{x, y});
+                visited[y][x] = true;
+                boolean touchesBorder = false;
+                int area = 0;
+
+                while (!queue.isEmpty()) {
+                    int[] p = queue.pollFirst();
+                    area++;
+                    if (p[0] == 0 || p[0] == w - 1 || p[1] == 0 || p[1] == h - 1)
+                        touchesBorder = true;
+                    for (int[] d : DIRS4) {
+                        int nx = p[0] + d[0], ny = p[1] + d[1];
+                        if (nx >= 0 && nx < w && ny >= 0 && ny < h
+                                && skeleton[ny][nx] == 0 && !visited[ny][nx]) {
+                            visited[ny][nx] = true;
+                            queue.add(new int[]{nx, ny});
+                        }
+                    }
+                }
+
+                if (!touchesBorder && area > maxArea)
+                    maxArea = area;
+            }
+        }
+        return maxArea;
+    }
+
+    /**
+     * Counts true cycles from a skeleton graph by filtering out
+     * micro-edges (length < 8 pixels) and recomputing Euler's formula.
+     * Micro-edges from thinning artifacts create spurious cycles that
+     * the raster flood-fill can't distinguish from genuine topology.
+     */
+    public static int graphTrueCycles(SkeletonGraph graph) {
+        var edges = graph.edges();
+        var nodes = graph.nodes();
+        int n = nodes.size();
+        if (n == 0) return 0;
+
+        // Count edges that are NOT micro-artifacts
+        int realEdges = 0;
+        for (var e : edges) {
+            if (e.pathLength() >= 8) realEdges++;
+        }
+
+        // Count nodes that participate in real edges
+        java.util.Set<Integer> activeNodeIds = new java.util.HashSet<>();
+        for (var e : edges) {
+            if (e.pathLength() >= 8) {
+                activeNodeIds.add(e.fromId());
+                activeNodeIds.add(e.toId());
+            }
+        }
+        int realNodes = activeNodeIds.size();
+
+        return Math.max(0, realEdges - realNodes + 1);
+    }
+
+    /** Number of 8-connected skeleton neighbors at (x,y) */
+    private static int countNeighbors(int[][] grid, int x, int y) {
+        int h = grid.length, w = h > 0 ? grid[0].length : 0;
+        int c = 0;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+                if (dx != 0 || dy != 0) {
+                    int ny = y + dy, nx = x + dx;
+                    if (ny >= 0 && ny < h && nx >= 0 && nx < w && grid[ny][nx] != 0) c++;
+                }
+        return c;
+    }
+
+    /**
+     * Prunes short branches from a skeleton by iteratively removing
+     * endpoint branches shorter than {@code minBranchRatio} of total length.
+     *
+     * @return pruned skeleton (new array)
+     */
+    public static int[][] pruneSkeleton(int[][] skeleton, double minBranchRatio) {
+        int h = skeleton.length, w = h > 0 ? skeleton[0].length : 0;
+        boolean[][] s = new boolean[h][w];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                s[y][x] = skeleton[y][x] != 0;
+
+        int totalLen = 0;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                if (s[y][x]) totalLen++;
+        if (totalLen < 3) {
+            int[][] out = new int[h][w];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                    if (s[y][x]) out[y][x] = 1;
+            return out;
+        }
+        int minLen = Math.max(2, (int)(totalLen * minBranchRatio));
+
+        // Iterative pruning: trace from each endpoint, delete if branch too short
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (int y = 0; y < h && !changed; y++) {
+                for (int x = 0; x < w && !changed; x++) {
+                    if (!s[y][x] || countSkelNeighbors(s, x, y) != 1) continue;
+
+                    // Trace from this endpoint to the nearest junction
+                    List<int[]> branch = new ArrayList<>();
+                    branch.add(new int[]{x, y});
+                    int cx = x, cy = y, px = -1, py = -1;
+                    while (true) {
+                        int oldCx = cx, oldCy = cy;
+                        int[] next = findSkelNext(s, cx, cy, px, py);
+                        if (next == null) break;
+                        branch.add(next);
+                        cx = next[0]; cy = next[1];
+                        px = oldCx; py = oldCy;
+                        int ndeg = countSkelNeighbors(s, cx, cy);
+                        if (ndeg >= 3 || ndeg == 1) break;
+                    }
+
+                    if (branch.size() < minLen) {
+                        for (int[] p : branch) s[p[1]][p[0]] = false;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        int[][] out = new int[h][w];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                if (s[y][x]) out[y][x] = 1;
+        return out;
+    }
+
+    /** Find the one skeleton neighbor of (x,y) that isn't (prevX,prevY) */
+    private static int[] findSkelNext(boolean[][] s, int x, int y, int prevX, int prevY) {
+        int h = s.length, w = h > 0 ? s[0].length : 0;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = x + dx, ny = y + dy;
+                if (ny >= 0 && ny < h && nx >= 0 && nx < w && s[ny][nx]
+                        && !(nx == prevX && ny == prevY))
+                    return new int[]{nx, ny};
+            }
+        return null;
+    }
+
+    private static int countSkelNeighbors(boolean[][] s, int x, int y) {
+        int h = s.length, w = h > 0 ? s[0].length : 0;
+        int c = 0;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+                if (dx != 0 || dy != 0) {
+                    int ny = y + dy, nx = x + dx;
+                    if (ny >= 0 && ny < h && nx >= 0 && nx < w && s[ny][nx]) c++;
+                }
+        return c;
+    }
+
+    // ═══════════════════ Edge Curvature ═══════════════════
+
+    /** Default number of resampled curvature samples per edge */
+    private static final int EDGE_CURV_SAMPLES = 16;
+    /** |curvature| threshold for detecting a corner on an edge (radians) */
+    private static final double CORNER_CURV_THRESHOLD = 0.35;
+
+    /**
+     * Computes curvature profile along a skeleton path.
+     * Returns {profile[M], totalCurvature, curvatureStd, inflectionCount}.
+     */
+    private static double[][] computeEdgeCurvature(List<int[]> path, int M) {
+        int n = path.size();
+        double[] profile = new double[M];
+        double totalCurv = 0, curvStd = 0;
+        int inflections = 0;
+
+        if (n < 3) return new double[][]{profile, {totalCurv}, {curvStd}, {(double)inflections}};
+
+        // Compute turning angles at interior points
+        double[] turns = new double[n - 2];
+        for (int i = 1; i < n - 1; i++) {
+            int[] p0 = path.get(i - 1), p1 = path.get(i), p2 = path.get(i + 1);
+            double inAngle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+            double outAngle = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
+            double t = outAngle - inAngle;
+            while (t > Math.PI) t -= 2 * Math.PI;
+            while (t < -Math.PI) t += 2 * Math.PI;
+            turns[i - 1] = t;
+        }
+        int turnsLen = turns.length;
+
+        // Accumulate stats + inflection count
+        double prevSign = Math.signum(turns[0]);
+        for (double t : turns) {
+            double absT = Math.abs(t);
+            totalCurv += absT;
+            double s = Math.signum(t);
+            if (s != 0 && s != prevSign) { inflections++; prevSign = s; }
+        }
+        double mean = totalCurv / turnsLen;
+        double var = 0;
+        for (double t : turns) var += (Math.abs(t) - mean) * (Math.abs(t) - mean);
+        curvStd = Math.sqrt(var / turnsLen);
+
+        // Resample to M samples via linear interpolation
+        profile = decimate(turns, M);
+        return new double[][]{profile, {totalCurv}, {curvStd}, {(double)inflections}};
+    }
+
+    /**
+     * Inserts CORNER nodes into the graph by splitting edges at high-curvature
+     * points (inflections and curvature peaks). Returns a new SkeletonGraph
+     * with corner nodes inserted and edges carrying curvature profiles.
+     */
+    public static SkeletonGraph insertCornerNodes(SkeletonGraph graph, int[][] skeleton) {
+        List<GraphNode> nodes = new ArrayList<>(graph.nodes());
+        List<GraphEdge> newEdges = new ArrayList<>();
+        int nextNodeId = nodes.size();
+
+        for (GraphEdge edge : graph.edges()) {
+            List<int[]> path = edge.path();
+            int n = path.size();
+            if (n < 3) {
+                newEdges.add(makeCurvedEdge(edge.fromId(), edge.toId(), path));
+                continue;
+            }
+
+            // Compute curvature at each interior point
+            double[] turns = new double[n - 2];
+            int[] turnIndices = new int[n - 2]; // original path index (1-based)
+            for (int i = 1; i < n - 1; i++) {
+                int[] p0 = path.get(i - 1), p1 = path.get(i), p2 = path.get(i + 1);
+                double inA = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+                double outA = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
+                double t = outA - inA;
+                while (t > Math.PI) t -= 2 * Math.PI;
+                while (t < -Math.PI) t += 2 * Math.PI;
+                turns[i - 1] = t;
+                turnIndices[i - 1] = i;
+            }
+
+            // Find curvature peaks above threshold
+            boolean[] isPeak = new boolean[turns.length];
+            for (int i = 0; i < turns.length; i++) {
+                double absT = Math.abs(turns[i]);
+                if (absT < CORNER_CURV_THRESHOLD) continue;
+                double left = (i > 0) ? Math.abs(turns[i - 1]) : 0;
+                double right = (i < turns.length - 1) ? Math.abs(turns[i + 1]) : 0;
+                if (absT >= left && absT >= right) isPeak[i] = true;
+            }
+            // Suppress close peaks (< 3 indices apart)
+            for (int i = 0; i < turns.length; i++) {
+                if (!isPeak[i]) continue;
+                for (int d = 1; d <= 3; d++) {
+                    int ni = i + d;
+                    if (ni < turns.length && isPeak[ni] && Math.abs(turns[ni]) > Math.abs(turns[i])) {
+                        isPeak[i] = false; break;
+                    }
+                    ni = i - d;
+                    if (ni >= 0 && isPeak[ni] && Math.abs(turns[ni]) > Math.abs(turns[i])) {
+                        isPeak[i] = false; break;
+                    }
+                }
+            }
+
+            // Split edge at peaks, creating sub-edges with curvature profiles
+            int prevNodeId = edge.fromId();
+            int lastSplitIdx = 0;
+            for (int i = 0; i < turns.length; i++) {
+                if (!isPeak[i]) continue;
+                int pathIdx = turnIndices[i]; // 1-based index in original path
+                int[] cornerPt = path.get(pathIdx);
+
+                // Create corner node
+                int cornerId = nextNodeId++;
+                int cornerX = cornerPt[0], cornerY = cornerPt[1];
+                nodes.add(new GraphNode(cornerId, cornerX, cornerY, 2, NodeType.CORNER));
+
+                // Sub-path from prevNodeId/point to this corner
+                List<int[]> subPath = path.subList(lastSplitIdx, pathIdx + 1);
+                newEdges.add(makeCurvedEdge(prevNodeId, cornerId, subPath));
+
+                prevNodeId = cornerId;
+                lastSplitIdx = pathIdx;
+            }
+            // Final sub-path from last split to end node
+            List<int[]> finalPath = path.subList(lastSplitIdx, n);
+            newEdges.add(makeCurvedEdge(prevNodeId, edge.toId(), finalPath));
+        }
+
+        // Recompute total length
+        int totalLen = 0;
+        for (GraphEdge e : newEdges) totalLen += e.pathLength();
+        return new SkeletonGraph(nodes, newEdges, totalLen);
+    }
+
+    /** Creates a GraphEdge with computed curvature profile */
+    private static GraphEdge makeCurvedEdge(int fromId, int toId, List<int[]> path) {
+        double[][] curvData = computeEdgeCurvature(path, EDGE_CURV_SAMPLES);
+        return new GraphEdge(fromId, toId, path.size(), path,
+                curvData[0], curvData[1][0], curvData[2][0], (int)curvData[3][0]);
+    }
+
+    /**
+     * Builds a skeleton graph from a thinned binary image.
+     *
+     * <p>Nodes: endpoints (degree=1) and junctions (degree ≥ 3).
+     * Edges: skeleton paths connecting nodes.
+     *
+     * <p>Returns null for simple loops with no nodes (e.g., perfect circles).
+     */
+    public static SkeletonGraph buildSkeletonGraph(int[][] skeleton) {
+        int h = skeleton.length, w = h > 0 ? skeleton[0].length : 0;
+        if (w == 0) return new SkeletonGraph(List.of(), List.of(), 0);
+
+        // Phase 1: find all nodes and assign IDs
+        List<GraphNode> nodes = new ArrayList<>();
+        int[][] nodeId = new int[h][w]; // 0 = no node, >0 = node index (1-based)
+        for (int y = 0; y < h; y++) Arrays.fill(nodeId[y], -1);
+
+        int totalLen = 0;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                if (skeleton[y][x] != 0) {
+                    totalLen++;
+                    int deg = countNeighbors(skeleton, x, y);
+                    if (deg == 1 || deg >= 3) {
+                        int id = nodes.size();
+                        NodeType type = deg == 1 ? NodeType.ENDPOINT : NodeType.JUNCTION;
+                        nodes.add(new GraphNode(id, x, y, deg, type));
+                        nodeId[y][x] = id;
+                    }
+                }
+
+        if (totalLen < 2) return new SkeletonGraph(nodes, List.of(), totalLen);
+        if (nodes.isEmpty()) {
+            // Pure loop — find any skeleton pixel as virtual node
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                    if (skeleton[y][x] != 0) {
+                        nodes.add(new GraphNode(0, x, y, 2, NodeType.ENDPOINT));
+                        nodeId[y][x] = 0;
+                        y = h; break;
+                    }
+            // Also add a second virtual node at the opposite side of loop for edge
+            if (nodes.size() == 1) {
+                GraphNode n0 = nodes.get(0);
+                int fx = -1, fy = -1, maxD = 0;
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        if (skeleton[y][x] != 0 && nodeId[y][x] < 0) {
+                            int d = (x-n0.x)*(x-n0.x) + (y-n0.y)*(y-n0.y);
+                            if (d > maxD) { maxD = d; fx = x; fy = y; }
+                        }
+                if (fx >= 0) {
+                    nodes.add(new GraphNode(1, fx, fy, 2, NodeType.ENDPOINT));
+                    nodeId[fy][fx] = 1;
+                }
+            }
+        }
+
+        // Phase 2: trace edges between nodes
+        List<GraphEdge> edges = new ArrayList<>();
+        boolean[][] visitedEdge = new boolean[h][w];
+
+        for (GraphNode node : nodes) {
+            int x = node.x(), y = node.y();
+            // Try all neighbors of this node
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    if (dx == 0 && dy == 0) continue;
+                    int nx = x + dx, ny = y + dy;
+                    if (ny < 0 || ny >= h || nx < 0 || nx >= w) continue;
+                    if (skeleton[ny][nx] == 0) continue;
+                    if (visitedEdge[ny][nx]) continue;
+
+                    // Trace from this neighbor until we hit another node
+                    int prevX = x, prevY = y;
+                    int cx = nx, cy = ny;
+                    List<int[]> path = new ArrayList<>();
+                    boolean reachedNode = false;
+                    int steps = 0;
+
+                    while (steps < w * h) {
+                        path.add(new int[]{cx, cy});
+                        visitedEdge[cy][cx] = true;
+                        steps++;
+
+                        int nid = nodeId[cy][cx];
+                        if (nid >= 0 && nid != node.id()) {
+                            // Reached another node — create edge
+                            edges.add(makeCurvedEdge(node.id(), nid, path));
+                            reachedNode = true;
+                            break;
+                        }
+
+                        // Move to next unvisited skeleton neighbor
+                        boolean moved = false;
+                        int bestDeg = 999, bestNx = -1, bestNy = -1;
+                        for (int ddy = -1; ddy <= 1; ddy++) {
+                            for (int ddx = -1; ddx <= 1; ddx++) {
+                                if (ddx == 0 && ddy == 0) continue;
+                                int tnx = cx + ddx, tny = cy + ddy;
+                                if (tny < 0 || tny >= h || tnx < 0 || tnx >= w) continue;
+                                if (skeleton[tny][tnx] == 0) continue;
+                                if (tnx == prevX && tny == prevY) continue;
+                                if (visitedEdge[tny][tnx]) continue;
+                                // Prefer the neighbor that goes toward an unvisited node
+                                int ndeg = countNeighbors(skeleton, tnx, tny);
+                                int tnid = nodeId[tny][tnx];
+                                // Prioritize: other node first, then lower degree (stay on path)
+                                if (tnid >= 0 && tnid != node.id()) {
+                                    bestNx = tnx; bestNy = tny; bestDeg = -1;
+                                } else if (bestDeg > 0 && ndeg <= 2) {
+                                    bestNx = tnx; bestNy = tny; bestDeg = ndeg;
+                                }
+                            }
+                        }
+                        if (bestNx >= 0) {
+                            prevX = cx; prevY = cy;
+                            cx = bestNx; cy = bestNy;
+                            moved = true;
+                        }
+                        if (!moved) break;
+                    }
+
+                    // If we didn't reach another node but traced a loop back, create edge
+                    if (!reachedNode && steps > 1) {
+                        int nid = nodeId[cy][cx];
+                        if (nid >= 0) {
+                            edges.add(makeCurvedEdge(node.id(), nid, path));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Remove duplicate edges (same nodes in opposite order)
+        List<GraphEdge> deduped = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (GraphEdge e : edges) {
+            String key = e.fromId() <= e.toId()
+                ? e.fromId() + "_" + e.toId()
+                : e.toId() + "_" + e.fromId();
+            if (seen.add(key)) deduped.add(e);
+        }
+
+        // Phase 3: insert corner nodes and compute edge curvature profiles
+        SkeletonGraph basic = new SkeletonGraph(nodes, deduped, totalLen);
+        return insertCornerNodes(basic, skeleton);
     }
 
 }

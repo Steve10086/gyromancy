@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class SymbolMatcherTest {
 
-    private static final float THRESHOLD = 0.50f;
+    private static final float THRESHOLD = 0.37f;
 
     private static final File TEST_SYMBOL_DIR = new File("src/test/resources/test_images/symbol");
     private static final File TEST_RUNE_DIR   = new File("src/test/resources/test_images/rune");
