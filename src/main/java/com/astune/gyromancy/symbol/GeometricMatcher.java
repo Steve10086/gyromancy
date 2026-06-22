@@ -62,6 +62,20 @@ public final class GeometricMatcher {
             return MatchResult.NONE;
         }
 
+        // Cycle quality check: noise often has tiny accidental holes.
+        // If drawn's largest enclosed area is < 15% of template's, penalize.
+        float cycleQuality = 1.0f;
+        if (tplCycles > 0 && drawnCycles > 0) {
+            int drawnMaxArea = GeometryUtils.maxEnclosedArea(drawn);
+            int tplMaxArea = GeometryUtils.maxEnclosedArea(template.pattern());
+            if (tplMaxArea > 0 && drawnMaxArea < tplMaxArea / 5) {
+                // Tiny accidental hole → not a real cycle
+                cycleQuality = 0.20f;
+            } else if (tplMaxArea > 0 && drawnMaxArea < tplMaxArea / 3) {
+                cycleQuality = 0.50f;
+            }
+        }
+
         // Prune #1: clean raw skeleton (removes drawing noise before normalize)
         int[][] rawSkel = GeometryUtils.thin(drawn);
         int[][] rawPruned = GeometryUtils.pruneSkeleton(rawSkel, 0.04);
@@ -72,9 +86,27 @@ public final class GeometricMatcher {
         int[][] normPruned = GeometryUtils.pruneSkeleton(normSkel, 0.04);
         GeometryUtils.SkeletonGraph drawnGraph = GeometryUtils.buildSkeletonGraph(normPruned);
 
-        // ═══ Phase 2: WL graph kernel score (structure-aware) ═══
+        // ═══ Phase 2: Composite graph score (WL kernel + degree sequence + structural penalty) ═══
         GeometryUtils.SkeletonGraph tplGraph = template.skeletonGraph();
-        float graphScore = computeWLGraphScore(drawnGraph, tplGraph);
+        float wlScore = computeWLGraphScore(drawnGraph, tplGraph);
+        float degSeqScore = computeDegreeSequenceScore(drawnGraph, tplGraph);
+        float rawGraphScore = 0.65f * wlScore + 0.35f * degSeqScore;
+        float structPenalty = computeStructuralComplexityPenalty(drawnGraph, tplGraph);
+
+        // Minimum skeleton length penalty: noise produces tiny skeletons
+        // that coincidentally pass cycle/endpoint checks
+        float minLenPenalty = 1.0f;
+        int dLen = drawnGraph.totalLength();
+        int tLen = tplGraph.totalLength();
+        if (tLen > 8 && dLen < tLen / 4) {
+            minLenPenalty = 0.05f;   // extreme: noise skeleton is tiny
+        } else if (tLen > 8 && dLen < tLen / 3) {
+            minLenPenalty = 0.15f;
+        } else if (tLen > 8 && dLen < tLen / 2) {
+            minLenPenalty = 0.45f;
+        }
+
+        float graphScore = rawGraphScore * structPenalty * structPenalty * minLenPenalty;
 
         // ═══ Phase 3: Supplementary descriptors (from normalized image) ═══
         GeometryUtils.Contour contour = GeometryUtils.traceContour(normDrawn);
@@ -136,13 +168,29 @@ public final class GeometricMatcher {
         int cntT = countPixels(template.pattern());
         float pixelRatio = (float) Math.min(cntD, cntT) / Math.max(cntD, cntT);
 
-        // ═══ Phase 4: Combined score — skew + pixel dominant for fire/water ═══
-        float confidence = 0.18f * graphScore
-                         + 0.16f * curvScore
-                         + 0.20f * cdfScore
-                         + 0.20f * skewScore
-                         + 0.04f * rangeScore
-                         + 0.22f * pixelRatio;
+        // ═══ Phase 4: Combined score — graph-dominant with per-cycle-class adaptation ═══
+        boolean isZeroCycle = (tplCycles == 0);
+
+        float confidence;
+        if (isZeroCycle) {
+            // Zero-cycle shapes: cycle gate can't filter noise → graph MUST dominate
+            confidence = 0.50f * graphScore
+                       + 0.12f * curvScore
+                       + 0.10f * cdfScore
+                       + 0.08f * skewScore
+                       + 0.06f * rangeScore
+                       + 0.14f * pixelRatio;
+        } else {
+            // ≥1 cycle: cycle gate already rejects noise → balanced
+            // Apply cycle quality penalty: tiny accidental holes → lower score
+            confidence = cycleQuality * (
+                          0.35f * graphScore
+                        + 0.16f * curvScore
+                        + 0.14f * cdfScore
+                        + 0.12f * skewScore
+                        + 0.08f * rangeScore
+                        + 0.15f * pixelRatio);
+        }
 
         return new MatchResult(confidence, 0f, false, 1f, graphScore);
     }
@@ -194,6 +242,83 @@ public final class GeometricMatcher {
 
         return 0.18f * fEdgeCnt + 0.26f * fEps + 0.20f * fEdgeLen
              + 0.16f * fEdgeCurv + 0.12f * fDegree + 0.08f * fJnc;
+    }
+
+    // ═══════════════════ Structural Complexity Penalty ═══════════════════
+
+    /**
+     * Penalizes matches where the drawn graph lacks the structural complexity
+     * required to plausibly be the template. A noise scribble with 0-1 edges
+     * cannot be an arrow (3 edges, 3 endpoints, 1 junction).
+     *
+     * @return factor in [0,1] multiplying graphScore
+     */
+    private static float computeStructuralComplexityPenalty(
+            GeometryUtils.SkeletonGraph drawn, GeometryUtils.SkeletonGraph tpl) {
+        int epsD = drawn.endpointCount(), epsT = tpl.endpointCount();
+        int eD = drawn.edgeCount(), eT = tpl.edgeCount();
+        int jncD = (int) drawn.nodes().stream()
+                .filter(n -> n.type() == GeometryUtils.NodeType.JUNCTION
+                          || n.type() == GeometryUtils.NodeType.CORNER).count();
+        int jncT = (int) tpl.nodes().stream()
+                .filter(n -> n.type() == GeometryUtils.NodeType.JUNCTION
+                          || n.type() == GeometryUtils.NodeType.CORNER).count();
+        int nD = drawn.nodeCount(), nT = tpl.nodeCount();
+
+        // If template is trivial, can't meaningfully penalize
+        if (eT <= 1 && epsT <= 1 && jncT == 0) return 1.0f;
+
+        // Endpoint adequacy
+        float epsOk = (epsT == 0) ? 1.0f
+                    : (epsD == 0) ? 0.10f
+                    : (epsD >= epsT / 2.0) ? 1.0f
+                    : Math.max(0.10f, sharpRatio(epsD, epsT));
+
+        // Edge adequacy
+        float edgesOk = (eT == 0) ? 1.0f
+                      : (eD == 0) ? 0.06f
+                      : softRatio(eD, eT);
+
+        // Junction/corner adequacy
+        float jncOk = (jncT == 0) ? 1.0f
+                    : (jncD == 0) ? 0.12f
+                    : softRatio(jncD, jncT);
+
+        // Node adequacy
+        float nodesOk = (nT == 0) ? 1.0f
+                      : (nD == 0) ? 0.06f
+                      : softRatio(nD, nT);
+
+        return 0.35f * epsOk + 0.30f * edgesOk + 0.20f * jncOk + 0.15f * nodesOk;
+    }
+
+    // ═══════════════════ Degree Sequence Score ═══════════════════
+
+    /**
+     * Compares sorted degree sequences from highest degree downward.
+     * Arrow [3,1,1,1] vs noise [1] → heavily penalized.
+     * Arrow vs arrow [3,1,1,1] → 1.0.
+     */
+    private static float computeDegreeSequenceScore(
+            GeometryUtils.SkeletonGraph drawn, GeometryUtils.SkeletonGraph tpl) {
+        java.util.List<Integer> dDeg = drawn.degreeSequence();
+        java.util.List<Integer> tDeg = tpl.degreeSequence();
+
+        if (dDeg.isEmpty() && tDeg.isEmpty()) return 1.0f;
+        if (dDeg.isEmpty() || tDeg.isEmpty()) return 0.15f;
+
+        // Compare from highest degree downward
+        int di = dDeg.size() - 1, ti = tDeg.size() - 1;
+        int matches = 0;
+        int total = Math.max(dDeg.size(), tDeg.size());
+
+        while (di >= 0 && ti >= 0) {
+            int dv = dDeg.get(di), tv = tDeg.get(ti);
+            if (Math.abs(dv - tv) <= 1) { matches++; di--; ti--; }
+            else if (dv > tv) di--;
+            else ti--;
+        }
+        return (float) matches / total;
     }
 
     // ═══════════════════ Weisfeiler-Lehman Graph Kernel ═══════════════════
@@ -277,14 +402,24 @@ public final class GeometricMatcher {
         return labels;
     }
 
-    /** Bin edge length: 3 levels. */
+    /** Bin edge length: 4 levels. */
     private static int lenBin(int length) {
-        return length < 6 ? 0 : length < 15 ? 1 : 2;
+        return length < 5 ? 0 : length < 10 ? 1 : length < 20 ? 2 : 3;
     }
 
-    /** Bin edge curvature: 3 levels. */
+    /** Bin edge curvature: 4 levels. */
     private static int curvBin(double totalCurv) {
-        return totalCurv < 0.3 ? 0 : totalCurv < 1.0 ? 1 : 2;
+        return totalCurv < 0.2 ? 0 : totalCurv < 0.5 ? 1 : totalCurv < 1.2 ? 2 : 3;
+    }
+
+    /** Bin curvature std: 3 levels — distinguishes smooth from jagged edges. */
+    private static int curvStdBin(double curvStd) {
+        return curvStd < 0.1 ? 0 : curvStd < 0.3 ? 1 : 2;
+    }
+
+    /** Bin inflection count: 3 levels — noise edges have many sign changes. */
+    private static int inflBin(int inflectionCount) {
+        return inflectionCount == 0 ? 0 : inflectionCount == 1 ? 1 : 2;
     }
 
     /**
@@ -310,7 +445,9 @@ public final class GeometricMatcher {
                 var edge = edges.get(edgeIdx);
                 String sig = oldLabels[nbId] + ","
                            + lenBin(edge.pathLength()) + ","
-                           + curvBin(edge.totalCurvature());
+                           + curvBin(edge.totalCurvature()) + ","
+                           + curvStdBin(edge.curvatureStd()) + ","
+                           + inflBin(edge.inflectionCount());
                 neighbors.add(sig);
             }
             java.util.Collections.sort(neighbors);
