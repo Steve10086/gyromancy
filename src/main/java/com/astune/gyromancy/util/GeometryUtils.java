@@ -1094,7 +1094,7 @@ public final class GeometryUtils {
                     }
                 }
 
-                if (!touchesBorder && area > 10)
+                if (!touchesBorder && area > 2)
                     trueCycles++;
             }
         }

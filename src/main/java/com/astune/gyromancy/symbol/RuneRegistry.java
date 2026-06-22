@@ -10,7 +10,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
-@EventBusSubscriber(modid = Gyromancy.MODID, bus = EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = Gyromancy.MODID)
 public final class RuneRegistry {
 
     private static final String DIR = "/assets/gyromancy/textures/rune/";
