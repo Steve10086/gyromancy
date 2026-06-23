@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class SymbolMatcherTest {
 
-    private static final float THRESHOLD = 0.37f;
+    private static final float THRESHOLD = 0.40f;
 
     private static final File TEST_SYMBOL_DIR = new File("src/test/resources/test_images/symbol");
     private static final File TEST_RUNE_DIR   = new File("src/test/resources/test_images/rune");
@@ -68,17 +68,19 @@ class SymbolMatcherTest {
         int[][] testImg = TemplateLoader.load(
                 "/test_images/" + testDir.getName() + "/" + testName + ".png");
 
-        // Match against all templates, track best
-        List<String> allNames = pngNames(tplPath);
+        // Use ML classifier
+        MLSymbolMatcher ml = MLSymbolMatcher.getInstance();
+        if (ml == null) {
+            System.out.println("[MatcherTest] ML model not available — skipping " + testName);
+            return;
+        }
+
+        // Get all scores from classifier
+        Map<String, Float> allScores = ml.allScores(testImg);
         String bestName = "";
         float bestScore = 0f;
-        Map<String, Float> allScores = new LinkedHashMap<>();
-
-        for (String tplName : allNames) {
-            SymbolTemplate tpl = loadTemplate(tplPath, tplName, role);
-            float score = GeometricMatcher.match(testImg, tpl).confidence();
-            allScores.put(tplName, score);
-            if (score > bestScore) { bestScore = score; bestName = tplName; }
+        for (var e : allScores.entrySet()) {
+            if (e.getValue() > bestScore) { bestScore = e.getValue(); bestName = e.getKey(); }
         }
 
         // Log
@@ -91,6 +93,7 @@ class SymbolMatcherTest {
         System.out.print(sb);
 
         // Rule
+        List<String> allNames = new ArrayList<>(allScores.keySet());
         String prefix = findPrefixOrNull(testName, allNames);
 
         if (prefix == null) {

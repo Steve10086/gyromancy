@@ -56,9 +56,13 @@ public record SymbolTemplate(
 
             // Metrics & graph from normalized pattern
             int[][] norm = GeometryUtils.normalize(pattern, 32, 32);
+            int[][] hires = GeometryUtils.upscaleConnectivityPreserving(norm, 128);
+            int upK = (128 + Math.min(norm.length, norm[0].length) - 1)
+                    / Math.min(norm.length, norm[0].length);
+            int[][] smoothHires = GeometryUtils.gaussianSmoothBinary(hires, upK / 3.0);
 
-            // Prune #2: build graph from normalized + cleaned skeleton
-            int[][] normSkel = GeometryUtils.thin(norm);
+            // Prune #2: build graph from normalized + upscaled + smoothed + cleaned skeleton
+            int[][] normSkel = GeometryUtils.thin(smoothHires);
             int[][] normPruned = GeometryUtils.pruneSkeleton(normSkel, 0.04);
             GeometryUtils.SkeletonGraph graph = GeometryUtils.buildSkeletonGraph(normPruned);
             float[] weights = computeEdgeWeights(graph);

@@ -43,43 +43,80 @@ public final class GeometricMatcher {
     }
 
     public static MatchResult match(int[][] drawn, SymbolTemplate template) {
-        // ═══ Phase 1: Hard cycle gate ═══
-        int drawnCycles = GeometryUtils.detectTrueCycles(drawn);
-        int tplCycles = template.trueCycleCount();
+        int[][] normDrawn = GeometryUtils.normalize(drawn, 32, 32);
 
-        if (drawnCycles != tplCycles) return MatchResult.NONE;
-        if (drawnCycles == 0 && tplCycles > 0) return MatchResult.NONE;
+        // Detect cycles on normalized (pre-thinned) — consistent with SymbolTemplate
+        int drawnCycles = GeometryUtils.detectTrueCycles(normDrawn);
+        int drawnMaxArea = GeometryUtils.maxEnclosedArea(normDrawn);
+
+        // Upscale to ≥128×128 with 8-connectivity, then anti-alias
+        int[][] hiresDrawn = GeometryUtils.upscaleConnectivityPreserving(normDrawn, 128);
+        int k = (128 + Math.min(normDrawn.length, normDrawn[0].length) - 1)
+                / Math.min(normDrawn.length, normDrawn[0].length);
+        int[][] smoothDrawn = GeometryUtils.gaussianSmoothBinary(hiresDrawn, k / 3.0);
+        int[][] normSkel = GeometryUtils.thin(smoothDrawn);
+        int[][] normPruned = GeometryUtils.pruneSkeleton(normSkel, 0.04);
+        SkeletonGraph drawnGraph = GeometryUtils.buildSkeletonGraph(normPruned);
+
+        SkeletonGraph tplGraph = template.skeletonGraph();
+        int tplCycles = template.trueCycleCount();
+        int tplMaxArea = GeometryUtils.maxEnclosedArea(template.pattern());
+
+        float confidence = geometricConfidence(
+                drawnGraph, drawnCycles, drawnMaxArea,
+                tplGraph, tplCycles, tplMaxArea, tplGraph.totalLength());
+
+        return new MatchResult(confidence, 0f, false, 1f, confidence);
+    }
+
+    /**
+     * Package-private: used by MLSymbolMatcher for two-stage pipeline.
+     * Computes [0,1] geometric confidence that a drawn skeleton graph
+     * matches a template skeleton graph, without needing SymbolTemplate.
+     *
+     * <p>Three phases: hard cycle gate → skeleton length penalty → graph geometry score.
+     */
+    static float geometricConfidence(
+            SkeletonGraph drawnGraph, int drawnCycles, int drawnMaxArea,
+            SkeletonGraph tplGraph, int tplCycles, int tplMaxArea, int tplTotalLen) {
+
+        // ═══ Phase 1: Hard cycle gate ═══
+        if (drawnCycles != tplCycles) return 0f;
+        if (drawnCycles == 0 && tplCycles > 0) return 0f;
 
         // Cycle quality: noise often has tiny accidental holes
         float cycleQuality = 1.0f;
         if (tplCycles > 0 && drawnCycles > 0) {
-            int drawnMaxArea = GeometryUtils.maxEnclosedArea(drawn);
-            int tplMaxArea = GeometryUtils.maxEnclosedArea(template.pattern());
             if (tplMaxArea > 0 && drawnMaxArea < tplMaxArea / 5) cycleQuality = 0.20f;
             else if (tplMaxArea > 0 && drawnMaxArea < tplMaxArea / 3) cycleQuality = 0.50f;
         }
 
-        // Build drawn skeleton graph (normalized)
-        int[][] normDrawn = GeometryUtils.normalize(drawn, 32, 32);
-        int[][] normSkel = GeometryUtils.thin(normDrawn);
-        int[][] normPruned = GeometryUtils.pruneSkeleton(normSkel, 0.04);
-        SkeletonGraph drawnGraph = GeometryUtils.buildSkeletonGraph(normPruned);
-        SkeletonGraph tplGraph = template.skeletonGraph();
-
         // ═══ Phase 2: Min skeleton length penalty ═══
         float minLenPenalty = 1.0f;
-        int dLen = drawnGraph.totalLength(), tLen = tplGraph.totalLength();
-        if (tLen > 8 && dLen < tLen / 4) minLenPenalty = 0.05f;
-        else if (tLen > 8 && dLen < tLen / 3) minLenPenalty = 0.15f;
-        else if (tLen > 8 && dLen < tLen / 2) minLenPenalty = 0.45f;
+        int dLen = drawnGraph.totalLength();
+        if (tplTotalLen > 8 && dLen < tplTotalLen / 4) minLenPenalty = 0.05f;
+        else if (tplTotalLen > 8 && dLen < tplTotalLen / 3) minLenPenalty = 0.15f;
+        else if (tplTotalLen > 8 && dLen < tplTotalLen / 2) minLenPenalty = 0.45f;
 
         // ═══ Phase 3: Graph geometry score (pure 2D skeleton features) ═══
         float geoScore = computeGraphGeometryScore(drawnGraph, tplGraph);
 
-        // ═══ Phase 4: Combined score ═══
-        float confidence = geoScore * cycleQuality * minLenPenalty;
+        // ═══ Phase 4: Structural complexity — noise has jagged graph topology ═══
+        float complexity = 1.0f;
+        if (drawnCycles == 0) {
+            int dEdges = drawnGraph.edgeCount();
+            if (dEdges == 0) return 0f;
+            // Extreme edge density → thinning artifacts from scribble noise
+            // Legitimate 0-cycle symbols max out at ~0.23; noise often exceeds 0.25
+            float edgeDensity = (float) dEdges / Math.max(1, dLen);
+            if (edgeDensity > 0.30f) complexity = 0.02f;
+            else if (edgeDensity > 0.25f) complexity = 0.05f;
+            // Very short skeleton with few edges → can't be a meaningful symbol
+            if (dLen < 10 && dEdges <= 2) complexity = 0.05f;
+        }
 
-        return new MatchResult(confidence, 0f, false, 1f, geoScore);
+        // ═══ Phase 5: Combined score ═══
+        return geoScore * cycleQuality * minLenPenalty * complexity;
     }
 
     // ═══════════════════ Graph Geometry Scoring ═══════════════════

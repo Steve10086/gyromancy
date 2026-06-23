@@ -35,6 +35,9 @@ repositories {
         url = file("${project.projectDir}/repo")
     }
 
+    // ── Maven Central (required for ONNX Runtime) ──
+    mavenCentral()
+
     // ── Remote repositories (fallback) ──
     // Checked only when a dependency is NOT found in LocalRepo above.
     // Each remote is scoped to its own group to avoid unnecessary lookups.
@@ -173,6 +176,9 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // ── ONNX Runtime for ML inference ──
+    implementation 'com.microsoft.onnxruntime:onnxruntime:1.18.0'
 
     // For more info:
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html

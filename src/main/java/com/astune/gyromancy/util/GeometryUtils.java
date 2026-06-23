@@ -114,6 +114,148 @@ public final class GeometryUtils {
         return dst;
     }
 
+    /**
+     * Upscales a binary image to at least {@code minSize} in both dimensions
+     * while <b>preserving 8-connectivity</b>.
+     *
+     * <p>Each original black pixel produces a K×K block, where
+     * K = ⌈minSize / min(W,H)⌉. For every pair of diagonally-adjacent
+     * original black pixels, two bridging pixels are added to convert the
+     * corner-only touch into an edge connection (preserving 8-connectivity).
+     *
+     * <p>Without bridging, a 45° diagonal line in the original would become
+     * blocks touching only at corners — Zhang-Suen then produces staircase
+     * artifacts (dozens of false junctions). Bridging fixes this while
+     * keeping line width tight (K pixels, not K+1).
+     *
+     * <p>Output dimensions: {@code W*K+1 × H*K+1} (single-pixel boundary
+     * strip at right/bottom edges may exist when K doesn't divide evenly).
+     *
+     * @param src     binary image
+     * @param minSize minimum output width and height (e.g. 128)
+     * @return upscaled image with preserved 8-connectivity
+     */
+    public static int[][] upscaleConnectivityPreserving(int[][] src, int minSize) {
+        int sh = src.length, sw = sh > 0 ? src[0].length : 0;
+        if (sw == 0 || sh == 0) return new int[minSize][minSize];
+
+        int minDim = Math.min(sw, sh);
+        int K = (minSize + minDim - 1) / minDim; // ceil(minSize/minDim)
+        if (K < 1) K = 1;
+
+        int dw = sw * K + 1;
+        int dh = sh * K + 1;
+        int[][] dst = new int[dh][dw];
+
+        // Phase 1: fill K×K blocks for each black source pixel
+        for (int oy = 0; oy < sh; oy++) {
+            int y0 = oy * K;
+            for (int ox = 0; ox < sw; ox++) {
+                if (src[oy][ox] == 0) continue;
+                int x0 = ox * K;
+                for (int dy = 0; dy < K; dy++)
+                    for (int dx = 0; dx < K; dx++)
+                        dst[y0 + dy][x0 + dx] = 1;
+            }
+        }
+
+        // Phase 2: bridge diagonally-adjacent blocks
+        // For each pair (ox,oy)-(ox+dx,oy+dy) both black with |dx|=|dy|=1,
+        // fill the two pixels at the shared corner to make them edge-connected.
+        for (int oy = 0; oy < sh; oy++) {
+            for (int ox = 0; ox < sw; ox++) {
+                if (src[oy][ox] == 0) continue;
+
+                // SE diagonal: (ox,oy) and (ox+1,oy+1)
+                if (ox + 1 < sw && oy + 1 < sh && src[oy + 1][ox + 1] != 0) {
+                    int cx = ox * K + K - 1;  // right edge of (ox,oy) block
+                    int cy = oy * K + K - 1;  // bottom edge of (ox,oy) block
+                    dst[cy][cx + 1] = 1;      // right bridge
+                    dst[cy + 1][cx] = 1;      // down bridge
+                }
+                // SW diagonal: (ox,oy) and (ox-1,oy+1)
+                if (ox - 1 >= 0 && oy + 1 < sh && src[oy + 1][ox - 1] != 0) {
+                    int cx = ox * K;            // left edge of (ox,oy) block
+                    int cy = oy * K + K - 1;    // bottom edge of (ox,oy) block
+                    dst[cy][cx - 1] = 1;        // left bridge
+                    dst[cy + 1][cx] = 1;        // down bridge
+                }
+            }
+        }
+
+        return dst;
+    }
+
+    /**
+     * Anti-alias a binary image by Gaussian blur + threshold.
+     *
+     * <p>Removes staircase artifacts from block-upscaled images: treats
+     * the binary as a continuous field, applies a Gaussian kernel, then
+     * thresholds back at 0.5. The result has smooth diagonal edges
+     * instead of pixel-level steps.
+     *
+     * @param src   binary image (0=bg, 1=fg)
+     * @param sigma Gaussian sigma in output pixels
+     * @return anti-aliased binary image (same dimensions)
+     */
+    public static int[][] gaussianSmoothBinary(int[][] src, double sigma) {
+        int h = src.length, w = h > 0 ? src[0].length : 0;
+        if (w == 0 || sigma <= 0) {
+            int[][] copy = new int[h][w];
+            for (int y = 0; y < h; y++) System.arraycopy(src[y], 0, copy[y], 0, w);
+            return copy;
+        }
+
+        // Float copy
+        float[][] buf = new float[h][w];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                buf[y][x] = src[y][x];
+
+        // 1D Gaussian kernel
+        int r = (int) Math.ceil(3.0 * sigma);
+        double[] kernel = new double[2 * r + 1];
+        double s2 = 2.0 * sigma * sigma;
+        double ksum = 0;
+        for (int i = -r; i <= r; i++) {
+            kernel[i + r] = Math.exp(-i * i / s2);
+            ksum += kernel[i + r];
+        }
+        for (int i = 0; i < kernel.length; i++) kernel[i] /= ksum;
+
+        // Horizontal pass
+        float[][] hPass = new float[h][w];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                double sum = 0;
+                for (int i = -r; i <= r; i++) {
+                    int sx = x + i;
+                    if (sx < 0) sx = 0;
+                    else if (sx >= w) sx = w - 1;
+                    sum += buf[y][sx] * kernel[i + r];
+                }
+                hPass[y][x] = (float) sum;
+            }
+        }
+
+        // Vertical pass + threshold
+        int[][] dst = new int[h][w];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                double sum = 0;
+                for (int i = -r; i <= r; i++) {
+                    int sy = y + i;
+                    if (sy < 0) sy = 0;
+                    else if (sy >= h) sy = h - 1;
+                    sum += hPass[sy][x] * kernel[i + r];
+                }
+                dst[y][x] = sum >= 0.5 ? 1 : 0;
+            }
+        }
+
+        return dst;
+    }
+
     // ═══════════════════════ Zhang-Suen Thinning ═══════════════════
 
     /**
