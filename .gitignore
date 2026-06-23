@@ -44,7 +44,7 @@ DESIGN_PLAN.md
 
 .venv
 venv
-.gz
-.log
-.jar
+*.gz
+*.log
+*.jar
 
