@@ -1039,6 +1039,74 @@ public final class GeometryUtils {
         public int cycleCount() { return Math.max(0, edges.size() - nodes.size() + 1); }
     }
 
+    // ═══════════════════ Shape Context Descriptors ═══════════════════
+
+    /** Shape Context descriptor for one skeleton graph node.
+     *  histogram: linearized 5 distance bins × 12 angle bins = 60 elements.
+     *  Each element is a normalized probability (sum = 1.0). */
+    public record ShapeContextDescriptor(int nodeId, double[] histogram, double maxPairwiseDist) {
+        public static final int DIST_BINS = 5;
+        public static final int ANGLE_BINS = 12;
+        public static final int HIST_SIZE = DIST_BINS * ANGLE_BINS;
+    }
+
+    /**
+     * Computes Shape Context descriptors for all nodes in a skeleton graph.
+     * Each descriptor is a 5×12 = 60-bin histogram of relative (distance, angle)
+     * positions to all other nodes. Scale-invariant (normalized by max pairwise
+     * distance) and rotation-invariant (angle bins shifted during matching).
+     *
+     * @param graph the skeleton graph with node (x,y) positions in 32×32 coords
+     * @return one descriptor per node, in graph.nodes() list order
+     */
+    public static List<ShapeContextDescriptor> computeShapeContextDescriptors(SkeletonGraph graph) {
+        List<GraphNode> nodes = graph.nodes();
+        int n = nodes.size();
+        if (n == 0) return List.of();
+
+        // Extract positions
+        int[] xs = new int[n], ys = new int[n];
+        for (int i = 0; i < n; i++) { xs[i] = nodes.get(i).x(); ys[i] = nodes.get(i).y(); }
+
+        // Compute max pairwise distance for scale normalization
+        double dMax = 1e-6;
+        for (int i = 0; i < n; i++)
+            for (int j = i + 1; j < n; j++) {
+                double d = Math.sqrt((xs[i]-xs[j])*(xs[i]-xs[j]) + (ys[i]-ys[j])*(ys[i]-ys[j]));
+                if (d > dMax) dMax = d;
+            }
+        if (dMax < 1e-6) dMax = 1.0;
+
+        List<ShapeContextDescriptor> descs = new java.util.ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            double[] hist = new double[ShapeContextDescriptor.HIST_SIZE];
+            for (int j = 0; j < n; j++) {
+                if (i == j) continue;
+                double dx = xs[j] - xs[i], dy = ys[j] - ys[i];
+                double dist = Math.sqrt(dx*dx + dy*dy) / dMax;
+                double angle = Math.atan2(dy, dx);
+                if (angle < 0) angle += 2.0 * Math.PI;
+
+                int dBin = Math.min(ShapeContextDescriptor.DIST_BINS - 1,
+                                    (int)(ShapeContextDescriptor.DIST_BINS * dist));
+                int aBin = Math.min(ShapeContextDescriptor.ANGLE_BINS - 1,
+                                    (int)(ShapeContextDescriptor.ANGLE_BINS * angle / (2.0 * Math.PI)));
+                hist[dBin * ShapeContextDescriptor.ANGLE_BINS + aBin] += 1.0;
+            }
+            // Normalize to sum=1. For single-node graphs, fill uniformly
+            double sum = 0;
+            for (double v : hist) sum += v;
+            if (sum < 1e-9) {
+                double fill = 1.0 / ShapeContextDescriptor.HIST_SIZE;
+                for (int k = 0; k < hist.length; k++) hist[k] = fill;
+            } else {
+                for (int k = 0; k < hist.length; k++) hist[k] /= sum;
+            }
+            descs.add(new ShapeContextDescriptor(nodes.get(i).id(), hist, dMax));
+        }
+        return descs;
+    }
+
     /**
      * Counts true enclosed regions in a skeletonized binary image using
      * flood-fill on background pixels. A true enclosed region is a
