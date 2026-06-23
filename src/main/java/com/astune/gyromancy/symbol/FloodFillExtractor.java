@@ -34,13 +34,15 @@ public final class FloodFillExtractor {
 
     public record ExtractedGlyph(
             Set<PixelPos> pixels,
-            double[] worldX, double[] worldY,  // per-pixel 2D coords (same index order as above)
+            double[] worldX, double[] worldY,
             double minWorldX, double maxWorldX,
             double minWorldY, double maxWorldY,
             int blockCount
     ) {}
 
     public static class FloodFillState {
+        public final int stateId;
+        public final PixelPos origin;
         public final Deque<PixelPos> queue;
         public final Set<PixelPos> visited;
         public final Set<BlockPos> involvedBlocks;
@@ -52,22 +54,40 @@ public final class FloodFillExtractor {
         public double minWorldY = Double.MAX_VALUE;
         public double maxWorldY = -Double.MAX_VALUE;
 
-        public FloodFillState(PixelPos seed) {
+        public FloodFillState(int id, PixelPos origin) {
+            this.stateId = id;
+            this.origin = origin;
             this.queue = new ArrayDeque<>();
-            this.queue.add(seed);
+            this.queue.add(origin);
             this.visited = new HashSet<>();
             this.involvedBlocks = new HashSet<>();
             this.initialSeeds = new HashSet<>();
-            this.initialSeeds.add(seed);
+            this.initialSeeds.add(origin);
+        }
+
+        /** Absorb another state's progress. Used when BFS reaches another state's origin. */
+        void absorb(FloodFillState other) {
+            this.visited.addAll(other.visited);
+            this.worldXs.addAll(other.worldXs);
+            this.worldYs.addAll(other.worldYs);
+            this.involvedBlocks.addAll(other.involvedBlocks);
+            this.initialSeeds.addAll(other.initialSeeds);
+            this.minWorldX = Math.min(this.minWorldX, other.minWorldX);
+            this.maxWorldX = Math.max(this.maxWorldX, other.maxWorldX);
+            this.minWorldY = Math.min(this.minWorldY, other.minWorldY);
+            this.maxWorldY = Math.max(this.maxWorldY, other.maxWorldY);
+            // Queue unvisited seeds from the absorbed state
+            for (PixelPos s : other.initialSeeds) {
+                if (!this.visited.contains(s) && !this.queue.contains(s)) {
+                    this.queue.add(s);
+                }
+            }
         }
 
         void resetGeometry() {
-            worldXs.clear();
-            worldYs.clear();
-            minWorldX = Double.MAX_VALUE;
-            maxWorldX = -Double.MAX_VALUE;
-            minWorldY = Double.MAX_VALUE;
-            maxWorldY = -Double.MAX_VALUE;
+            worldXs.clear(); worldYs.clear();
+            minWorldX = Double.MAX_VALUE; maxWorldX = -Double.MAX_VALUE;
+            minWorldY = Double.MAX_VALUE; maxWorldY = -Double.MAX_VALUE;
             involvedBlocks.clear();
         }
     }
@@ -78,10 +98,6 @@ public final class FloodFillExtractor {
     // Core: pixel ↔ world coordinate mapping
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * Maps a canvas pixel to its 3D world position.
-     * Based on Pigmentum's calculatePixelFromHit, using corner0 + dot-product projection.
-     */
     static Vec3 worldFromPixel(BlockPos pos, CanvasFace face, int px, int py) {
         Vec3 c0 = face.corner0();
         Vec3 sideW = face.corner1().subtract(c0);
@@ -91,10 +107,6 @@ public final class FloodFillExtractor {
         return Vec3.atCenterOf(pos).add(c0).add(sideW.scale(u)).add(sideH.scale(v));
     }
 
-    /**
-     * Inverse projection: world position → pixel on a CanvasFace.
-     * Returns null if the world point does not project onto this face.
-     */
     static PixelPos pixelFromWorld(Vec3 worldPos, BlockPos pos, CanvasFace face) {
         Vec3 local = worldPos.subtract(Vec3.atCenterOf(pos));
         Vec3 c0 = face.corner0();
@@ -117,10 +129,6 @@ public final class FloodFillExtractor {
         return new PixelPos(pos, face.primaryFace(), px, py, face.pixels().getPixel(px, py));
     }
 
-    /**
-     * Flatten a 3D world position to 2D based on face direction.
-     * All pixels in a glyph share the same dominant face direction.
-     */
     static double[] flatten(Direction face, Vec3 w) {
         return switch (face) {
             case NORTH, SOUTH -> new double[]{w.x, w.y};
@@ -133,13 +141,16 @@ public final class FloodFillExtractor {
     // Public API
     // ═══════════════════════════════════════════════════════════════
 
-    public static ExtractionResult extract(ServerLevel level, PixelPos seed, int maxBlocks) {
-        FloodFillState state = new FloodFillState(seed);
-        return continueExtract(level, state, maxBlocks);
+    /** Map of all active states (passed from FloodFillScheduler) for origin-based merging */
+    private static Map<Integer, FloodFillState> allSeeds = null;
+
+    static void setAllSeedsRef(Map<Integer, FloodFillState> ref) {
+        allSeeds = ref;
     }
 
     public static ExtractionResult continueExtract(ServerLevel level, FloodFillState state, int maxBlocks) {
         int blocksVisitedThisCall = 0;
+        int visitedBefore = state.visited.size();
         Direction dominantFace = null;
 
         while (!state.queue.isEmpty()) {
@@ -151,12 +162,14 @@ public final class FloodFillExtractor {
             if (face == null) continue;
 
             if (!ManaPixelDetector.isManaPixel(face, curr.x(), curr.y())) continue;
-            if (ManaPixelDetector.isMarked(face, curr.x(), curr.y())) continue;
 
             if (dominantFace == null) dominantFace = face.primaryFace();
 
             state.visited.add(curr);
             state.involvedBlocks.add(curr.pos());
+
+            // Origin merge: check if this pixel is another state's origin
+            checkOriginMerge(state, curr);
 
             // Compute and store world position
             Vec3 w3d = worldFromPixel(curr.pos(), face, curr.x(), curr.y());
@@ -181,7 +194,6 @@ public final class FloodFillExtractor {
                         PixelPos nb = new PixelPos(curr.pos(), curr.face(), nx, ny, 0);
                         if (!state.visited.contains(nb)) state.queue.add(nb);
                     } else {
-                        // Edge crossing — corner-based lookup
                         List<PixelPos> adjacents = findAdjacentByCorner(level, curr, face, nx, ny);
                         if (!adjacents.isEmpty()) {
                             Gyromancy.LOGGER.debug("[FloodFill] edge ({},{})→({},{}) from {} → {} adj",
@@ -207,6 +219,12 @@ public final class FloodFillExtractor {
             }
         }
 
+        // Dead loop guard: no progress → cancel
+        if (state.visited.size() == visitedBefore) {
+            Gyromancy.LOGGER.debug("[FloodFill] No progress this round — canceling state #{}", state.stateId);
+            return new ExtractionResult(null, null);
+        }
+
         ExtractedGlyph glyph = buildGlyph(state);
 
         int added = 0;
@@ -225,6 +243,24 @@ public final class FloodFillExtractor {
 
         if (glyph.pixels().isEmpty() && added == 0) return new ExtractionResult(null, null);
         return new ExtractionResult(glyph, added > 0 ? resetForNextGroup(state) : null);
+    }
+
+    private static void checkOriginMerge(FloodFillState state, PixelPos curr) {
+        if (allSeeds == null) return;
+        List<FloodFillState> toRemove = null;
+        for (FloodFillState other : allSeeds.values()) {
+            if (other.stateId == state.stateId) continue;
+            if (other.origin.equals(curr)) {
+                if (toRemove == null) toRemove = new ArrayList<>();
+                toRemove.add(other);
+                state.absorb(other);
+                Gyromancy.LOGGER.debug("[FloodFill] State #{} absorbed #{} (origin hit: {})",
+                        state.stateId, other.stateId, curr);
+            }
+        }
+        if (toRemove != null) {
+            for (FloodFillState r : toRemove) allSeeds.remove(r.stateId);
+        }
     }
 
     private static ExtractedGlyph buildGlyph(FloodFillState state) {
@@ -248,43 +284,34 @@ public final class FloodFillExtractor {
     private static List<PixelPos> findAdjacentByCorner(
             ServerLevel level, PixelPos curr, CanvasFace face, int nx, int ny) {
 
-        // Compute world position of the neighbor pixel beyond the edge
         Vec3 worldNeighbor = worldFromPixel(curr.pos(), face, nx, ny);
 
-        // Find adjacent block: use corner-based direction
         Vec3 c0 = face.corner0();
         Vec3 sideW = face.corner1().subtract(c0);
         Vec3 sideH = face.corner3().subtract(c0);
-        Vec3 normal = sideW.cross(sideH);
 
         int pw = face.pixels().getWidth();
         int ph = face.pixels().getHeight();
-        double u = (nx + 0.5) / pw;
-        double v = (ny + 0.5) / ph;
 
-        // Determine which side of the face we crossed
         Vec3 edgeDirection = Vec3.ZERO;
-        if (nx < 0)      edgeDirection = sideW.scale(-1);
+        if (nx < 0)       edgeDirection = sideW.scale(-1);
         else if (nx >= pw) edgeDirection = sideW;
-        if (ny < 0)      edgeDirection = edgeDirection.add(sideH.scale(-1));
+        if (ny < 0)       edgeDirection = edgeDirection.add(sideH.scale(-1));
         else if (ny >= ph) edgeDirection = edgeDirection.add(sideH);
 
         if (edgeDirection.lengthSqr() < EPSILON) return List.of();
 
-        // Normalize and get approximate block direction
         edgeDirection = edgeDirection.normalize();
         Direction adjDir = Direction.getNearest(edgeDirection.x, edgeDirection.y, edgeDirection.z);
         BlockPos adjPos = curr.pos().relative(adjDir);
 
         if (adjPos.equals(curr.pos())) return List.of();
 
-        // Try all faces on the adjacent block
         List<PixelPos> results = new ArrayList<>();
         for (CanvasFace adjFace : getFacesAt(level, adjPos)) {
             PixelPos mapped = pixelFromWorld(worldNeighbor, adjPos, adjFace);
             if (mapped != null
-                    && ManaPixelDetector.isManaPixel(adjFace, mapped.x(), mapped.y())
-                    && !ManaPixelDetector.isMarked(adjFace, mapped.x(), mapped.y())) {
+                    && ManaPixelDetector.isManaPixel(adjFace, mapped.x(), mapped.y())) {
                 results.add(mapped);
             }
         }
@@ -292,15 +319,13 @@ public final class FloodFillExtractor {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // Normalization: stored world coords → 32×32 binary grid
+    // Normalization
     // ═══════════════════════════════════════════════════════════════
 
     public static int[][] normalizeGlyph(ExtractedGlyph glyph) {
         double w = glyph.maxWorldX - glyph.minWorldX;
         double h = glyph.maxWorldY - glyph.minWorldY;
-        if (w <= 0 || h <= 0) {
-            return createFallbackNormalized(glyph);
-        }
+        if (w <= 0 || h <= 0) return createFallbackNormalized(glyph);
 
         double size = Math.max(w, h) * 1.1;
         double padX = (size - w) / 2.0;
@@ -313,20 +338,16 @@ public final class FloodFillExtractor {
         for (int i = 0; i < glyph.worldX.length; i++) {
             int tx = (int) ((glyph.worldX[i] - srcMinX) * scale);
             int ty = (int) ((glyph.worldY[i] - srcMinY) * scale);
-            if (tx >= 0 && tx < 32 && ty >= 0 && ty < 32) {
-                result[ty][tx] = 1;
-            }
+            if (tx >= 0 && tx < 32 && ty >= 0 && ty < 32) result[ty][tx] = 1;
         }
         return result;
     }
 
     private static int[][] createFallbackNormalized(ExtractedGlyph glyph) {
         int[][] result = new int[32][32];
-        int i = 0;
         for (PixelPos p : glyph.pixels) {
             int tx = 16 + p.x(), ty = 16 + p.y();
             if (tx >= 0 && tx < 32 && ty >= 0 && ty < 32) result[ty][tx] = 1;
-            i++;
         }
         return result;
     }

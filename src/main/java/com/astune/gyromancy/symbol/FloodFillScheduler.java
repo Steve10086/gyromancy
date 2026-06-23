@@ -6,36 +6,38 @@ import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractionResult;
 import com.astune.gyromancy.symbol.FloodFillExtractor.FloodFillState;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
 
 /**
- * Tick-budgeted scheduler for cross-block flood fill operations.
+ * Tick-budgeted scheduler with global seed list and origin-based merging.
  *
- * <p>Seeds from one canvas update are submitted as a batch and placed into
- * a single FloodFillState. During BFS, connected seeds merge naturally;
- * disconnected seeds produce separate glyphs from the same state.
+ * <p>All active FloodFillStates live in a single {@link #allSeeds} map.
+ * When a BFS reaches another state's origin pixel, the states merge.
+ * This handles Pigmentum's per-block update packets without spatial heuristics.
  */
 @EventBusSubscriber(modid = Gyromancy.MODID)
 public final class FloodFillScheduler {
 
     static final int MAX_BLOCKS_PER_TICK = 20;
-    private static final double MERGE_MARGIN = 1.5;
+
+    /** Global active states, only accessed from ServerTickEvent.Post (single thread) */
+    static final Map<Integer, FloodFillState> allSeeds = new LinkedHashMap<>();
+    private static int nextStateId = 1;
 
     private static final Queue<PendingTask> pendingTasks = new ConcurrentLinkedQueue<>();
     private static PendingTask activeContinuation = null;
 
-    private static final List<FloodFillState> activeStates = new CopyOnWriteArrayList<>();
     private static final List<BiConsumer<ServerLevel, ExtractedGlyph>> completionCallbacks = new ArrayList<>();
+
+    static {
+        FloodFillExtractor.setAllSeedsRef(allSeeds);
+    }
 
     private FloodFillScheduler() {}
 
@@ -43,44 +45,18 @@ public final class FloodFillScheduler {
     // Public API
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * Submits a batch of seeds from one canvas update for flood fill extraction.
-     * All seeds start in the same FloodFillState queue; connected ones merge via BFS.
-     */
     public static void submitBatch(ServerLevel level, List<PixelPos> seeds) {
         if (seeds.isEmpty()) return;
 
-        // Try to merge into any existing active state
-        PixelPos first = seeds.getFirst();
-        boolean merged = false;
-
-        // Try to find a CanvasFace for the first seed to compute world bounds
-        var faces = FloodFillExtractor.getFacesAt(level, first.pos(), first.face());
-        if (!faces.isEmpty()) {
-            Vec3 w3d = FloodFillExtractor.worldFromPixel(first.pos(), faces.getFirst(), first.x(), first.y());
-            double[] w2d = FloodFillExtractor.flatten(faces.getFirst().primaryFace(), w3d);
-            double wx = w2d[0], wy = w2d[1];
-            for (FloodFillState state : activeStates) {
-                if (isInBounds(state, wx, wy)) {
-                    for (PixelPos s : seeds) {
-                        if (!state.visited.contains(s)) state.queue.add(s);
-                    }
-                    merged = true;
-                    Gyromancy.LOGGER.debug("[FloodFillScheduler] Merged {} seeds into active fill ({} visited)",
-                            seeds.size(), state.visited.size());
-                    break;
-                }
-            }
-        }
-        if (merged) return;
-
-        // New batch
-        FloodFillState state = new FloodFillState(seeds.getFirst());
+        int id = nextStateId++;
+        FloodFillState state = new FloodFillState(id, seeds.getFirst());
         state.initialSeeds.addAll(seeds);
         for (int i = 1; i < seeds.size(); i++) state.queue.add(seeds.get(i));
-        pendingTasks.add(new PendingTask(level, null, state));
 
-        Gyromancy.LOGGER.debug("[FloodFillScheduler] Submitted batch: {} seeds", seeds.size());
+        allSeeds.put(id, state);
+        pendingTasks.add(new PendingTask(level, state));
+
+        Gyromancy.LOGGER.debug("[FloodFillScheduler] Batch #{}: {} seeds", id, seeds.size());
     }
 
     public static void onGlyphExtracted(BiConsumer<ServerLevel, ExtractedGlyph> callback) {
@@ -92,7 +68,7 @@ public final class FloodFillScheduler {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // Tick handler
+    // Tick handler — single-threaded via ServerTickEvent.Post
     // ═══════════════════════════════════════════════════════════════
 
     @SubscribeEvent
@@ -103,23 +79,19 @@ public final class FloodFillScheduler {
         if (activeContinuation != null) {
             ExtractionResult result = FloodFillExtractor.continueExtract(
                     activeContinuation.level, activeContinuation.state, remainingBudget);
-            activeContinuation = handleResult(activeContinuation.level, result, activeContinuation);
-            if (activeContinuation != null) return; // budget exhausted or more groups
+            activeContinuation = handleResult(activeContinuation.level, result, activeContinuation.state);
+            if (activeContinuation != null) return;
         }
 
         // 2. Process pending batches
         while (!pendingTasks.isEmpty() && remainingBudget > 0) {
             PendingTask task = pendingTasks.poll();
-            if (task == null) break;
+            if (task == null || !allSeeds.containsKey(task.state.stateId)) continue;
 
-            ExtractionResult result;
-            if (task.state != null) {
-                result = FloodFillExtractor.continueExtract(task.level, task.state, remainingBudget);
-            } else {
-                result = FloodFillExtractor.extract(task.level, task.seed, remainingBudget);
-            }
+            ExtractionResult result = FloodFillExtractor.continueExtract(
+                    task.level, task.state, remainingBudget);
 
-            PendingTask next = handleResult(task.level, result, task);
+            PendingTask next = handleResult(task.level, result, task.state);
             if (next != null) {
                 activeContinuation = next;
                 break;
@@ -127,20 +99,18 @@ public final class FloodFillScheduler {
         }
     }
 
-    /** Returns non-null if there's more work to continue next tick */
-    private static PendingTask handleResult(ServerLevel level, ExtractionResult result, PendingTask task) {
+    private static PendingTask handleResult(ServerLevel level, ExtractionResult result, FloodFillState state) {
         if (result.glyph() != null) {
             fireCompletion(level, result.glyph());
         }
 
         if (result.continuation() != null) {
-            if (!activeStates.contains(result.continuation())) {
-                activeStates.add(result.continuation());
-            }
-            return new PendingTask(task.level, null, result.continuation());
+            return new PendingTask(level, result.continuation());
         }
 
-        // Fully done
+        // Fully done — remove from global list
+        allSeeds.remove(state.stateId);
+        Gyromancy.LOGGER.debug("[FloodFillScheduler] State #{} completed and removed", state.stateId);
         return null;
     }
 
@@ -152,18 +122,8 @@ public final class FloodFillScheduler {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // Bounds merging
-    // ═══════════════════════════════════════════════════════════════
-
-    private static boolean isInBounds(FloodFillState state, double wx, double wy) {
-        if (state.minWorldX == Double.MAX_VALUE) return false;
-        return wx >= state.minWorldX - MERGE_MARGIN && wx <= state.maxWorldX + MERGE_MARGIN
-            && wy >= state.minWorldY - MERGE_MARGIN && wy <= state.maxWorldY + MERGE_MARGIN;
-    }
-
-    // ═══════════════════════════════════════════════════════════════
     // Internal types
     // ═══════════════════════════════════════════════════════════════
 
-    private record PendingTask(ServerLevel level, PixelPos seed, FloodFillState state) {}
+    private record PendingTask(ServerLevel level, FloodFillState state) {}
 }
