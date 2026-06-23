@@ -238,5 +238,88 @@ public final class GeometryPreprocessUtils {
         nodes.clear();nodes.addAll(alive);edges.clear();edges.addAll(aliveE);
     }
 
+    // ═══════════ Dominant-point edge splitting ═══════════
+
+    /**
+     * Splits every edge at its support points (max-deviation path pixels).
+     *
+     * <p>For each edge AB, a coordinate frame is built with origin at the
+     * midpoint of the straight line AB, u-axis = AB direction, v-axis = ⊥.
+     * For each of the four half-axes (u>0, u<0, v>0, v<0), the path pixel
+     * with the greatest signed distance is selected as a new split node.
+     * Points within 3px of an existing endpoint are skipped (u-axis extrema
+     * naturally fall near A or B).
+     *
+     * <p>A split node is degree-2 (path-continuation point, not a junction
+     * or endpoint). Its edges replace the original edge.
+     */
+    public static void splitEdgesAtSupportPoints(List<SkelNode> nodes, List<SkelEdge> edges) {
+        int nextId = nodes.size();
+        List<SkelNode> newNodes = new ArrayList<>(nodes);
+        List<SkelEdge> newEdges = new ArrayList<>();
+
+        for (SkelEdge e : edges) {
+            SkelNode a = newNodes.get(e.from()), b = newNodes.get(e.to());
+            List<int[]> path = e.path();
+            if (path.size() < 4) { newEdges.add(e); continue; } // too short
+
+            // Build coordinate frame
+            double mx = (a.x() + b.x()) / 2.0, my = (a.y() + b.y()) / 2.0;
+            double dx = b.x() - a.x(), dy = b.y() - a.y();
+            double len = Math.sqrt(dx * dx + dy * dy);
+            if (len < 4) { newEdges.add(e); continue; }
+            double ux = dx / len, uy = dy / len;   // along-axis unit
+            double vx = -uy, vy = ux;              // across-axis unit (⊥ CCW)
+
+            // Scan path for extrema in each half-plane
+            int bestPosU = -1, bestNegU = -1, bestPosV = -1, bestNegV = -1;
+            double maxPosU = -1, maxNegU = -1, maxPosV = -1, maxNegV = -1;
+
+            for (int i = 0; i < path.size(); i++) {
+                int[] p = path.get(i);
+                double wx = p[0] - mx, wy = p[1] - my;
+                double u = wx * ux + wy * uy;
+                double v = wx * vx + wy * vy;
+
+                if (u > 0 && u > maxPosU) { maxPosU = u; bestPosU = i; }
+                if (u < 0 && -u > maxNegU) { maxNegU = -u; bestNegU = i; }
+                if (v > 0 && v > maxPosV) { maxPosV = v; bestPosV = i; }
+                if (v < 0 && -v > maxNegV) { maxNegV = -v; bestNegV = i; }
+            }
+
+            // Collect unique split indices, sorted by path position
+            java.util.BitSet splitIdxs = new java.util.BitSet(path.size());
+            // U-axis extrema → only keep if far from endpoints (not just the existing nodes)
+            if (bestPosU >= 0 && bestPosU > 2 && bestPosU < path.size() - 3) splitIdxs.set(bestPosU);
+            if (bestNegU >= 0 && bestNegU > 2 && bestNegU < path.size() - 3) splitIdxs.set(bestNegU);
+            // V-axis extrema → always keep (these are the true support points)
+            if (bestPosV >= 0 && bestPosV > 1 && bestPosV < path.size() - 2) splitIdxs.set(bestPosV);
+            if (bestNegV >= 0 && bestNegV > 1 && bestNegV < path.size() - 2) splitIdxs.set(bestNegV);
+
+            if (splitIdxs.isEmpty()) { newEdges.add(e); continue; }
+
+            // Split the edge: walk the path, cutting at each split index
+            int prevId = e.from();
+            List<int[]> segment = new ArrayList<>();
+            for (int i = 0; i < path.size(); i++) {
+                segment.add(path.get(i));
+                if (splitIdxs.get(i)) {
+                    int[] sp = path.get(i);
+                    int splitId = nextId++;
+                    newNodes.add(new SkelNode(splitId, sp[0], sp[1], 2, false));
+                    newEdges.add(new SkelEdge(prevId, splitId, segment));
+                    prevId = splitId;
+                    segment = new ArrayList<>();
+                }
+            }
+            // Final segment
+            if (!segment.isEmpty())
+                newEdges.add(new SkelEdge(prevId, e.to(), segment));
+        }
+
+        nodes.clear(); nodes.addAll(newNodes);
+        edges.clear(); edges.addAll(newEdges);
+    }
+
     private static List<List<Integer>> buildAdj(int n, List<SkelEdge> edges) { List<List<Integer>> adj=new ArrayList<>(n); for(int i=0;i<n;i++)adj.add(new ArrayList<>()); for(int ei=0;ei<edges.size();ei++){SkelEdge e=edges.get(ei);adj.get(e.from()).add(ei);adj.get(e.to()).add(ei);} return adj; }
 }

@@ -65,9 +65,9 @@ public class SkeletonExportTest {
             GeometryPreprocessUtils.mergeZeroEdges(nodes, edges);
             int minBranch = Math.max(cropped[0].length, cropped.length) / 10;
             GeometryPreprocessUtils.pruneShortBranches(nodes, edges, minBranch);
+            GeometryPreprocessUtils.splitEdgesAtSupportPoints(nodes, edges);
 
             renderCombined(cropped, nodes, edges, new File(outDir, name + ".png"));
-
             writeDebug(name, nodes, edges, outDir);
 
             System.out.printf("[SkeletonExport] %-28s %d×%d → skel %d×%d  nodes=%d  edges=%d%n",
