@@ -115,6 +115,75 @@ public final class GeometryUtils {
     }
 
     /**
+     * Fills enclosed background holes whose area is below
+     * {@code max(5, max(w,h)/10)} using 4-connected flood fill.
+     *
+     * <p>A hole is a background (0) region that does not touch any border
+     * of the image. Small holes from drawing artifacts (thin-line crossings,
+     * missed corner fills) are filled to produce a solid shape before
+     * skeletonization.
+     *
+     * @param src binary image (0=bg, 1=fg)
+     * @return new image with small holes filled
+     */
+    public static int[][] fillSmallHoles(int[][] src) {
+        int h = src.length, w = h > 0 ? src[0].length : 0;
+        if (w == 0) return new int[0][0];
+
+        int areaThreshold = Math.min(5, Math.max(w, h) / 10);
+
+        // Copy src into mutable grid; we'll fill holes in-place on the copy
+        int[][] dst = new int[h][w];
+        for (int y = 0; y < h; y++) System.arraycopy(src[y], 0, dst[y], 0, w);
+
+        // visited mask for flood fill (4-connected bg scan)
+        boolean[][] visited = new boolean[h][w];
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (dst[y][x] != 0 || visited[y][x]) continue;
+
+                // Flood-fill this background region
+                java.util.ArrayDeque<int[]> q = new java.util.ArrayDeque<>();
+                java.util.ArrayList<int[]> region = new java.util.ArrayList<>();
+                q.add(new int[]{x, y});
+                visited[y][x] = true;
+                boolean touchesBorder = false;
+
+                while (!q.isEmpty()) {
+                    int[] p = q.poll();
+                    int cx = p[0], cy = p[1];
+                    region.add(p);
+
+                    if (cx == 0 || cx == w - 1 || cy == 0 || cy == h - 1)
+                        touchesBorder = true;
+
+                    // 4-connected neighbors
+                    if (cx > 0 && dst[cy][cx - 1] == 0 && !visited[cy][cx - 1]) {
+                        visited[cy][cx - 1] = true; q.add(new int[]{cx - 1, cy});
+                    }
+                    if (cx + 1 < w && dst[cy][cx + 1] == 0 && !visited[cy][cx + 1]) {
+                        visited[cy][cx + 1] = true; q.add(new int[]{cx + 1, cy});
+                    }
+                    if (cy > 0 && dst[cy - 1][cx] == 0 && !visited[cy - 1][cx]) {
+                        visited[cy - 1][cx] = true; q.add(new int[]{cx, cy - 1});
+                    }
+                    if (cy + 1 < h && dst[cy + 1][cx] == 0 && !visited[cy + 1][cx]) {
+                        visited[cy + 1][cx] = true; q.add(new int[]{cx, cy + 1});
+                    }
+                }
+
+                // Fill if enclosed and small
+                if (!touchesBorder && region.size() < areaThreshold) {
+                    for (int[] p : region) dst[p[1]][p[0]] = 1;
+                }
+            }
+        }
+
+        return dst;
+    }
+
+    /**
      * Upscales a binary image to at least {@code minSize} in both dimensions
      * while <b>preserving 8-connectivity</b>.
      *
@@ -255,6 +324,147 @@ public final class GeometryUtils {
 
         return dst;
     }
+
+    // ═══════ Guo-Hall Thinning (mirrors skimage thin(), exact LUTs) ═══════
+
+    /**
+     * Neighborhood mask matching skimage {@code thin()}:
+     * <pre>
+     *   [ 8][ 4][ 2]     NW(bit3) N(bit2)  NE(bit1)
+     *   [16][ 0][ 1]      W(bit4) C         E(bit0)
+     *   [32][64][128]    SW(bit5) S(bit6)  SE(bit7)
+     * </pre>
+     * Bit 0=E(1), bit1=NE(2), bit2=N(4), bit3=NW(8),
+     * bit4=W(16), bit5=SW(32), bit6=S(64), bit7=SE(128)
+     */
+    private static final int[][] SKEL_MASK = {{8, 4, 2}, {16, 0, 1}, {32, 64, 128}};
+
+    /** Guo & Hall (1989) G123_LUT — exact values from skimage._skeletonize. */
+    private static final boolean[] G123_LUT = makeG123Lut();
+    /** Guo & Hall (1989) G123P_LUT — exact values from skimage._skeletonize. */
+    private static final boolean[] G123P_LUT = makeG123PLut();
+
+    /**
+     * Binary skeletonization via Guo & Hall (1989) thinning.
+     * Identical to {@code skimage.morphology.thin()} — uses the exact
+     * same hard-coded G123_LUT and G123P_LUT.
+     *
+     * @param src binary image (0=bg, 1=fg)
+     * @return 1px-wide 8-connected skeleton
+     */
+    public static int[][] skeletonize(int[][] src) {
+        int h = src.length, w = h > 0 ? src[0].length : 0;
+        if (w == 0 || h == 0) return new int[0][0];
+
+        boolean[][] a = new boolean[h + 2][w + 2]; // padded (read)
+        boolean[][] b = new boolean[h + 2][w + 2]; // cleaned (write)
+
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                a[y + 1][x + 1] = src[y][x] != 0;
+
+        boolean changed;
+        do {
+            changed = false;
+
+            // Sub-iteration 1: a → b
+            copy(b, a, h, w);
+            for (int y = 1; y <= h; y++)
+                for (int x = 1; x <= w; x++)
+                    if (a[y][x] && G123_LUT[encodeNeighbors(a, x, y)]) {
+                        b[y][x] = false; changed = true;
+                    }
+            swapRows(a, b);
+
+            // Sub-iteration 2: a → b
+            copy(b, a, h, w);
+            for (int y = 1; y <= h; y++)
+                for (int x = 1; x <= w; x++)
+                    if (a[y][x] && G123P_LUT[encodeNeighbors(a, x, y)]) {
+                        b[y][x] = false; changed = true;
+                    }
+            swapRows(a, b);
+
+        } while (changed);
+
+        int[][] out = new int[h][w];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                if (a[y + 1][x + 1]) out[y][x] = 1;
+        return out;
+    }
+
+    private static void copy(boolean[][] dst, boolean[][] src, int h, int w) {
+        for (int y = 0; y <= h + 1; y++)
+            System.arraycopy(src[y], 0, dst[y], 0, w + 2);
+    }
+
+    private static void swapRows(boolean[][] x, boolean[][] y) {
+        for (int r = 0; r < x.length; r++) {
+            boolean[] t = x[r]; x[r] = y[r]; y[r] = t;
+        }
+    }
+
+    private static int encodeNeighbors(boolean[][] img, int x, int y) {
+        int idx = 0;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+                if (img[y + dy][x + dx])
+                    idx += SKEL_MASK[dy + 1][dx + 1];
+        return idx;
+    }
+
+    // ═══════ LUTs: EXACT values from skimage._skeletonize ═══════
+    // Generated by _generate_thin_luts() — Guo & Hall 1989
+
+    private static boolean[] makeG123Lut() {
+        // G1 AND G2 AND G3
+        boolean[] lut = new boolean[256];
+        for (int n = 0; n < 256; n++)
+            lut[n] = g1(n) && g2(n) && g3(n);
+        return lut;
+    }
+
+    private static boolean[] makeG123PLut() {
+        // G1 AND G2 AND G3'
+        boolean[] lut = new boolean[256];
+        for (int n = 0; n < 256; n++)
+            lut[n] = g1(n) && g2(n) && g3p(n);
+        return lut;
+    }
+
+    /** G1: exactly one 0→1 transition in bit0→bit1→...→bit7→bit0 (E,NE,N,NW,W,SW,S,SE). */
+    private static boolean g1(int n) {
+        int s = 0;
+        if (!bh(n, 0) && (bh(n, 1) || bh(n, 2))) s++;  // E→NE→N
+        if (!bh(n, 2) && (bh(n, 3) || bh(n, 4))) s++;  // N→NW→W
+        if (!bh(n, 4) && (bh(n, 5) || bh(n, 6))) s++;  // W→SW→S
+        if (!bh(n, 6) && (bh(n, 7) || bh(n, 0))) s++;  // S→SE→E
+        return s == 1;
+    }
+
+    /** G2: min(n1, n2) ∈ [2,3] — endpoint preservation. */
+    private static boolean g2(int n) {
+        int n1 = 0, n2 = 0;
+        for (int k : new int[]{1, 3, 5, 7}) {
+            if (bh(n, k) || bh(n, k - 1)) n1++;
+            if (bh(n, k) || bh(n, (k + 1) % 8)) n2++;
+        }
+        int m = Math.min(n1, n2);
+        return m == 2 || m == 3;
+    }
+
+    /** G3: SE-boundary — not ( (NE or N or not E) and S ). */
+    private static boolean g3(int n) {
+        return !((bh(n, 1) || bh(n, 2) || !bh(n, 7)) && bh(n, 0));
+    }
+
+    /** G3': NW-boundary — not ( (SW or S or not W) and N ). */
+    private static boolean g3p(int n) {
+        return !((bh(n, 5) || bh(n, 6) || !bh(n, 3)) && bh(n, 4));
+    }
+
+    private static boolean bh(int n, int i) { return (n >> i & 1) == 1; }
 
     // ═══════════════════════ Zhang-Suen Thinning ═══════════════════
 
@@ -1132,6 +1342,68 @@ public final class GeometryUtils {
                 }
         if (minX == Integer.MAX_VALUE) return new int[]{0, 0, 0, 0};
         return new int[]{minX, minY, maxX, maxY};
+    }
+
+    /**
+     * Finds the largest 8-connected foreground component and crops to its
+     * bounding box, excluding any isolated noise pixels outside the main shape.
+     *
+     * @param src binary image (typically a skeleton)
+     * @return new array containing only the largest 8-connected component
+     */
+    public static int[][] cropToForeground(int[][] src) {
+        int h = src.length, w = h > 0 ? src[0].length : 0;
+        if (w == 0) return new int[1][1];
+
+        // Find largest 8-connected component and its bounding box
+        boolean[][] visited = new boolean[h][w];
+        int bestSize = 0;
+        int bestMinX = -1, bestMinY = -1, bestMaxX = -1, bestMaxY = -1;
+
+        for (int sy = 0; sy < h; sy++) {
+            for (int sx = 0; sx < w; sx++) {
+                if (src[sy][sx] == 0 || visited[sy][sx]) continue;
+
+                java.util.ArrayDeque<int[]> q = new java.util.ArrayDeque<>();
+                q.add(new int[]{sx, sy});
+                visited[sy][sx] = true;
+                int size = 0;
+                int cMinX = w, cMinY = h, cMaxX = -1, cMaxY = -1;
+
+                while (!q.isEmpty()) {
+                    int[] p = q.poll();
+                    int cx = p[0], cy = p[1];
+                    size++;
+                    if (cx < cMinX) cMinX = cx; if (cx > cMaxX) cMaxX = cx;
+                    if (cy < cMinY) cMinY = cy; if (cy > cMaxY) cMaxY = cy;
+
+                    // 8-connected neighbors
+                    for (int dy = -1; dy <= 1; dy++)
+                        for (int dx = -1; dx <= 1; dx++) {
+                            if (dx == 0 && dy == 0) continue;
+                            int nx = cx + dx, ny = cy + dy;
+                            if (nx >= 0 && nx < w && ny >= 0 && ny < h
+                                    && src[ny][nx] != 0 && !visited[ny][nx]) {
+                                visited[ny][nx] = true; q.add(new int[]{nx, ny});
+                            }
+                        }
+                }
+
+                if (size > bestSize) {
+                    bestSize = size;
+                    bestMinX = cMinX; bestMinY = cMinY;
+                    bestMaxX = cMaxX; bestMaxY = cMaxY;
+                }
+            }
+        }
+
+        if (bestSize == 0) return new int[1][1];
+
+        int outW = bestMaxX - bestMinX + 1, outH = bestMaxY - bestMinY + 1;
+        int[][] dst = new int[outH][outW];
+        for (int y = bestMinY; y <= bestMaxY; y++)
+            System.arraycopy(src[y], bestMinX, dst[y - bestMinY], 0, outW);
+        return dst;
     }
 
     public static double[] computeCentroid(int[][] binaryImage) {
