@@ -3,6 +3,7 @@ package com.astune.gyromancy.symbol;
 import ai.onnxruntime.*;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.util.GeometryUtils;
+import com.astune.gyromancy.util.GeometryPreprocessUtils;
 import com.astune.gyromancy.util.GeometryUtils.SkeletonGraph;
 import com.astune.gyromancy.util.TemplateLoader;
 import com.google.gson.Gson;
@@ -93,10 +94,10 @@ public final class MLSymbolMatcher {
 
         int[][] normDrawn = GeometryUtils.normalize(image, 32, 32);
 
-        int[][] hiresDrawn = GeometryUtils.upscaleConnectivityPreserving(normDrawn, 128);
+        int[][] hiresDrawn = GeometryPreprocessUtils.upscaleConnectivityPreserving(normDrawn, 128);
         int k = (128 + Math.min(normDrawn.length, normDrawn[0].length) - 1)
                 / Math.min(normDrawn.length, normDrawn[0].length);
-        int[][] smoothDrawn = GeometryUtils.gaussianSmoothBinary(hiresDrawn, k / 3.0);
+        int[][] smoothDrawn = GeometryPreprocessUtils.gaussianSmoothBinary(hiresDrawn, k / 3.0);
         int[][] normSkel = GeometryUtils.thin(smoothDrawn);
         int[][] normPruned = GeometryUtils.pruneSkeleton(normSkel, 0.04);
         SkeletonGraph drawnGraph = GeometryUtils.buildSkeletonGraph(normPruned);
@@ -260,10 +261,10 @@ public final class MLSymbolMatcher {
 
         int[][] norm = GeometryUtils.normalize(raw, 32, 32);
 
-        int[][] hires = GeometryUtils.upscaleConnectivityPreserving(norm, 128);
+        int[][] hires = GeometryPreprocessUtils.upscaleConnectivityPreserving(norm, 128);
         int k2 = (128 + Math.min(norm.length, norm[0].length) - 1)
                  / Math.min(norm.length, norm[0].length);
-        int[][] smoothHires = GeometryUtils.gaussianSmoothBinary(hires, k2 / 3.0);
+        int[][] smoothHires = GeometryPreprocessUtils.gaussianSmoothBinary(hires, k2 / 3.0);
         int[][] skel = GeometryUtils.thin(smoothHires);
         int[][] pruned = GeometryUtils.pruneSkeleton(skel, 0.04);
         SkeletonGraph graph = GeometryUtils.buildSkeletonGraph(pruned);

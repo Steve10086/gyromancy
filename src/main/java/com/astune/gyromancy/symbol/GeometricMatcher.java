@@ -2,6 +2,7 @@ package com.astune.gyromancy.symbol;
 
 import com.astune.gyromancy.api.symbol.SymbolTemplate;
 import com.astune.gyromancy.util.GeometryUtils;
+import com.astune.gyromancy.util.GeometryPreprocessUtils;
 import com.astune.gyromancy.util.GeometryUtils.SkeletonGraph;
 import com.astune.gyromancy.util.GeometryUtils.GraphNode;
 import com.astune.gyromancy.util.GeometryUtils.NodeType;
@@ -50,10 +51,10 @@ public final class GeometricMatcher {
         int drawnMaxArea = GeometryUtils.maxEnclosedArea(normDrawn);
 
         // Upscale to ≥128×128 with 8-connectivity, then anti-alias
-        int[][] hiresDrawn = GeometryUtils.upscaleConnectivityPreserving(normDrawn, 128);
+        int[][] hiresDrawn = GeometryPreprocessUtils.upscaleConnectivityPreserving(normDrawn, 128);
         int k = (128 + Math.min(normDrawn.length, normDrawn[0].length) - 1)
                 / Math.min(normDrawn.length, normDrawn[0].length);
-        int[][] smoothDrawn = GeometryUtils.gaussianSmoothBinary(hiresDrawn, k / 3.0);
+        int[][] smoothDrawn = GeometryPreprocessUtils.gaussianSmoothBinary(hiresDrawn, k / 3.0);
         int[][] normSkel = GeometryUtils.thin(smoothDrawn);
         int[][] normPruned = GeometryUtils.pruneSkeleton(normSkel, 0.04);
         SkeletonGraph drawnGraph = GeometryUtils.buildSkeletonGraph(normPruned);

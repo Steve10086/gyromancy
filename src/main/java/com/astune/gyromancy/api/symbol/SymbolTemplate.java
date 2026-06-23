@@ -1,6 +1,7 @@
 package com.astune.gyromancy.api.symbol;
 
 import com.astune.gyromancy.util.GeometryUtils;
+import com.astune.gyromancy.util.GeometryPreprocessUtils;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
@@ -56,10 +57,10 @@ public record SymbolTemplate(
 
             // Metrics & graph from normalized pattern
             int[][] norm = GeometryUtils.normalize(pattern, 32, 32);
-            int[][] hires = GeometryUtils.upscaleConnectivityPreserving(norm, 128);
+            int[][] hires = GeometryPreprocessUtils.upscaleConnectivityPreserving(norm, 128);
             int upK = (128 + Math.min(norm.length, norm[0].length) - 1)
                     / Math.min(norm.length, norm[0].length);
-            int[][] smoothHires = GeometryUtils.gaussianSmoothBinary(hires, upK / 3.0);
+            int[][] smoothHires = GeometryPreprocessUtils.gaussianSmoothBinary(hires, upK / 3.0);
 
             // Prune #2: build graph from normalized + upscaled + smoothed + cleaned skeleton
             int[][] normSkel = GeometryUtils.thin(smoothHires);
