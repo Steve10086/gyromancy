@@ -253,10 +253,17 @@ public final class GeometryPreprocessUtils {
      * <p>A split node is degree-2 (path-continuation point, not a junction
      * or endpoint). Its edges replace the original edge.
      */
-    public static void splitEdgesAtSupportPoints(List<SkelNode> nodes, List<SkelEdge> edges) {
+    public static void splitEdgesAtSupportPoints(List<SkelNode> nodes, List<SkelEdge> edges,
+            int imgW, int imgH) {
         int nextId = nodes.size();
         List<SkelNode> newNodes = new ArrayList<>(nodes);
         List<SkelEdge> newEdges = new ArrayList<>();
+
+        // Guards
+        int minEndDist = Math.max(imgW, imgH) / 5;
+        java.util.HashSet<Long> existingPos = new java.util.HashSet<>();
+        for (SkelNode nd : newNodes)
+            existingPos.add(((long) nd.x() << 32) | (nd.y() & 0xFFFF_FFFFL));
 
         for (SkelEdge e : edges) {
             SkelNode a = newNodes.get(e.from()), b = newNodes.get(e.to());
@@ -305,11 +312,40 @@ public final class GeometryPreprocessUtils {
                 segment.add(path.get(i));
                 if (splitIdxs.get(i)) {
                     int[] sp = path.get(i);
-                    int splitId = nextId++;
-                    newNodes.add(new SkelNode(splitId, sp[0], sp[1], 2, false));
-                    newEdges.add(new SkelEdge(prevId, splitId, segment));
-                    prevId = splitId;
-                    segment = new ArrayList<>();
+
+                    // Guard 1: angle SP→A vs SP→B (macro-angle to edge endpoints)
+                    double dxA = a.x() - sp[0], dyA = a.y() - sp[1];
+                    double dxB = b.x() - sp[0], dyB = b.y() - sp[1];
+                    double lenA = Math.sqrt(dxA*dxA + dyA*dyA);
+                    double lenB = Math.sqrt(dxB*dxB + dyB*dyB);
+                    boolean sharp = true;
+                    if (lenA > 1e-6 && lenB > 1e-6) {
+                        double cos = (dxA*dxB + dyA*dyB) / (lenA * lenB);
+                        cos = Math.max(-1, Math.min(1, cos));
+                        double angle = Math.toDegrees(Math.acos(cos));
+                        sharp = angle < 160 || angle > 200;
+                    }
+
+                    // Guard 2: not too close to any existing node
+                    boolean farEnough = true;
+                    for (SkelNode nd : newNodes) {
+                        int ndx = sp[0] - nd.x(), ndy = sp[1] - nd.y();
+                        if (ndx*ndx + ndy*ndy < minEndDist * minEndDist) {
+                            farEnough = false; break;
+                        }
+                    }
+
+                    // Guard 3: position not already occupied
+                    long posKey = ((long) sp[0] << 32) | (sp[1] & 0xFFFF_FFFFL);
+                    boolean novel = existingPos.add(posKey);
+
+                    if (sharp && farEnough && novel) {
+                        int splitId = nextId++;
+                        newNodes.add(new SkelNode(splitId, sp[0], sp[1], 2, false));
+                        newEdges.add(new SkelEdge(prevId, splitId, segment));
+                        prevId = splitId;
+                        segment = new ArrayList<>();
+                    }
                 }
             }
             // Final segment
