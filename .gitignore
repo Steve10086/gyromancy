@@ -41,3 +41,10 @@ repo/
 
 ### Design Documents ###
 DESIGN_PLAN.md
+
+.venv
+venv
+.gz
+.log
+.jar
+
