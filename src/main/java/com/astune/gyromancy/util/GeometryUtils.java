@@ -466,6 +466,423 @@ public final class GeometryUtils {
 
     private static boolean bh(int n, int i) { return (n >> i & 1) == 1; }
 
+    // ═══════════ Skeleton Graph (convolution-based, lightweight) ═══════════
+
+    /** Convolution kernel for 8-neighbor counting. */
+    private static final int[][] CONV8 = {{1,1,1},{1,0,1},{1,1,1}};
+
+    /** A node on the skeleton graph. */
+    public record SkelNode(int id, int x, int y, int degree, boolean isEndpoint) {}
+
+    /** An edge connecting two nodes with the pixel path between them. */
+    public record SkelEdge(int from, int to, List<int[]> path) {
+        public int length() { return path.size(); }
+    }
+
+    /**
+     * Extracts endpoints (degree=1) and junctions (degree≥3) from a skeleton
+     * using 8-neighbor convolution.
+     *
+     * @param skel binary skeleton (0=bg, 1=fg)
+     * @return list of nodes with unique IDs, ordered by (y, x)
+     */
+    public static List<SkelNode> extractNodes(int[][] skel) {
+        int h = skel.length, w = h > 0 ? skel[0].length : 0;
+        List<SkelNode> nodes = new ArrayList<>();
+        int id = 0;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                if (skel[y][x] != 0) {
+                    int deg = countNeighbors8(skel, x, y);
+                    if (deg != 2) { // endpoint (1) or junction (≥3)
+                        nodes.add(new SkelNode(id++, x, y, deg, deg == 1));
+                    }
+                }
+        return nodes;
+    }
+
+    /** 8-neighbor count via 3×3 convolution kernel. */
+    private static int countNeighbors8(int[][] img, int x, int y) {
+        int h = img.length, w = img[0].length;
+        int cnt = 0;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int ny = y + dy, nx = x + dx;
+                if (ny >= 0 && ny < h && nx >= 0 && nx < w && img[ny][nx] != 0)
+                    cnt++;
+            }
+        return cnt;
+    }
+
+    /**
+     * Traces all edges between nodes along the skeleton.
+     *
+     * <p>For each node, walks outward along the skeleton until another
+     * node is reached. Each path is recorded once.
+     *
+     * @param skel  binary skeleton
+     * @param nodes list of nodes (IDs must match their position in this list)
+     * @return list of edges
+     */
+    public static List<SkelEdge> traceEdges(int[][] skel, List<SkelNode> nodes) {
+        int h = skel.length, w = skel[0].length;
+        int n = nodes.size();
+        if (n == 0) return List.of();
+
+        // Build (x,y) → nodeId lookup
+        int[][] nodeId = new int[h][w];
+        for (int i = 0; i < h; i++) Arrays.fill(nodeId[i], -1);
+        for (SkelNode nd : nodes)
+            nodeId[nd.y()][nd.x()] = nd.id();
+
+        boolean[][] visited = new boolean[h][w];
+        List<SkelEdge> edges = new ArrayList<>();
+
+        for (SkelNode start : nodes) {
+            int sx = start.x(), sy = start.y();
+            // Walk each skeleton neighbor
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++) {
+                    if (dx == 0 && dy == 0) continue;
+                    int nx = sx + dx, ny = sy + dy;
+                    if (ny < 0 || ny >= h || nx < 0 || nx >= w) continue;
+                    if (skel[ny][nx] == 0 || visited[ny][nx]) continue;
+
+                    // Trace from this neighbor
+                    int prevX = sx, prevY = sy;
+                    int cx = nx, cy = ny;
+                    List<int[]> path = new ArrayList<>();
+                    boolean hitNode = false;
+                    int endId = -1;
+                    int steps = 0;
+
+                    while (steps < w * h) {
+                        path.add(new int[]{cx, cy});
+                        visited[cy][cx] = true;
+                        steps++;
+
+                        int nid = nodeId[cy][cx];
+                        if (nid >= 0) {
+                            endId = nid;
+                            hitNode = true;
+                            break;
+                        }
+
+                        // Move to next unvisited skeleton neighbor
+                        boolean moved = false;
+                        // Prefer any unvisited neighbor (there should be ≤2 for path pixels)
+                        for (int ddy = -1; ddy <= 1; ddy++)
+                            for (int ddx = -1; ddx <= 1; ddx++) {
+                                if (ddx == 0 && ddy == 0) continue;
+                                int tnx = cx + ddx, tny = cy + ddy;
+                                if (tny < 0 || tny >= h || tnx < 0 || tnx >= w) continue;
+                                if (skel[tny][tnx] == 0) continue;
+                                if (tnx == prevX && tny == prevY) continue;
+                                // Don't walk into another node unless it's the direct next step
+                                int tnid = nodeId[tny][tnx];
+                                if (tnid >= 0) {
+                                    // Reached a node → record the edge immediately
+                                    path.add(new int[]{tnx, tny});
+                                    visited[tny][tnx] = true;
+                                    endId = tnid;
+                                    hitNode = true;
+                                    moved = true;
+                                    break;
+                                }
+                                if (!visited[tny][tnx]) {
+                                    prevX = cx; prevY = cy;
+                                    cx = tnx; cy = tny;
+                                    moved = true;
+                                    break;
+                                }
+                            }
+                        if (!moved) break;
+                        if (hitNode) break;
+                    }
+
+                    if (hitNode && endId >= 0) {
+                        edges.add(new SkelEdge(start.id(), endId, path));
+                    }
+                }
+        }
+
+        // Deduplicate: keep only one direction per edge pair
+        List<SkelEdge> deduped = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (SkelEdge e : edges) {
+            String key = Math.min(e.from(), e.to()) + "_" + Math.max(e.from(), e.to());
+            if (seen.add(key)) deduped.add(e);
+        }
+        return deduped;
+    }
+
+    /**
+     * Merges nodes connected by an edge of length ≤ 1 (adjacent deg≠2 pixels
+     * on the skeleton — Guo-Hall stair-step artifact). The two nodes are
+     * replaced by a single node at their midpoint with the max of their
+     * skeleton degrees. All edges incident to either node are remapped.
+     *
+     * <p>Must run before {@link #pruneShortBranches} — otherwise adjacent
+     * junctions get orphaned by the pruning step.
+     */
+    public static void mergeZeroEdges(List<SkelNode> nodes, List<SkelEdge> edges) {
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (int ei = 0; ei < edges.size(); ei++) {
+                SkelEdge e = edges.get(ei);
+                if (e.length() > 1) continue;
+                int a = e.from(), b = e.to();
+                if (a == b) continue;
+
+                SkelNode na = nodes.get(a), nb = nodes.get(b);
+                int mx = (na.x() + nb.x()) / 2, my = (na.y() + nb.y()) / 2;
+                int md = Math.max(na.degree(), nb.degree());
+                boolean ep = na.isEndpoint() && nb.isEndpoint();
+
+                int n = nodes.size();
+                int[] oldToNew = new int[n];
+                Arrays.fill(oldToNew, -1);
+                List<SkelNode> merged = new ArrayList<>();
+                for (int i = 0; i < n; i++) {
+                    if (i == b) continue;
+                    oldToNew[i] = merged.size();
+                    if (i == a)
+                        merged.add(new SkelNode(merged.size(), mx, my, md, ep));
+                    else {
+                        SkelNode o = nodes.get(i);
+                        merged.add(new SkelNode(merged.size(), o.x(), o.y(), o.degree(), o.isEndpoint()));
+                    }
+                }
+
+                Set<String> seen = new HashSet<>();
+                List<SkelEdge> remapped = new ArrayList<>();
+                for (int ej = 0; ej < edges.size(); ej++) {
+                    if (ej == ei) continue;
+                    SkelEdge oe = edges.get(ej);
+                    int nf = oldToNew[oe.from()], nt = oldToNew[oe.to()];
+                    // Redirect edges incident to the removed node (b) to the survivor (a)
+                    if (oe.from() == b) nf = oldToNew[a];
+                    if (oe.to() == b) nt = oldToNew[a];
+                    if (nf < 0 || nt < 0 || nf == nt) continue;
+                    String k = Math.min(nf, nt) + "_" + Math.max(nf, nt);
+                    if (seen.add(k)) remapped.add(new SkelEdge(nf, nt, oe.path()));
+                }
+                nodes.clear(); nodes.addAll(merged);
+                edges.clear(); edges.addAll(remapped);
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    /**
+     * Prunes short endpoint branches from the skeleton graph.
+     *
+     * <p>A branch is "short" if its pixel-path length &lt; {@code minLen}.
+     * The endpoint node is removed and its connecting edge is deleted;
+     * the junction node at the other end has its degree decremented.
+     *
+     * <p>Does NOT modify the skeleton image — only the graph representation.
+     *
+     * @param nodes  list to mutate (endpoints are removed)
+     * @param edges  list to mutate (pruned edges are removed)
+     * @param minLen minimum edge length to keep (in skeleton pixels)
+     */
+    public static void pruneShortBranches(List<SkelNode> nodes, List<SkelEdge> edges, int minLen) {
+        // Build adjacency: nodeId → list of edge indices
+        int n = nodes.size();
+        List<List<Integer>> adj = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) adj.add(new ArrayList<>());
+        for (int ei = 0; ei < edges.size(); ei++) {
+            SkelEdge e = edges.get(ei);
+            adj.get(e.from()).add(ei);
+            adj.get(e.to()).add(ei);
+        }
+
+        // Track edges to remove
+        Set<Integer> removeEdges = new HashSet<>();
+        Set<Integer> removeNodes = new HashSet<>();
+        boolean changed = true;
+
+        while (changed) {
+            changed = false;
+            for (int ni = 0; ni < n; ni++) {
+                if (removeNodes.contains(ni)) continue;
+                SkelNode node = nodes.get(ni);
+                if (!node.isEndpoint()) continue;
+                List<Integer> myEdges = adj.get(ni);
+                // Find the one remaining edge (ignoring already-marked ones)
+                int livingEdge = -1;
+                for (int ei : myEdges)
+                    if (!removeEdges.contains(ei)) { livingEdge = ei; break; }
+                if (livingEdge < 0) continue;
+
+                SkelEdge e = edges.get(livingEdge);
+                if (e.length() >= minLen) continue;
+
+                // Prune this edge and endpoint
+                removeEdges.add(livingEdge);
+                removeNodes.add(ni);
+
+                // Other end becomes an endpoint if it had degree=2 (path pixel)
+                // after losing this edge
+                int otherId = (e.from() == ni) ? e.to() : e.from();
+                SkelNode other = nodes.get(otherId);
+
+                // Count how many living edges the other node has
+                int livingCount = 0;
+                for (int ei : adj.get(otherId))
+                    if (!removeEdges.contains(ei)) livingCount++;
+
+                if (livingCount == 1) {
+                    // Other node becomes an endpoint (update degree if it was a junction)
+                    SkelNode updated = new SkelNode(other.id(), other.x(), other.y(), 1, true);
+                    nodes.set(otherId, updated);
+                }
+                changed = true;
+            }
+        }
+
+        // Apply removals
+        List<SkelNode> keptNodes = new ArrayList<>();
+        int[] oldToNew = new int[n];
+        Arrays.fill(oldToNew, -1);
+        for (int i = 0; i < n; i++)
+            if (!removeNodes.contains(i)) {
+                oldToNew[i] = keptNodes.size();
+                SkelNode old = nodes.get(i);
+                keptNodes.add(new SkelNode(oldToNew[i], old.x(), old.y(), old.degree(), old.isEndpoint()));
+            }
+
+        List<SkelEdge> keptEdges = new ArrayList<>();
+        for (int ei = 0; ei < edges.size(); ei++)
+            if (!removeEdges.contains(ei)) {
+                SkelEdge e = edges.get(ei);
+                int nf = oldToNew[e.from()], nt = oldToNew[e.to()];
+                if (nf >= 0 && nt >= 0)
+                    keptEdges.add(new SkelEdge(nf, nt, e.path()));
+            }
+
+        // Phase 2: collapse degree-2 path-point nodes
+        collapseDegree2AfterPruning(keptNodes, keptEdges);
+
+        nodes.clear(); nodes.addAll(keptNodes);
+        edges.clear(); edges.addAll(keptEdges);
+    }
+
+    /**
+     * Collapses any node with exactly 2 remaining graph edges that resulted
+     * from the pruning pass. Only runs on nodes whose neighbor count changed
+     * — a natural junction with deg≥3 in the skeleton is NOT collapsed even
+     * if it happens to have 2 edges (e.g. fire symbol's two junction nodes).
+     *
+     * <p>Heuristic: a node is collapsible iff its current graph degree is 2
+     * AND its original skeleton degree was ≤3 (meaning the original degree
+     * could have been 3 knocked down to 2, or a path point erroneously
+     * included due to a nearby branch).
+     */
+    private static void collapseDegree2AfterPruning(List<SkelNode> nodes, List<SkelEdge> edges) {
+        int n = nodes.size();
+        if (n == 0) return;
+
+        List<List<Integer>> adj = buildAdj(n, edges);
+        Set<Integer> deadEdges = new HashSet<>();
+        Set<Integer> deadNodes = new HashSet<>();
+
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (int xi = 0; xi < n; xi++) {
+                if (deadNodes.contains(xi)) continue;
+                // Count living edges
+                int living = 0, e1 = -1, e2 = -1;
+                for (int ei : adj.get(xi))
+                    if (!deadEdges.contains(ei)) {
+                        if (living == 0) e1 = ei;
+                        else if (living == 1) e2 = ei;
+                        living++;
+                    }
+                if (living != 2) continue;
+
+                SkelNode xNode = nodes.get(xi);
+                // Only collapse if this wasn't a high-degree junction originally
+                // (deg ≥ 4 in skeleton = true branch point, must NOT be collapsed)
+                if (xNode.degree() >= 4) continue;
+
+                SkelEdge edge1 = edges.get(e1), edge2 = edges.get(e2);
+                int a = (edge1.from() == xi) ? edge1.to() : edge1.from();
+                int b = (edge2.from() == xi) ? edge2.to() : edge2.from();
+                if (a == b) continue; // self-loop, skip
+
+                // Merge paths
+                List<int[]> merged = new ArrayList<>();
+                boolean e1FromX = (edge1.from() == xi);
+                if (e1FromX) {
+                    for (int i = edge1.path().size() - 1; i >= 0; i--)
+                        merged.add(edge1.path().get(i));
+                } else {
+                    merged.addAll(edge1.path());
+                }
+                boolean e2ToX = (edge2.to() == xi);
+                if (e2ToX) {
+                    for (int i = edge2.path().size() - 1; i >= 0; i--)
+                        merged.add(edge2.path().get(i));
+                } else {
+                    merged.addAll(edge2.path());
+                }
+
+                deadNodes.add(xi);
+                deadEdges.add(e1);
+                deadEdges.add(e2);
+                edges.add(new SkelEdge(a, b, merged));
+                int newEi = edges.size() - 1;
+                adj.get(a).add(newEi);
+                adj.get(b).add(newEi);
+                changed = true;
+            }
+        }
+
+        // Remap: create new nodes with sequential IDs, remap edges
+        int[] oldToNew = new int[n];
+        Arrays.fill(oldToNew, -1);
+        List<SkelNode> alive = new ArrayList<>();
+        for (int i = 0; i < n; i++)
+            if (!deadNodes.contains(i)) {
+                oldToNew[i] = alive.size();
+                SkelNode old = nodes.get(i);
+                alive.add(new SkelNode(oldToNew[i], old.x(), old.y(), old.degree(), old.isEndpoint()));
+            }
+
+        List<SkelEdge> aliveEdges = new ArrayList<>();
+        for (int ei = 0; ei < edges.size(); ei++)
+            if (!deadEdges.contains(ei)) {
+                SkelEdge e = edges.get(ei);
+                int nf = oldToNew[e.from()], nt = oldToNew[e.to()];
+                if (nf >= 0 && nt >= 0)
+                    aliveEdges.add(new SkelEdge(nf, nt, e.path()));
+            }
+
+        nodes.clear(); nodes.addAll(alive);
+        edges.clear(); edges.addAll(aliveEdges);
+    }
+
+    // ═══════════════════════ Helper ═══════════════════
+
+    private static List<List<Integer>> buildAdj(int n, List<SkelEdge> edges) {
+        List<List<Integer>> adj = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) adj.add(new ArrayList<>());
+        for (int ei = 0; ei < edges.size(); ei++) {
+            SkelEdge e = edges.get(ei);
+            adj.get(e.from()).add(ei);
+            adj.get(e.to()).add(ei);
+        }
+        return adj;
+    }
+
+    // ═══════════════════════ Zhang-Suen Thinning ═══════════════════
+
     // ═══════════════════════ Zhang-Suen Thinning ═══════════════════
 
     /**

@@ -1,22 +1,25 @@
 package com.astune.gyromancy.symbol;
 
 import com.astune.gyromancy.util.GeometryUtils;
+import com.astune.gyromancy.util.GeometryUtils.*;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
 /**
- * Pure Java pipeline (no Python):
- *   PNG → fillSmallHoles → upscale(≥128, connectivity-preserving)
- *       → gaussianSmoothBinary(σ=K/3) → skeletonize()
+ * Pipeline:
+ *   PNG → fillSmallHoles → upscale → smooth → skeletonize
+ *       → cropToForeground → extractNodes → traceEdges
+ *       → pruneShortBranches(max(w,h)/10)
+ *       → render skeleton + graph overlay
  *
- * <p>Output per image (in {@code build/skeleton_viz/}):
- *   {@code {name}_smooth.png} — upscaled + smoothed
- *   {@code {name}_skel.png}   — Guo-Hall skeleton (skimage-equivalent)
+ * <p>Output: {@code build/skeleton_viz/{name}.png} — skeleton (gray) + graph overlay
  */
 public class SkeletonExportTest {
 
@@ -27,18 +30,18 @@ public class SkeletonExportTest {
         File outDir = new File("build/skeleton_viz");
         if (outDir.exists()) {
             File[] old = outDir.listFiles();
-            if (old != null) for (File f : old) f.delete();
+            if (old != null) for (File f : old) deleteRecursive(f);
         }
         outDir.mkdirs();
 
         int count = 0;
-        count += scanDir(new File("src/test/resources/test_images/symbol"), outDir);
-        count += scanDir(new File("src/test/resources/test_images/rune"), outDir);
-        System.out.println("[SkeletonExport] Done. " + count + " pairs in " + outDir.getAbsolutePath());
+        count += processDir(new File("src/test/resources/test_images/symbol"), outDir);
+        count += processDir(new File("src/test/resources/test_images/rune"), outDir);
+        System.out.println("[SkeletonExport] Done. " + count + " images in " + outDir.getAbsolutePath());
     }
 
-    private static int scanDir(File dir, File outDir) {
-        File[] files = dir.listFiles((d, n) -> n.endsWith(".png"));
+    private static int processDir(File srcDir, File outDir) {
+        File[] files = srcDir.listFiles((d, n) -> n.endsWith(".png"));
         if (files == null) return 0;
         int count = 0;
         for (File f : files) {
@@ -53,26 +56,63 @@ public class SkeletonExportTest {
             int[][] up = GeometryUtils.upscaleConnectivityPreserving(filled, 128);
             int[][] smooth = GeometryUtils.gaussianSmoothBinary(up, K / 3.0);
             int[][] skel = GeometryUtils.skeletonize(smooth);
+            int[][] cropped = GeometryUtils.cropToForeground(skel);
 
-            int[][] croppedSkel = GeometryUtils.cropToForeground(skel);
-            int[][] croppedSmooth = GeometryUtils.cropToForeground(smooth);
+            List<SkelNode> nodes = new java.util.ArrayList<>(GeometryUtils.extractNodes(cropped));
+            List<SkelEdge> edges = new java.util.ArrayList<>(GeometryUtils.traceEdges(cropped, nodes));
+            GeometryUtils.mergeZeroEdges(nodes, edges);
+            int minBranch = Math.max(cropped[0].length, cropped.length) / 10;
+            GeometryUtils.pruneShortBranches(nodes, edges, minBranch);
 
-            savePng(smooth, new File(outDir, name + "_smooth.png"));
-            savePng(skel, new File(outDir, name + "_skel.png"));
+            renderCombined(cropped, nodes, edges, new File(outDir, name + ".png"));
 
-            File cropDir = new File(outDir, "cropped");
-            cropDir.mkdirs();
-            savePng(croppedSmooth, new File(cropDir, name + "_smooth.png"));
-            savePng(croppedSkel, new File(cropDir, name + "_skel.png"));
-
-            System.out.printf("[SkeletonExport] %-28s %d×%d → %d×%d → skel %d×%d%n",
-                    name, raw[0].length, raw.length,
-                    smooth[0].length, smooth.length,
-                    croppedSkel[0].length, croppedSkel.length);
+            System.out.printf("[SkeletonExport] %-28s %d×%d → skel %d×%d  nodes=%d  edges=%d%n",
+                    name, raw[0].length, raw.length, cropped[0].length, cropped.length,
+                    nodes.size(), edges.size());
             count++;
         }
         return count;
     }
+
+    // ═══════════════════ Combined render: skeleton + graph ═══════════════════
+
+    private static final Color SKEL_GRAY   = new Color(180, 180, 180);
+    private static final Color EDGE_LINE   = new Color(60, 180, 60);
+
+    private static void renderCombined(int[][] skel, List<SkelNode> nodes,
+            List<SkelEdge> edges, File out) {
+        int w = skel[0].length, h = skel.length;
+        int scale = Math.max(1, Math.min(8, 400 / Math.max(w, h)));
+        int iw = w * scale, ih = h * scale;
+        BufferedImage img = new BufferedImage(iw, ih, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, iw, ih);
+
+        // Base layer: skeleton pixels in light gray
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                if (skel[y][x] != 0) {
+                    g.setColor(SKEL_GRAY);
+                    g.fillRect(x * scale, y * scale, scale, scale);
+                }
+
+        // Green straight lines between connected nodes (no node markers)
+        g.setColor(EDGE_LINE);
+        g.setStroke(new BasicStroke(Math.max(1.5f, scale / 3f)));
+        for (SkelEdge e : edges) {
+            SkelNode a = nodes.get(e.from()), b = nodes.get(e.to());
+            g.drawLine(a.x() * scale + scale / 2, a.y() * scale + scale / 2,
+                       b.x() * scale + scale / 2, b.y() * scale + scale / 2);
+        }
+
+        g.dispose();
+        try { ImageIO.write(img, "PNG", out); }
+        catch (IOException e) { System.err.println("[SkeletonExport] FAIL " + out); }
+    }
+
+    // ═══════════════════ Helpers ═══════════════════
 
     private static int[][] loadPng(File f) {
         try {
@@ -87,15 +127,8 @@ public class SkeletonExportTest {
         } catch (IOException e) { return null; }
     }
 
-    private static int countFg(int[][] img) { int c=0; for(int[] r:img) for(int v:r) if(v!=0) c++; return c; }
-
-    private static void savePng(int[][] pixels, File out) {
-        int h = pixels.length, w = h > 0 ? pixels[0].length : 0;
-        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-                img.setRGB(x, y, pixels[y][x] != 0 ? 0x000000 : 0xFFFFFF);
-        try { ImageIO.write(img, "PNG", out); }
-        catch (IOException e) { System.err.println("[SkeletonExport] FAIL " + out); }
+    private static void deleteRecursive(File f) {
+        if (f.isDirectory()) { File[] kids = f.listFiles(); if (kids != null) for (File c : kids) deleteRecursive(c); }
+        f.delete();
     }
 }
