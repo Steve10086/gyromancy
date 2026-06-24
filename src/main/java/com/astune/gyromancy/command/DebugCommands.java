@@ -9,8 +9,7 @@ import com.astune.gyromancy.element.ElementStorageManager;
 import com.astune.gyromancy.element.IElementChunkAccessor;
 import com.astune.gyromancy.network.SyncDebugElementPacket;
 import com.astune.gyromancy.registry.GyromancyRegistries;
-import com.astune.gyromancy.symbol.GeometricMatcher;
-import com.astune.gyromancy.symbol.GeometricMatcher.MatchResult;
+import com.astune.gyromancy.symbol.SkeletonMatcher;
 import com.astune.gyromancy.util.TemplateLoader;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -126,12 +125,13 @@ public final class DebugCommands {
             String bestOtherName = "";
             float selfScore = 0f;
 
+            SkeletonMatcher matcher = SkeletonMatcher.getInstance();
             for (SymbolTemplate tpl : GyromancyRegistries.SYMBOL) {
-                MatchResult r = GeometricMatcher.match(testImg, tpl);
+                float conf = matcher.matchOne(testImg, tpl.id());
                 if (tpl.id().equals(id)) {
-                    selfScore = r.confidence();
-                } else if (r.confidence() > bestOther) {
-                    bestOther = r.confidence();
+                    selfScore = conf;
+                } else if (conf > bestOther) {
+                    bestOther = conf;
                     bestOtherName = tpl.id().toString();
                 }
             }

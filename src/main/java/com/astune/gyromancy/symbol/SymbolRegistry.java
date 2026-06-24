@@ -9,50 +9,37 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
-import java.util.Map;
-import java.util.Set;
 
 /**
- * Auto-discovers 32×32 PNG symbol templates from
- * {@code /assets/gyromancy/textures/symbol/}.
- * Black pixels = foreground (1), non-black = background (0).
+ * Unified symbol template registry.
+ *
+ * <p>All templates (center symbols, outer circles, parameter runes) are defined
+ * in a single list — the sole configuration point. Each entry has a name (must
+ * match a PNG in {@code /assets/gyromancy/textures/symbol/}), feature points,
+ * rotation flag, and {@link SymbolRole}.
  */
 @EventBusSubscriber(modid = Gyromancy.MODID)
 public final class SymbolRegistry {
 
     private static final String DIR = "/assets/gyromancy/textures/symbol/";
 
-    // ── Register new symbols by adding their PNG filename (without .png) here ──
-    private static final String[] SYMBOLS = {
-            "circle_outer",
-            "square",
-            "star",
-            "triangle",
-            "figure_8",
-            "fire_symbol",
-            "water_symbol",
-            "earth_symbol",
-            "arrow",
-            "revert",
-            "wind",
+    // ═══════════════════ Configuration point — add new symbols here ═══════════════════
+
+    record SymbolDef(String name, int featurePoints, boolean allowRotation, SymbolRole role) {}
+
+    private static final SymbolDef[] SYMBOLS = {
+            new SymbolDef("arrow",          0, false, SymbolRole.CENTER_SYMBOL),
+            new SymbolDef("circle_outer",   0, false, SymbolRole.OUTER_CIRCLE),
+            new SymbolDef("earth",          4, false, SymbolRole.CENTER_SYMBOL),
+            new SymbolDef("figure_8",       0, false, SymbolRole.CENTER_SYMBOL),
+            new SymbolDef("fire",           3, false, SymbolRole.CENTER_SYMBOL),
+            new SymbolDef("revert",         0, false, SymbolRole.CENTER_SYMBOL),
+            new SymbolDef("star",           5, true,  SymbolRole.CENTER_SYMBOL),
+            new SymbolDef("water",          0, false, SymbolRole.CENTER_SYMBOL),
+            new SymbolDef("wind",           0, true,  SymbolRole.CENTER_SYMBOL),
     };
 
-    // Feature points for specific symbols (default: 0)
-    private static final Map<String, Integer> FEATURE_POINTS = Map.ofEntries(
-            Map.entry("square", 4),
-            Map.entry("star", 5),
-            Map.entry("triangle", 3),
-            Map.entry("fire_symbol", 3),
-            Map.entry("earth_symbol", 4)
-    );
-
-    // Symbols that allow rotation (default: false)
-    private static final Set<String> ALLOW_ROTATION = Set.of("star", "wind");
-
-    // Default role per symbol (default: CENTER_SYMBOL)
-    private static final Map<String, SymbolRole> ROLES = Map.of(
-            "circle_outer", SymbolRole.OUTER_CIRCLE
-    );
+    // ═══════════════════ Registration ═══════════════════
 
     private SymbolRegistry() {}
 
@@ -60,21 +47,29 @@ public final class SymbolRegistry {
     static void onRegister(RegisterEvent event) {
         event.register(GyromancyRegistries.SYMBOL_KEY, registry -> {
             int loaded = 0;
-            for (String name : SYMBOLS) {
-                int[][] pattern = TemplateLoader.load(DIR + name + ".png");
+            for (SymbolDef def : SYMBOLS) {
+                int[][] pattern = TemplateLoader.load(DIR + def.name + ".png");
                 if (isEmptyPattern(pattern)) {
-                    Gyromancy.LOGGER.warn("[SymbolRegistry] Skipping {} — empty or missing PNG", name);
+                    Gyromancy.LOGGER.warn("[SymbolRegistry] Skipping {} — empty or missing PNG", def.name);
                     continue;
                 }
-                int fp = FEATURE_POINTS.getOrDefault(name, 0);
-                boolean rot = ALLOW_ROTATION.contains(name);
-                SymbolRole role = ROLES.getOrDefault(name, SymbolRole.CENTER_SYMBOL);
-                SymbolTemplate t = new SymbolTemplate(rl(name), pattern, fp, rot, false, role);
+                SymbolTemplate t = new SymbolTemplate(
+                        rl(def.name), pattern, def.featurePoints,
+                        def.allowRotation, false, def.role);
                 registry.register(t.id(), t);
                 loaded++;
             }
             Gyromancy.LOGGER.info("[SymbolRegistry] Loaded {} symbol templates", loaded);
+            SkeletonMatcher.getInstance().init();
         });
+    }
+
+    static {
+        // Pre-register with SkeletonMatcher (classpath-based, before NeoForge events)
+        for (SymbolDef def : SYMBOLS)
+            SkeletonMatcher.getInstance().registerTemplate(
+                    ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, def.name),
+                    DIR + def.name + ".png");
     }
 
     private static boolean isEmptyPattern(int[][] p) {

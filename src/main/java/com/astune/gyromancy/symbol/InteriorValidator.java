@@ -15,7 +15,7 @@ import java.util.*;
  *
  * <p>Rules:
  * <ul>
- *   <li>Rune (CENTER_SYMBOL / PARAMETER_RUNE): interior must be clean — no raw mana pixels</li>
+ *   <li>Center symbol / rune: interior must be clean — no raw mana pixels</li>
  *   <li>Outer circle (OUTER_CIRCLE): interior may only contain recognized glyphs, no raw mana</li>
  * </ul>
  */

@@ -36,19 +36,8 @@ public final class MLSymbolMatcher {
     private final OrtEnvironment env;
     private final OrtSession session;
     private final Map<String, float[]> templateEmbeddings;
-    private final Map<String, TemplateGeomDesc> templateGeom;
 
     private static volatile MLSymbolMatcher INSTANCE;
-
-    // ═══════════════════ Template geometric descriptor ═══════════════════
-
-    /** Precomputed geometric data for one template — used by Stage 1 graph gate. */
-    private record TemplateGeomDesc(
-            SkeletonGraph skeletonGraph,
-            int trueCycleCount,
-            int maxEnclosedArea,
-            int totalLength
-    ) {}
 
     // ═══════════════════ Singleton init ═══════════════════
 
@@ -56,7 +45,6 @@ public final class MLSymbolMatcher {
         env = OrtEnvironment.getEnvironment();
         session = loadSession(env);
         templateEmbeddings = loadEmbeddings();
-        templateGeom = loadTemplateGeom();
     }
 
     public static MLSymbolMatcher getInstance() {
@@ -87,48 +75,16 @@ public final class MLSymbolMatcher {
      * @return map of template id → combined [0,1] score
      */
     public Map<String, Float> allScores(int[][] image) {
-        // ═══ Stage 1: Build drawn skeleton graph (once) ═══
-        // Detect cycles on raw image — consistent with template loading
-        int drawnCycles = GeometryUtils.detectTrueCycles(image);
-        int drawnMaxArea = GeometryUtils.maxEnclosedArea(image);
-
-        int[][] normDrawn = GeometryUtils.normalize(image, 32, 32);
-
-        int[][] hiresDrawn = GeometryPreprocessUtils.upscaleConnectivityPreserving(normDrawn, 128);
-        int k = (128 + Math.min(normDrawn.length, normDrawn[0].length) - 1)
-                / Math.min(normDrawn.length, normDrawn[0].length);
-        int[][] smoothDrawn = GeometryPreprocessUtils.gaussianSmoothBinary(hiresDrawn, k / 3.0);
-        int[][] normSkel = GeometryUtils.thin(smoothDrawn);
-        int[][] normPruned = GeometryUtils.pruneSkeleton(normSkel, 0.04);
-        SkeletonGraph drawnGraph = GeometryUtils.buildSkeletonGraph(normPruned);
-
-
-        // ═══ Stage 2: ML embedding ═══
+        // ═══ ML embedding ═══
         float[] emb = embed(image);
         if (emb == null) return Map.of();
 
-        // ═══ Per-template combined scoring ═══
+        // ═══ Per-template ML scoring (geometric gating now handled by SkeletonMatcher) ═══
         Map<String, Float> scores = new LinkedHashMap<>();
         for (var entry : templateEmbeddings.entrySet()) {
             String id = entry.getKey();
-            TemplateGeomDesc tgd = templateGeom.get(id);
-            if (tgd == null) continue;
-
-            // Geometric graph-matching score [0,1]
-            float geo = GeometricMatcher.geometricConfidence(
-                    drawnGraph, drawnCycles, drawnMaxArea,
-                    tgd.skeletonGraph, tgd.trueCycleCount,
-                    tgd.maxEnclosedArea, tgd.totalLength);
-
-            // ML embedding score [0,1]
             float ml = Math.max(0f, 1f - l1Distance(emb, entry.getValue()) / 5f);
-
-            // Binary geometric gate: if geometry rejects, score=0; else pure ML
-            if (geo < 0.02f) {
-                scores.put(id, 0f);
-            } else {
-                scores.put(id, ml);
-            }
+            scores.put(id, ml);
         }
         return scores;
     }
@@ -223,60 +179,4 @@ public final class MLSymbolMatcher {
         return embeddings;
     }
 
-    // ── Template geometric descriptors ──
-
-    /**
-     * Loads and precomputes skeleton graph descriptors for each template.
-     * Uses the same template IDs as the embeddings JSON.
-     * Tries symbol path first, then rune path.
-     */
-    private Map<String, TemplateGeomDesc> loadTemplateGeom() {
-        Map<String, TemplateGeomDesc> geom = new LinkedHashMap<>();
-        for (String id : templateEmbeddings.keySet()) {
-            TemplateGeomDesc desc = loadOneTemplateGeom(id);
-            if (desc != null) {
-                geom.put(id, desc);
-            } else {
-                Gyromancy.LOGGER.warn("[MLSymbolMatcher] No template image for: {}", id);
-            }
-        }
-        Gyromancy.LOGGER.info("[MLSymbolMatcher] Loaded {} template geometric descriptors", geom.size());
-        return geom;
-    }
-
-    private static TemplateGeomDesc loadOneTemplateGeom(String templateId) {
-        // Try symbol path first, then rune path
-        String path = "/assets/gyromancy/textures/symbol/" + templateId + ".png";
-        int[][] raw = TemplateLoader.loadRaw(path);
-        if (isEmpty(raw)) {
-            path = "/assets/gyromancy/textures/rune/" + templateId + ".png";
-            raw = TemplateLoader.loadRaw(path);
-        }
-        if (isEmpty(raw)) return null;
-
-        // Pipeline: detect cycles on raw (consistent with SymbolTemplate),
-        // then normalize → thin → prune → build graph
-        int cycles = GeometryUtils.detectTrueCycles(raw);
-        int maxArea = GeometryUtils.maxEnclosedArea(raw);
-
-        int[][] norm = GeometryUtils.normalize(raw, 32, 32);
-
-        int[][] hires = GeometryPreprocessUtils.upscaleConnectivityPreserving(norm, 128);
-        int k2 = (128 + Math.min(norm.length, norm[0].length) - 1)
-                 / Math.min(norm.length, norm[0].length);
-        int[][] smoothHires = GeometryPreprocessUtils.gaussianSmoothBinary(hires, k2 / 3.0);
-        int[][] skel = GeometryUtils.thin(smoothHires);
-        int[][] pruned = GeometryUtils.pruneSkeleton(skel, 0.04);
-        SkeletonGraph graph = GeometryUtils.buildSkeletonGraph(pruned);
-
-        return new TemplateGeomDesc(graph, cycles, maxArea, graph.totalLength());
-    }
-
-    private static boolean isEmpty(int[][] img) {
-        if (img == null || img.length == 0) return true;
-        for (int[] row : img)
-            for (int v : row)
-                if (v != 0) return false;
-        return true;
-    }
 }

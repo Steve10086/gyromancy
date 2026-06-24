@@ -33,9 +33,6 @@ public final class GyromancyRegistries {
     public static final ResourceKey<Registry<InkType>> INK_KEY =
             ResourceKey.createRegistryKey(rl("ink"));
 
-    public static final ResourceKey<Registry<SymbolTemplate>> RUNE_KEY =
-            ResourceKey.createRegistryKey(rl("rune"));
-
     // ── Registry instances (populated during NewRegistryEvent) ──
 
     public static final Registry<IArrayEffect> ARRAY_EFFECT =
@@ -47,15 +44,11 @@ public final class GyromancyRegistries {
     public static final Registry<InkType> INK =
             new RegistryBuilder<>(INK_KEY).sync(true).create();
 
-    public static final Registry<SymbolTemplate> RUNE =
-            new RegistryBuilder<>(RUNE_KEY).sync(true).create();
-
     @SubscribeEvent
     static void registerRegistries(NewRegistryEvent event) {
         event.register(ARRAY_EFFECT);
         event.register(SYMBOL);
         event.register(INK);
-        event.register(RUNE);
     }
 
     private static ResourceLocation rl(String path) {

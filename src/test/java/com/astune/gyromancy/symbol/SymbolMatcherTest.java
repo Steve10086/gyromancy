@@ -61,13 +61,9 @@ public class SymbolMatcherTest {
         outDir.mkdirs();
 
         File symbolTplDir = new File("src/main/resources/assets/gyromancy/textures/symbol");
-        File runeTplDir   = new File("src/main/resources/assets/gyromancy/textures/rune");
-        File symbolTestDir = new File("src/test/resources/test_images/symbol");
-        File runeTestDir   = new File("src/test/resources/test_images/rune");
+        File testDir = new File("src/test/resources/test_images/symbol");
 
-        int count = 0;
-        count += matchDir(symbolTestDir, symbolTplDir, outDir);
-        count += matchDir(runeTestDir, runeTplDir, outDir);
+        int count = matchDir(testDir, symbolTplDir, outDir);
         System.out.println("[SymbolMatcher] Done. " + count + " test cases → " + outDir.getAbsolutePath());
     }
 
