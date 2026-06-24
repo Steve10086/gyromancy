@@ -10,12 +10,23 @@ import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.symbol.*;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
 import com.astune.painter.api.CanvasData;
+import com.astune.painter.api.CanvasDataHolder;
+import com.astune.painter.block.CanvasBlockEntity;
 import com.astune.painter.event.ServerCanvasUpdateEvent;
+import com.astune.painter.network.SyncCanvasPacket;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Bridge between Pigmentum canvas events and the symbol recognition pipeline.
@@ -100,6 +111,9 @@ public final class MagicArrayDetector {
         int id = GlyphMarker.nextGlyphId();
         GlyphMarker.markConsumed(glyph, id, level);
 
+        // Sync modified canvas back to clients so they see the consumed marks
+        syncAffectedCanvases(glyph, level);
+
         PositionedGlyph pg = new PositionedGlyph(
                 id, best.symbolId(), best.confidence(), best.role(),
                 glyph.pixels().iterator().next().pos(), // representative position
@@ -136,5 +150,45 @@ public final class MagicArrayDetector {
         } else {
             Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle found, no inner glyphs yet — waiting");
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Canvas sync — pushes modified canvas data to clients
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Syncs all canvas blocks touched by a glyph back to clients.
+     * Called after {@link GlyphMarker#markConsumed} modifies effect layers
+     * so clients can see the consumed pixel markings.
+     */
+    private static void syncAffectedCanvases(ExtractedGlyph glyph, ServerLevel level) {
+        Set<BlockPos> uniquePositions = glyph.pixels().stream()
+                .map(PixelPos::pos)
+                .collect(Collectors.toSet());
+
+        for (BlockPos pos : uniquePositions) {
+            syncCanvasAt(level, pos);
+        }
+    }
+
+    /**
+     * Syncs a single canvas block to all clients tracking its chunk.
+     * Sends the full CanvasData including effect layer changes from glyph marking.
+     */
+    private static void syncCanvasAt(ServerLevel level, BlockPos pos) {
+        BlockEntity be = level.getBlockEntity(pos);
+        if (!(be instanceof CanvasDataHolder holder)) return;
+
+        CanvasData data = holder.painter$getCanvasData();
+        BlockState state = level.getBlockState(pos);
+        BlockState mimicked = be instanceof CanvasBlockEntity canvasBE
+                ? canvasBE.getMimickedState()
+                : null;
+
+        PacketDistributor.sendToPlayersTrackingChunk(
+                level, new ChunkPos(pos),
+                new SyncCanvasPacket(pos, data, Optional.ofNullable(mimicked), false)
+        );
+        level.setBlocksDirty(pos, state, state);
     }
 }
