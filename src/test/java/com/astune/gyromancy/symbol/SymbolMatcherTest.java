@@ -29,6 +29,9 @@ import org.junit.jupiter.api.Test;
  * <ol>
  *   <li><b>Hard — open-line count</b>: number of endpoint nodes (degree-1). Reject if mismatch.</li>
  *   <li><b>Hard — closed-loop count</b>: graph cycles + pure-cycle components. Reject if mismatch.</li>
+ *   <li><b>Hard — outer/inner open-line count</b>: classify each open line as outer
+ *       (endpoint outside closed-loop polygon) or inner (endpoint inside).
+ *       Reject if counts differ.</li>
  *   <li><b>Soft — open-line relative-angle</b>: for each open line, compute the
  *       straight-line angle from endpoint to the nearest junction (degree≥3).
  *       Sort angles to form a rotation-invariant signature.
@@ -100,6 +103,9 @@ public class SymbolMatcherTest {
                 if (testStats.openLines != tpl.openLines) continue;
                 // Layer 2: closed-loop count must match
                 if (testStats.closedLoops != tpl.closedLoops) continue;
+                // Layer 2b: outer/inner open-line counts must match
+                if (testStats.outerOpenLines != tpl.outerOpenLines) continue;
+                if (testStats.innerOpenLines != tpl.innerOpenLines) continue;
                 // Layer 3 (soft): open-line shape similarity
                 double shapeConf = openLineConfidence(tpl.openLineData, testStats.openLineData);
                 // Layer 3b (soft): open-line relative-angle similarity
@@ -150,11 +156,40 @@ public class SymbolMatcherTest {
         // Feature 3 — open-line shapes and angles for soft matching
         List<OpenLineData> openLineData = new ArrayList<>();
         List<Double> openAngles = new ArrayList<>();
-        extractOpenLines(nodes, edges, openLineData, openAngles);
+        List<int[]> openEndpoints = new ArrayList<>();        // endpoint pixel for classification
+        extractOpenLines(nodes, edges, openLineData, openAngles, openEndpoints);
         double[] anglesArr = openAngles.stream().mapToDouble(Double::doubleValue).toArray();
 
+        // Feature 4 — outer / inner open-line classification.
+        // For shapes with a closed loop: an open line is "outer" if the endpoint
+        // is farther from the loop's centroid than its junction is; "inner" otherwise.
+        int outerOpen = 0, innerOpen = 0;
+        if (graphCycles > 0) {
+            double[] ctr = cycleCentroid(nodes, edges);
+            if (!Double.isNaN(ctr[0])) {
+                for (int i = 0; i < openEndpoints.size(); i++) {
+                    int[] ep = openEndpoints.get(i);
+                    // Find the junction this open line connects to (via angleData ordering)
+                    SkelNode junc = findOpenLineJunction(nodes, edges, ep[0], ep[1]);
+                    if (junc != null) {
+                        double epDist = dist2(ep[0], ep[1], ctr[0], ctr[1]);
+                        double jcDist = dist2(junc.x(), junc.y(), ctr[0], ctr[1]);
+                        if (epDist > jcDist) outerOpen++;
+                        else innerOpen++;
+                    } else {
+                        outerOpen++; // fallback
+                    }
+                }
+            } else {
+                outerOpen = openLines;
+            }
+        } else {
+            // No closed loop: all open lines are "outer"
+            outerOpen = openLines;
+        }
+
         return new SkeletonStats(nodes.size(), edges.size(), openLines, closedLoops,
-                openLineData, anglesArr);
+                outerOpen, innerOpen, openLineData, anglesArr);
     }
 
     /**
@@ -232,6 +267,90 @@ public class SymbolMatcherTest {
         return pureCycles;
     }
 
+    // ═══════════════════════ Cycle polygon extraction ═══════════════════════
+
+    /**
+     * Computes the centroid of the closed-loop cycle in the skeleton graph.
+     * Strips tree edges (incident to endpoints), then collects all pixel
+     * positions from the remaining cycle edges.
+     */
+    private static double[] cycleCentroid(List<SkelNode> nodes, List<SkelEdge> edges) {
+        int n = nodes.size();
+        boolean[] isTree = new boolean[edges.size()];
+        int[] deg = new int[n];
+        List<List<Integer>> adj = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) adj.add(new ArrayList<>());
+        for (int ei = 0; ei < edges.size(); ei++) {
+            SkelEdge e = edges.get(ei);
+            adj.get(e.from()).add(ei);
+            adj.get(e.to()).add(ei);
+            deg[e.from()]++; deg[e.to()]++;
+        }
+        Deque<Integer> leaves = new ArrayDeque<>();
+        for (int i = 0; i < n; i++) if (deg[i] == 1) leaves.add(i);
+        while (!leaves.isEmpty()) {
+            int leaf = leaves.poll();
+            for (int ei : adj.get(leaf)) {
+                if (isTree[ei]) continue;
+                isTree[ei] = true;
+                SkelEdge e = edges.get(ei);
+                int other = (e.from() == leaf) ? e.to() : e.from();
+                deg[other]--;
+                if (deg[other] == 1) leaves.add(other);
+            }
+        }
+        // Collect pixel positions from all non-tree edges
+        double sx = 0, sy = 0;
+        int count = 0;
+        for (int ei = 0; ei < edges.size(); ei++) {
+            if (isTree[ei]) continue;
+            for (int[] p : edges.get(ei).path()) { sx += p[0]; sy += p[1]; count++; }
+        }
+        if (count == 0) return new double[]{Double.NaN, Double.NaN};
+        return new double[]{sx / count, sy / count};
+    }
+
+    /**
+     * Finds the junction (degree ≥ 3) that the open line starting at the given
+     * endpoint connects to, by walking through d2 chains.
+     */
+    private static SkelNode findOpenLineJunction(List<SkelNode> nodes, List<SkelEdge> edges,
+            int epX, int epY) {
+        int n = nodes.size();
+        List<List<Integer>> a = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) a.add(new ArrayList<>());
+        for (int ei = 0; ei < edges.size(); ei++) {
+            SkelEdge e = edges.get(ei);
+            a.get(e.from()).add(ei);
+            a.get(e.to()).add(ei);
+        }
+        // Find the endpoint node at (epX, epY)
+        for (SkelNode nd : nodes) {
+            if (!nd.isEndpoint() || nd.x() != epX || nd.y() != epY) continue;
+            // Walk from endpoint through d2 chain to junction
+            int curId = nd.id();
+            int curEdge = a.get(curId).get(0);
+            SkelEdge ce = edges.get(curEdge);
+            int nid = (ce.from() == curId) ? ce.to() : ce.from();
+            while (nodes.get(nid).degree() == 2) {
+                int nextEdge = -1;
+                for (int ei : a.get(nid)) if (ei != curEdge) { nextEdge = ei; break; }
+                if (nextEdge < 0) break;
+                ce = edges.get(nextEdge);
+                int nn = (ce.from() == nid) ? ce.to() : ce.from();
+                curEdge = nextEdge;
+                nid = nn;
+            }
+            return nodes.get(nid);
+        }
+        return null;
+    }
+
+    private static double dist2(double x1, double y1, double x2, double y2) {
+        double dx = x1 - x2, dy = y1 - y2;
+        return dx * dx + dy * dy;
+    }
+
     // ═══════════════════════ Open-line shape extraction ═══════════════════════
 
     /**
@@ -254,7 +373,8 @@ public class SymbolMatcherTest {
      * Appends shape descriptors and straight-line angles to the given lists.
      */
     static void extractOpenLines(List<SkelNode> nodes, List<SkelEdge> edges,
-            List<OpenLineData> shapedata, List<Double> angleData) {
+            List<OpenLineData> shapedata, List<Double> angleData,
+            List<int[]> endpointData) {
 
         int nn = nodes.size();
         if (nn == 0) return;
@@ -330,6 +450,7 @@ public class SymbolMatcherTest {
             double lengthPct = (double) fullPath.size() / straightLen * 100.0;
 
             shapedata.add(new OpenLineData(widthPct, lengthPct));
+            endpointData.add(new int[]{nd.x(), nd.y()});      // endpoint position for classification
 
             // Straight-line angle endpoint → junction, normalised to [0, 2π)
             double angle = Math.atan2(dy, dx);
@@ -337,16 +458,18 @@ public class SymbolMatcherTest {
             angleData.add(angle);
         }
 
-        // Sort by width for stable comparison (permutation matching will still permute)
+        // Sort by width for stable comparison
         Integer[] idx = new Integer[shapedata.size()];
         for (int i = 0; i < idx.length; i++) idx[i] = i;
         Arrays.sort(idx, Comparator.comparingDouble(i -> shapedata.get(i).widthPct));
-        // Reorder both lists consistently
+        // Reorder all three lists consistently
         List<OpenLineData> sorted = new ArrayList<>(shapedata.size());
         List<Double> sortedAngles = new ArrayList<>(angleData.size());
-        for (int i : idx) { sorted.add(shapedata.get(i)); sortedAngles.add(angleData.get(i)); }
+        List<int[]> sortedEps = new ArrayList<>(endpointData.size());
+        for (int i : idx) { sorted.add(shapedata.get(i)); sortedAngles.add(angleData.get(i)); sortedEps.add(endpointData.get(i)); }
         shapedata.clear(); shapedata.addAll(sorted);
         angleData.clear(); angleData.addAll(sortedAngles);
+        endpointData.clear(); endpointData.addAll(sortedEps);
     }
 
     /** Appends an edge's path to {@code dest}, oriented from {@code fromNode} outward. */
@@ -485,6 +608,8 @@ public class SymbolMatcherTest {
         StringBuilder sb = new StringBuilder();
         sb.append("Test: ").append(testName).append("\n");
         sb.append("  openLines=").append(testStats.openLines)
+          .append(" (outer=").append(testStats.outerOpenLines)
+          .append(" inner=").append(testStats.innerOpenLines).append(")")
           .append("  closedLoops=").append(testStats.closedLoops)
           .append("  (nodes=").append(testStats.nodes)
           .append("  edges=").append(testStats.edges).append(")\n");
@@ -501,8 +626,9 @@ public class SymbolMatcherTest {
         sb.append("Templates:\n");
         for (var e : tplStats.entrySet()) {
             SkeletonStats s = e.getValue();
-            sb.append(String.format("  %-22s  openLines=%d  closedLoops=%d  (nodes=%d  edges=%d)",
-                    e.getKey(), s.openLines, s.closedLoops, s.nodes, s.edges));
+            sb.append(String.format("  %-22s  openLines=%d(outer=%d inner=%d)  closedLoops=%d  (nodes=%d  edges=%d)",
+                    e.getKey(), s.openLines, s.outerOpenLines, s.innerOpenLines,
+                    s.closedLoops, s.nodes, s.edges));
             if (!s.openLineData.isEmpty()) {
                 sb.append("\n    shapes:");
                 for (int i = 0; i < s.openLineData().size(); i++)
@@ -540,6 +666,7 @@ public class SymbolMatcherTest {
 
     /** Feature vector extracted from a skeleton graph. */
     record SkeletonStats(int nodes, int edges, int openLines, int closedLoops,
+                         int outerOpenLines, int innerOpenLines,
                          List<OpenLineData> openLineData,
                          double[] openLineAngles) {}
 
