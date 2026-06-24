@@ -29,12 +29,11 @@ import org.junit.jupiter.api.Test;
  * <ol>
  *   <li><b>Hard — open-line count</b>: number of endpoint nodes (degree-1). Reject if mismatch.</li>
  *   <li><b>Hard — closed-loop count</b>: graph cycles + pure-cycle components. Reject if mismatch.</li>
- *   <li><b>Soft — open-line shape</b>: for each open line (path from endpoint to nearest
- *       degree≥3 junction), measure width (max perpendicular deviation / straight-line length)
- *       and length (path length / straight-line length, can exceed 100%).
- *       Find the best permutation between template and target open lines using L1 loss,
- *       normalised by (maxWidth + maxLength) across all compared lines.
- *       Confidence = 1 − normalisedLoss, clamped to [0, 1].</li>
+ *   <li><b>Soft — open-line relative-angle</b>: for each open line, compute the
+ *       straight-line angle from endpoint to the nearest junction (degree≥3).
+ *       Sort angles to form a rotation-invariant signature.
+ *       Permutation search finds the best cyclic alignment between template
+ *       and target angle sets. Normalised L1 loss on [0, 2π).</li>
  * </ol>
  *
  * <p>Output: {@code build/skeleton_viz/hard_match/{testName}.txt} —
@@ -94,8 +93,7 @@ public class SymbolMatcherTest {
             if (testStats == null) continue;
 
             // ── Hard-match screening + soft-match confidence ──
-            // LinkedHashMap preserves insertion order (by confidence descending)
-            Map<String, Double> passed = new LinkedHashMap<>();
+            Map<String, double[]> passed = new LinkedHashMap<>();
             for (var e : tplStats.entrySet()) {
                 SkeletonStats tpl = e.getValue();
                 // Layer 1: open-line count must match
@@ -103,8 +101,11 @@ public class SymbolMatcherTest {
                 // Layer 2: closed-loop count must match
                 if (testStats.closedLoops != tpl.closedLoops) continue;
                 // Layer 3 (soft): open-line shape similarity
-                double conf = openLineConfidence(tpl.openLineData, testStats.openLineData);
-                passed.put(e.getKey(), conf);
+                double shapeConf = openLineConfidence(tpl.openLineData, testStats.openLineData);
+                // Layer 3b (soft): open-line relative-angle similarity
+                double angleConf = openLineAngleConfidence(tpl.openLineAngles, testStats.openLineAngles);
+                double combined = 0.40 * shapeConf + 0.60 * angleConf;
+                passed.put(e.getKey(), new double[]{shapeConf, angleConf, combined});
             }
 
             writeResult(new File(outDir, testName + ".txt"),
@@ -146,10 +147,14 @@ public class SymbolMatcherTest {
         int pureCycles  = countPureCycleComponents(cropped, nodes);
         int closedLoops = graphCycles + pureCycles;
 
-        // Feature 3 — open-line shapes for soft matching
-        List<OpenLineData> openLineData = extractOpenLines(nodes, edges);
+        // Feature 3 — open-line shapes and angles for soft matching
+        List<OpenLineData> openLineData = new ArrayList<>();
+        List<Double> openAngles = new ArrayList<>();
+        extractOpenLines(nodes, edges, openLineData, openAngles);
+        double[] anglesArr = openAngles.stream().mapToDouble(Double::doubleValue).toArray();
 
-        return new SkeletonStats(nodes.size(), edges.size(), openLines, closedLoops, openLineData);
+        return new SkeletonStats(nodes.size(), edges.size(), openLines, closedLoops,
+                openLineData, anglesArr);
     }
 
     /**
@@ -246,16 +251,17 @@ public class SymbolMatcherTest {
     /**
      * For each endpoint (degree-1), follows edges through degree-2 support-point
      * nodes until reaching the first junction (degree≥3) or another endpoint.
-     * Collects the full pixel path and computes width / length percentages.
+     * Appends shape descriptors and straight-line angles to the given lists.
      */
-    static List<OpenLineData> extractOpenLines(List<SkelNode> nodes, List<SkelEdge> edges) {
-        int n = nodes.size();
-        List<OpenLineData> result = new ArrayList<>();
-        if (n == 0) return result;
+    static void extractOpenLines(List<SkelNode> nodes, List<SkelEdge> edges,
+            List<OpenLineData> shapedata, List<Double> angleData) {
+
+        int nn = nodes.size();
+        if (nn == 0) return;
 
         // Build adjacency: nodeId → list of edge indices
-        List<List<Integer>> adj = new ArrayList<>(n);
-        for (int i = 0; i < n; i++) adj.add(new ArrayList<>());
+        List<List<Integer>> adj = new ArrayList<>(nn);
+        for (int i = 0; i < nn; i++) adj.add(new ArrayList<>());
         for (int ei = 0; ei < edges.size(); ei++) {
             SkelEdge e = edges.get(ei);
             adj.get(e.from()).add(ei);
@@ -300,14 +306,14 @@ public class SymbolMatcherTest {
             SkelNode junction = nodes.get(curNode);
             // The last pixel of the path should already be the junction position
             // (traceEdges includes the target node in the path). If not, add it.
-            if (fullPath.size() > 0) {
+            if (!fullPath.isEmpty()) {
                 int[] last = fullPath.get(fullPath.size() - 1);
                 if (last[0] != junction.x() || last[1] != junction.y()) {
                     fullPath.add(new int[]{junction.x(), junction.y()});
                 }
             }
 
-            // ── compute width and length metrics ──
+            // ── compute width, length, and angle ──
             double dx = junction.x() - nd.x();
             double dy = junction.y() - nd.y();
             double straightLen = Math.sqrt(dx * dx + dy * dy);
@@ -323,12 +329,24 @@ public class SymbolMatcherTest {
             double widthPct  = maxPerp / straightLen * 100.0;
             double lengthPct = (double) fullPath.size() / straightLen * 100.0;
 
-            result.add(new OpenLineData(widthPct, lengthPct));
+            shapedata.add(new OpenLineData(widthPct, lengthPct));
+
+            // Straight-line angle endpoint → junction, normalised to [0, 2π)
+            double angle = Math.atan2(dy, dx);
+            if (angle < 0) angle += 2 * Math.PI;
+            angleData.add(angle);
         }
 
         // Sort by width for stable comparison (permutation matching will still permute)
-        result.sort(Comparator.comparingDouble(OpenLineData::widthPct));
-        return result;
+        Integer[] idx = new Integer[shapedata.size()];
+        for (int i = 0; i < idx.length; i++) idx[i] = i;
+        Arrays.sort(idx, Comparator.comparingDouble(i -> shapedata.get(i).widthPct));
+        // Reorder both lists consistently
+        List<OpenLineData> sorted = new ArrayList<>(shapedata.size());
+        List<Double> sortedAngles = new ArrayList<>(angleData.size());
+        for (int i : idx) { sorted.add(shapedata.get(i)); sortedAngles.add(angleData.get(i)); }
+        shapedata.clear(); shapedata.addAll(sorted);
+        angleData.clear(); angleData.addAll(sortedAngles);
     }
 
     /** Appends an edge's path to {@code dest}, oriented from {@code fromNode} outward. */
@@ -399,6 +417,50 @@ public class SymbolMatcherTest {
         return Math.max(0.0, 1.0 - bestLoss);
     }
 
+    // ═══════════════════════ Soft-match: open-line relative angle ═══════════════════════
+
+    /**
+     * Confidence based on relative angles between open lines.
+     *
+     * <p>Each open line's straight-line angle (endpoint → junction) is treated
+     * as a feature. The set is rotation-invariant — sorted angles capture the
+     * relative pattern. Brute-force cyclic-permutation search finds the best
+     * alignment between template and target.
+     *
+     * <p>Loss = average angular distance across matched pairs, normalised to [0,1]
+     * by dividing by π (worst-case: 180° per pair).
+     */
+    static double openLineAngleConfidence(double[] tplAngles, double[] tgtAngles) {
+        int n = tplAngles.length;
+        if (n == 0) return 1.0;                              // no open lines
+
+        // Brute-force permutation + cyclic shift for rotation invariance
+        int[] perm = new int[n];
+        for (int i = 0; i < n; i++) perm[i] = i;
+
+        double bestLoss = Double.MAX_VALUE;
+        do {
+            // For each permutation, try all cyclic shifts of target
+            for (int shift = 0; shift < n; shift++) {
+                double sum = 0;
+                for (int i = 0; i < n; i++) {
+                    int j = (perm[i] + shift) % n;
+                    sum += angleDistance(tplAngles[i], tgtAngles[j]);
+                }
+                double loss = sum / (n * Math.PI);            // normalise to [0,1]
+                if (loss < bestLoss) bestLoss = loss;
+            }
+        } while (nextPermutation(perm));
+
+        return Math.max(0.0, 1.0 - bestLoss);
+    }
+
+    /** Shortest unsigned angle difference on circle [0, π]. */
+    private static double angleDistance(double a, double b) {
+        double d = Math.abs(a - b);
+        return d > Math.PI ? 2 * Math.PI - d : d;
+    }
+
     /** Lexicographic next permutation. Returns false when wrapped to identity. */
     private static boolean nextPermutation(int[] a) {
         int n = a.length;
@@ -419,7 +481,7 @@ public class SymbolMatcherTest {
 
     private static void writeResult(File out, String testName,
             SkeletonStats testStats, Map<String, SkeletonStats> tplStats,
-            Map<String, Double> passed) {
+            Map<String, double[]> passed) {
         StringBuilder sb = new StringBuilder();
         sb.append("Test: ").append(testName).append("\n");
         sb.append("  openLines=").append(testStats.openLines)
@@ -427,8 +489,13 @@ public class SymbolMatcherTest {
           .append("  (nodes=").append(testStats.nodes)
           .append("  edges=").append(testStats.edges).append(")\n");
         sb.append("  open-line shapes:");
-        for (OpenLineData d : testStats.openLineData)
-            sb.append(" ").append(d);
+        for (int i = 0; i < testStats.openLineData.size(); i++)
+            sb.append(" ").append(testStats.openLineData.get(i));
+        if (testStats.openLineAngles.length > 0) {
+            sb.append("  angles:");
+            for (double a : testStats.openLineAngles)
+                sb.append(String.format(" %.0f°", Math.toDegrees(a)));
+        }
         sb.append("\n\n");
 
         sb.append("Templates:\n");
@@ -437,9 +504,12 @@ public class SymbolMatcherTest {
             sb.append(String.format("  %-22s  openLines=%d  closedLoops=%d  (nodes=%d  edges=%d)",
                     e.getKey(), s.openLines, s.closedLoops, s.nodes, s.edges));
             if (!s.openLineData.isEmpty()) {
-                sb.append("  shapes:");
-                for (OpenLineData d : s.openLineData)
-                    sb.append(" ").append(d);
+                sb.append("\n    shapes:");
+                for (int i = 0; i < s.openLineData().size(); i++)
+                    sb.append(" ").append(s.openLineData().get(i));
+                sb.append("\n    angles:");
+                for (double a : s.openLineAngles())
+                    sb.append(String.format(" %.0f°", Math.toDegrees(a)));
             }
             sb.append("\n");
         }
@@ -448,11 +518,15 @@ public class SymbolMatcherTest {
         if (passed.isEmpty()) {
             sb.append("  (none)\n");
         } else {
-            // Sort by confidence descending
+            sb.append(String.format("  %-22s  %8s  %8s  %8s%n",
+                    "name", "shape", "angle", "combined"));
             var sorted = new ArrayList<>(passed.entrySet());
-            sorted.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
-            for (var e : sorted)
-                sb.append(String.format("  %-22s  conf=%.4f%n", e.getKey(), e.getValue()));
+            sorted.sort((a, b) -> Double.compare(b.getValue()[2], a.getValue()[2]));
+            for (var e : sorted) {
+                double[] scores = e.getValue();
+                sb.append(String.format("  %-22s  %8.4f  %8.4f  %8.4f%n",
+                        e.getKey(), scores[0], scores[1], scores[2]));
+            }
         }
 
         try {
@@ -466,7 +540,8 @@ public class SymbolMatcherTest {
 
     /** Feature vector extracted from a skeleton graph. */
     record SkeletonStats(int nodes, int edges, int openLines, int closedLoops,
-                         List<OpenLineData> openLineData) {}
+                         List<OpenLineData> openLineData,
+                         double[] openLineAngles) {}
 
     // ═══════════════════════ Helpers ═══════════════════════
 
