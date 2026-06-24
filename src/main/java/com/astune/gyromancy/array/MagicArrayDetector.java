@@ -15,6 +15,7 @@ import com.astune.painter.block.CanvasBlockEntity;
 import com.astune.painter.event.ServerCanvasUpdateEvent;
 import com.astune.painter.network.SyncCanvasPacket;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -108,8 +109,9 @@ public final class MagicArrayDetector {
         }
 
         // Clean → mark + store
+        int colorIndex = getGlyphColorIndex(best.symbolId());
         int id = GlyphMarker.nextGlyphId();
-        GlyphMarker.markConsumed(glyph, id, level);
+        GlyphMarker.markConsumed(glyph, colorIndex, id, level);
 
         // Sync modified canvas back to clients so they see the consumed marks
         syncAffectedCanvases(glyph, level);
@@ -150,6 +152,25 @@ public final class MagicArrayDetector {
         } else {
             Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle found, no inner glyphs yet — waiting");
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Color mapping — symbol → glyph color index
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Maps a matched symbol ID to its glyph color index.
+     * The index is encoded into the glyph_id effect layer and decoded
+     * on the client by {@code GlyphImageProvider} for colored rendering.
+     */
+    private static int getGlyphColorIndex(ResourceLocation symbolId) {
+        String name = symbolId.getPath();
+        return switch (name) {
+            case "fire"  -> GlyphMarker.COLOR_FIRE;   // → Red   0xFFFF0000
+            case "water" -> GlyphMarker.COLOR_WATER;  // → Blue  0xFF0000FF
+            case "earth" -> GlyphMarker.COLOR_EARTH;  // → Brown 0xFF8B4513
+            default      -> GlyphMarker.COLOR_FIRE;   // fallback: red
+        };
     }
 
     // ═══════════════════════════════════════════════════════════════
