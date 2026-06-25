@@ -132,6 +132,7 @@ public final class SkeletonMatcher {
         GeometryPreprocessUtils.mergeZeroEdges(nodes, edges);
         int minBranch = Math.max(cropped[0].length, cropped.length) / 10;
         GeometryPreprocessUtils.pruneShortBranches(nodes, edges, minBranch);
+
         GeometryPreprocessUtils.splitEdgesAtSupportPoints(nodes, edges,
                 cropped[0].length, cropped.length);
 

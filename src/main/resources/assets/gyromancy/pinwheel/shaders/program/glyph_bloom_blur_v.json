@@ -1,0 +1,4 @@
+{
+    "vertex": "veil:blit_screen",
+    "fragment": "gyromancy:glyph_bloom_blur_v"
+}

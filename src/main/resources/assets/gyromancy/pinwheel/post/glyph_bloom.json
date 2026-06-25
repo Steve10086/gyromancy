@@ -1,0 +1,31 @@
+{
+    "stages": [
+        {
+            "type": "veil:blit",
+            "shader": "gyromancy:glyph_bloom_threshold",
+            "in": "veil:post",
+            "out": "gyromancy:glyph_bloom_half"
+        },
+        {
+            "type": "veil:blit",
+            "shader": "gyromancy:glyph_bloom_blur_h",
+            "in": "gyromancy:glyph_bloom_half",
+            "out": "gyromancy:glyph_bloom_half2"
+        },
+        {
+            "type": "veil:blit",
+            "shader": "gyromancy:glyph_bloom_blur_v",
+            "in": "gyromancy:glyph_bloom_half2",
+            "out": "gyromancy:glyph_bloom_half"
+        },
+        {
+            "type": "veil:blit",
+            "shader": "gyromancy:glyph_bloom_composite",
+            "in": "gyromancy:glyph_bloom_half",
+            "out": "veil:post"
+        }
+    ],
+    "renderStage": "AFTER_PARTICLES",
+    "priority": 500,
+    "replace": false
+}

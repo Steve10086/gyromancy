@@ -33,14 +33,6 @@ public final class GlyphImageProvider implements CanvasImageProvider {
     public static final String NAME = "gyromancy_glyph";
     public static final GlyphImageProvider INSTANCE = new GlyphImageProvider();
 
-    /** Color palette: index → ARGB */
-    private static final int[] COLORS = {
-            0x00000000,  // 0: transparent
-            0xFFFF0000,  // 1: Fire   → Red
-            0xFF0000FF,  // 2: Water  → Blue
-            0xFF8B4513,  // 3: Earth  → Brown (saddle brown)
-    };
-
     private GlyphImageProvider() {}
 
     @Override
@@ -73,9 +65,9 @@ public final class GlyphImageProvider implements CanvasImageProvider {
                 if (encoded == 0) continue;
 
                 int colorIndex = GlyphMarker.decodeColorIndex(encoded);
-                if (colorIndex <= 0 || colorIndex >= COLORS.length) continue;
+                if (colorIndex <= 0 || colorIndex >= GlyphMarker.GLYPH_COLORS.length) continue;
 
-                int argb = COLORS[colorIndex];
+                int argb = GlyphMarker.GLYPH_COLORS[colorIndex];
                 // ARGB → ABGR (NativeImage convention)
                 int a = (argb >> 24) & 0xFF;
                 int r = (argb >> 16) & 0xFF;

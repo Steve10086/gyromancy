@@ -34,6 +34,17 @@ public final class GlyphMarker {
     public static final int COLOR_EARTH = 3; // → Brown 0xFF8B4513
 
     /**
+     * ARGB color palette indexed by {@link #COLOR_FIRE}, {@link #COLOR_WATER}, {@link #COLOR_EARTH}.
+     * Index 0 = transparent. Keep in sync with the Veil bloom threshold shader GLSL constants.
+     */
+    public static final int[] GLYPH_COLORS = {
+            0x00000000,  // 0: transparent
+            0xFFFF0000,  // 1: Fire   → Red
+            0xFF0000FF,  // 2: Water  → Blue
+            0xFF8B4513,  // 3: Earth  → Saddle Brown
+    };
+
+    /**
      * Encodes color index + glyph sequence into a single byte for the effect layer.
      * Upper 2 bits = color, lower 6 bits = per-color sequence (0-63).
      */

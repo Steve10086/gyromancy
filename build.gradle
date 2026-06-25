@@ -50,17 +50,14 @@ repositories {
         }
     }
 
-    // Examples for other common mod hosts (uncomment when needed):
-    // maven {
-    //     name = "CurseMaven"
-    //     url = "https://cursemaven.com"
-    //     content { includeGroup "curse.maven" }
-    // }
-    // maven {
-    //     name = "JEI"
-    //     url = "https://maven.blamejared.com/"
-    //     content { includeGroup "mezz.jei" }
-    // }
+    // ── Veil — FoundryMC rendering library ──
+    maven {
+        name = "BlameJared"
+        url = "https://maven.blamejared.com/"
+        content {
+            includeGroup "foundry.veil"
+        }
+    }
 }
 
 base {
@@ -154,6 +151,7 @@ sourceSets { test { compileClasspath += sourceSets.main.compileClasspath; runtim
 
 dependencies {
     implementation "maven.modrinth:pigmentum:0.5.7-1beta"
+    implementation "foundry.veil:veil-neoforge-${minecraft_version}:${veil_version}"
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"

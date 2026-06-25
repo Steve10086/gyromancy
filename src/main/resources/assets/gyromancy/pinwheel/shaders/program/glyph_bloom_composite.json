@@ -1,0 +1,10 @@
+{
+    "vertex": "veil:blit_screen",
+    "fragment": "gyromancy:glyph_bloom_composite",
+    "blend": {
+        "srcrgb": "one",
+        "dstrgb": "one",
+        "srcalpha": "one",
+        "dstalpha": "one"
+    }
+}
