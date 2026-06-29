@@ -21,7 +21,8 @@ public record SymbolTemplate(
         int featurePoints,
         boolean allowRotation,
         boolean allowMirror,
-        SymbolRole defaultRole
+        SymbolRole defaultRole,
+        int glyphColor
 ) {
     // ── Convenience ──
 
@@ -134,7 +135,8 @@ public record SymbolTemplate(
                     Codec.INT.fieldOf("featurePoints").forGetter(SymbolTemplate::featurePoints),
                     Codec.BOOL.fieldOf("allowRotation").forGetter(SymbolTemplate::allowRotation),
                     Codec.BOOL.fieldOf("allowMirror").forGetter(SymbolTemplate::allowMirror),
-                    SymbolRole.CODEC.fieldOf("defaultRole").forGetter(SymbolTemplate::defaultRole)
+                    SymbolRole.CODEC.fieldOf("defaultRole").forGetter(SymbolTemplate::defaultRole),
+                    Codec.INT.optionalFieldOf("glyphColor", 0xFFFFFFFF).forGetter(SymbolTemplate::glyphColor)
             ).apply(instance, SymbolTemplate::new)
     );
 

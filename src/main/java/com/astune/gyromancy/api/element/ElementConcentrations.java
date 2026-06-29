@@ -78,7 +78,7 @@ public record ElementConcentrations(long[] values, long[] derivatives) {
             rate = MAX_RATE - (MAX_RATE - MIN_RATE) * (excess - BELL_HALF) / BELL_HALF;
             if (rate < MIN_RATE) rate = MIN_RATE;
         }
-        return excess * rate / 1000;
+        return Math.max(1, excess * rate / 1000); // ponytail: floor→1 prevents permanent residue when excess < 1000
     }
 
     public ElementConcentrations decayAndRecover(ElementConcentrations defaults) {

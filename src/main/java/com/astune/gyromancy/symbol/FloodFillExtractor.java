@@ -45,10 +45,12 @@ public final class FloodFillExtractor {
         public final PixelPos origin;
         public final Deque<PixelPos> queue;
         public final Set<PixelPos> visited;
+        public final Set<PixelPos> processed;
         public final Set<BlockPos> involvedBlocks;
         public final Set<PixelPos> initialSeeds;
         public final List<Double> worldXs = new ArrayList<>();
         public final List<Double> worldYs = new ArrayList<>();
+        public Direction dominantFace = null;
         public double minWorldX = Double.MAX_VALUE;
         public double maxWorldX = -Double.MAX_VALUE;
         public double minWorldY = Double.MAX_VALUE;
@@ -60,6 +62,7 @@ public final class FloodFillExtractor {
             this.queue = new ArrayDeque<>();
             this.queue.add(origin);
             this.visited = new HashSet<>();
+            this.processed = new HashSet<>();
             this.involvedBlocks = new HashSet<>();
             this.initialSeeds = new HashSet<>();
             this.initialSeeds.add(origin);
@@ -68,6 +71,7 @@ public final class FloodFillExtractor {
         /** Absorb another state's progress. Used when BFS reaches another state's origin. */
         void absorb(FloodFillState other) {
             this.visited.addAll(other.visited);
+            this.processed.addAll(other.processed);
             this.worldXs.addAll(other.worldXs);
             this.worldYs.addAll(other.worldYs);
             this.involvedBlocks.addAll(other.involvedBlocks);
@@ -76,19 +80,22 @@ public final class FloodFillExtractor {
             this.maxWorldX = Math.max(this.maxWorldX, other.maxWorldX);
             this.minWorldY = Math.min(this.minWorldY, other.minWorldY);
             this.maxWorldY = Math.max(this.maxWorldY, other.maxWorldY);
-            // Queue unvisited seeds from the absorbed state
-            for (PixelPos s : other.initialSeeds) {
-                if (!this.visited.contains(s) && !this.queue.contains(s)) {
+            // Preserve only the absorbed state's current component frontier.
+            for (PixelPos s : other.queue) {
+                if (!this.visited.contains(s) && !this.processed.contains(s) && !this.queue.contains(s)) {
                     this.queue.add(s);
                 }
             }
         }
 
         void resetGeometry() {
+            visited.clear();
+            queue.clear();
             worldXs.clear(); worldYs.clear();
             minWorldX = Double.MAX_VALUE; maxWorldX = -Double.MAX_VALUE;
             minWorldY = Double.MAX_VALUE; maxWorldY = -Double.MAX_VALUE;
             involvedBlocks.clear();
+            dominantFace = null;
         }
     }
 
@@ -151,19 +158,24 @@ public final class FloodFillExtractor {
     public static ExtractionResult continueExtract(ServerLevel level, FloodFillState state, int maxBlocks) {
         int blocksVisitedThisCall = 0;
         int visitedBefore = state.visited.size();
-        Direction dominantFace = null;
 
         while (!state.queue.isEmpty()) {
             PixelPos curr = state.queue.poll();
-            if (state.visited.contains(curr)) continue;
+            if (state.visited.contains(curr) || state.processed.contains(curr)) continue;
 
             CanvasFace face = getFacesAt(level, curr.pos(), curr.face()).stream()
                     .findFirst().orElse(null);
-            if (face == null) continue;
+            if (face == null) {
+                state.processed.add(curr);
+                continue;
+            }
 
-            if (!ManaPixelDetector.isManaPixel(face, curr.x(), curr.y())) continue;
+            if (!ManaPixelDetector.isManaPixel(face, curr.x(), curr.y())) {
+                state.processed.add(curr);
+                continue;
+            }
 
-            if (dominantFace == null) dominantFace = face.primaryFace();
+            if (state.dominantFace == null) state.dominantFace = face.primaryFace();
 
             state.visited.add(curr);
             state.involvedBlocks.add(curr.pos());
@@ -173,7 +185,7 @@ public final class FloodFillExtractor {
 
             // Compute and store world position
             Vec3 w3d = worldFromPixel(curr.pos(), face, curr.x(), curr.y());
-            double[] w2d = flatten(dominantFace, w3d);
+            double[] w2d = flatten(state.dominantFace, w3d);
             state.worldXs.add(w2d[0]);
             state.worldYs.add(w2d[1]);
             state.minWorldX = Math.min(state.minWorldX, w2d[0]);
@@ -192,7 +204,7 @@ public final class FloodFillExtractor {
 
                     if (nx >= 0 && nx < pw && ny >= 0 && ny < ph) {
                         PixelPos nb = new PixelPos(curr.pos(), curr.face(), nx, ny, 0);
-                        if (!state.visited.contains(nb)) state.queue.add(nb);
+                        if (!state.visited.contains(nb) && !state.processed.contains(nb)) state.queue.add(nb);
                     } else {
                         List<PixelPos> adjacents = findAdjacentByCorner(level, curr, face, nx, ny);
                         if (!adjacents.isEmpty()) {
@@ -200,7 +212,7 @@ public final class FloodFillExtractor {
                                     curr.x(), curr.y(), nx, ny, curr.pos(), adjacents.size());
                         }
                         for (PixelPos adj : adjacents) {
-                            if (!state.visited.contains(adj)) {
+                            if (!state.visited.contains(adj) && !state.processed.contains(adj)) {
                                 if (!state.involvedBlocks.contains(adj.pos())) {
                                     blocksVisitedThisCall++;
                                     Gyromancy.LOGGER.debug("[FloodFill] + block {} from {} → {} total",
@@ -222,14 +234,17 @@ public final class FloodFillExtractor {
         // Dead loop guard: no progress → cancel
         if (state.visited.size() == visitedBefore) {
             Gyromancy.LOGGER.debug("[FloodFill] No progress this round — canceling state #{}", state.stateId);
-            return new ExtractionResult(null, null);
+            return enqueueNextComponent(level, state)
+                    ? new ExtractionResult(null, state)
+                    : new ExtractionResult(null, null);
         }
 
         ExtractedGlyph glyph = buildGlyph(state);
+        state.processed.addAll(state.visited);
 
         int added = 0;
         for (PixelPos s : state.initialSeeds) {
-            if (!state.visited.contains(s)) { state.queue.add(s); added++; }
+            if (!state.processed.contains(s)) added++;
         }
         if (added > 0) {
             Gyromancy.LOGGER.debug("[FloodFill] Glyph: {} pixels {} blocks — {} disconnected seeds remain",
@@ -241,8 +256,9 @@ public final class FloodFillExtractor {
                     String.format("%.1f", glyph.maxWorldX()), String.format("%.1f", glyph.maxWorldY()));
         }
 
-        if (glyph.pixels().isEmpty() && added == 0) return new ExtractionResult(null, null);
-        return new ExtractionResult(glyph, added > 0 ? resetForNextGroup(state) : null);
+        boolean hasNext = enqueueNextComponent(level, state);
+        if (glyph.pixels().isEmpty() && !hasNext) return new ExtractionResult(null, null);
+        return new ExtractionResult(glyph, hasNext ? state : null);
     }
 
     private static void checkOriginMerge(FloodFillState state, PixelPos curr) {
@@ -275,6 +291,24 @@ public final class FloodFillExtractor {
     private static FloodFillState resetForNextGroup(FloodFillState state) {
         state.resetGeometry();
         return state;
+    }
+
+    private static boolean enqueueNextComponent(ServerLevel level, FloodFillState state) {
+        state.resetGeometry();
+        for (PixelPos seed : state.initialSeeds) {
+            if (state.processed.contains(seed)) continue;
+
+            CanvasFace face = getFacesAt(level, seed.pos(), seed.face()).stream()
+                    .findFirst().orElse(null);
+            if (face == null || !ManaPixelDetector.isManaPixel(face, seed.x(), seed.y())) {
+                state.processed.add(seed);
+                continue;
+            }
+
+            state.queue.add(seed);
+            return true;
+        }
+        return false;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -322,33 +356,64 @@ public final class FloodFillExtractor {
     // Normalization
     // ═══════════════════════════════════════════════════════════════
 
-    public static int[][] normalizeGlyph(ExtractedGlyph glyph) {
-        double w = glyph.maxWorldX - glyph.minWorldX;
-        double h = glyph.maxWorldY - glyph.minWorldY;
-        if (w <= 0 || h <= 0) return createFallbackNormalized(glyph);
+    public static int[][] rawGlyphMatrix(ExtractedGlyph glyph) {
+        int n = glyph.worldX.length;
+        if (n == 0) return createFallbackRawMatrix(glyph);
 
-        double size = Math.max(w, h) * 1.1;
-        double padX = (size - w) / 2.0;
-        double padY = (size - h) / 2.0;
-        double srcMinX = glyph.minWorldX - padX;
-        double srcMinY = glyph.minWorldY - padY;
-        double scale = 32.0 / size;
-        int[][] result = new int[32][32];
+        double step = inferGridStep(glyph.worldX, glyph.worldY);
+        if (!(step > EPSILON) || !Double.isFinite(step)) step = 1.0 / 16.0;
 
-        for (int i = 0; i < glyph.worldX.length; i++) {
-            int tx = (int) ((glyph.worldX[i] - srcMinX) * scale);
-            int ty = (int) ((glyph.worldY[i] - srcMinY) * scale);
-            if (tx >= 0 && tx < 32 && ty >= 0 && ty < 32) result[ty][tx] = 1;
+        int width = Math.max(1, (int) Math.round((glyph.maxWorldX - glyph.minWorldX) / step) + 1);
+        int height = Math.max(1, (int) Math.round((glyph.maxWorldY - glyph.minWorldY) / step) + 1);
+        int[][] result = new int[height][width];
+
+        for (int i = 0; i < n; i++) {
+            int x = (int) Math.round((glyph.worldX[i] - glyph.minWorldX) / step);
+            int y = (int) Math.round((glyph.worldY[i] - glyph.minWorldY) / step);
+            if (x >= 0 && x < width && y >= 0 && y < height) result[y][x] = 1;
         }
         return result;
     }
 
-    private static int[][] createFallbackNormalized(ExtractedGlyph glyph) {
-        int[][] result = new int[32][32];
-        for (PixelPos p : glyph.pixels) {
-            int tx = 16 + p.x(), ty = 16 + p.y();
-            if (tx >= 0 && tx < 32 && ty >= 0 && ty < 32) result[ty][tx] = 1;
+    private static double inferGridStep(double[] xs, double[] ys) {
+        double dx = minPositiveDelta(xs);
+        double dy = minPositiveDelta(ys);
+        if (dx > EPSILON && dy > EPSILON) return Math.min(dx, dy);
+        if (dx > EPSILON) return dx;
+        if (dy > EPSILON) return dy;
+        return 1.0 / 16.0;
+    }
+
+    private static double minPositiveDelta(double[] values) {
+        double[] sorted = values.clone();
+        Arrays.sort(sorted);
+
+        double best = Double.MAX_VALUE;
+        double last = sorted.length == 0 ? 0.0 : sorted[0];
+        for (int i = 1; i < sorted.length; i++) {
+            double delta = sorted[i] - last;
+            if (delta > EPSILON) {
+                best = Math.min(best, delta);
+                last = sorted[i];
+            }
         }
+        return best == Double.MAX_VALUE ? 0.0 : best;
+    }
+
+    private static int[][] createFallbackRawMatrix(ExtractedGlyph glyph) {
+        if (glyph.pixels.isEmpty()) return new int[1][1];
+
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
+        for (PixelPos p : glyph.pixels) {
+            minX = Math.min(minX, p.x());
+            minY = Math.min(minY, p.y());
+            maxX = Math.max(maxX, p.x());
+            maxY = Math.max(maxY, p.y());
+        }
+
+        int[][] result = new int[maxY - minY + 1][maxX - minX + 1];
+        for (PixelPos p : glyph.pixels) result[p.y() - minY][p.x() - minX] = 1;
         return result;
     }
 

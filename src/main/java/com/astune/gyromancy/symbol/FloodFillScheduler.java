@@ -51,7 +51,6 @@ public final class FloodFillScheduler {
         int id = nextStateId++;
         FloodFillState state = new FloodFillState(id, seeds.getFirst());
         state.initialSeeds.addAll(seeds);
-        for (int i = 1; i < seeds.size(); i++) state.queue.add(seeds.get(i));
 
         allSeeds.put(id, state);
         pendingTasks.add(new PendingTask(level, state));

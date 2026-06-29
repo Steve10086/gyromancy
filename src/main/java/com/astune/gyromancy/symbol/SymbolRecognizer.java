@@ -8,33 +8,44 @@ import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
 import net.minecraft.core.Registry;
 import org.slf4j.Logger;
 
-import java.util.*;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Main entry point for symbol recognition.
  *
  * <p>Orchestrates the full pipeline for a single extracted glyph:
  * <ol>
- *   <li>Normalize the extracted glyph to a 32×32 binary grid</li>
+ *   <li>Rasterize the extracted glyph to its raw binary matrix</li>
  *   <li>Match against all registered templates via {@link SkeletonMatcher}</li>
- *   <li>Keep matches above the confidence threshold</li>
+ *   <li>Keep matches returned by {@link SkeletonMatcher}'s hard/soft threshold pipeline</li>
  *   <li>Return the resulting {@link SymbolMatch}(es)</li>
  * </ol>
  */
 public final class SymbolRecognizer {
 
     private static final Logger LOGGER = Gyromancy.LOGGER;
+    private static final AtomicInteger DEBUG_IMAGE_ID = new AtomicInteger();
 
     private SymbolRecognizer() {}
 
     public record RecognizerConfig(
             float confidenceThreshold
     ) {
+        /** Kept for API compatibility; SkeletonMatcher now owns all match thresholds. */
         public static final RecognizerConfig DEFAULT = new RecognizerConfig(0.40f);
     }
 
     /**
-     * Recognizes an extracted glyph by normalizing and matching against all templates.
+     * Recognizes an extracted glyph by rasterizing and matching against all templates.
      */
     public static List<SymbolMatch> recognize(
             ExtractedGlyph glyph,
@@ -42,32 +53,29 @@ public final class SymbolRecognizer {
             RecognizerConfig config) {
 
         if (glyph.pixels().isEmpty()) {
-            LOGGER.debug("[SymbolRecognizer] Empty glyph — no pixels to recognize");
+            LOGGER.debug("[SymbolRecognizer] Empty glyph - no pixels to recognize");
             return Collections.emptyList();
         }
 
-        int[][] normalized = FloodFillExtractor.normalizeGlyph(glyph);
+        int[][] rawMatrix = FloodFillExtractor.rawGlyphMatrix(glyph);
         int glyphArea = glyph.pixels().size();
 
-        LOGGER.debug("[SymbolRecognizer] Matching glyph: {} pixels across {} blocks (bbox: {},{} → {},{})",
+        LOGGER.debug("[SymbolRecognizer] Matching glyph: {} pixels across {} blocks raw={}x{} (bbox: {},{} -> {},{})",
                 glyphArea, glyph.blockCount(),
+                rawMatrix[0].length, rawMatrix.length,
                 String.format("%.1f", glyph.minWorldX()), String.format("%.1f", glyph.minWorldY()),
                 String.format("%.1f", glyph.maxWorldX()), String.format("%.1f", glyph.maxWorldY()));
 
-        printDebugGrid(normalized);
+        saveDebugMatrixPng(rawMatrix);
 
-        // Single skeleton pipeline run → batch match against all templates
         SkeletonMatcher matcher = SkeletonMatcher.getInstance();
-        List<SkeletonMatcher.Match> results = matcher.recognize(normalized);
+        List<SkeletonMatcher.Match> results = matcher.recognize(rawMatrix);
 
-        // Build index: templateId → SymbolTemplate
         Map<String, SymbolTemplate> tplIndex = new HashMap<>();
         for (SymbolTemplate t : symbolRegistry) tplIndex.put(t.id().toString(), t);
 
         List<SymbolMatch> matches = new ArrayList<>();
         for (SkeletonMatcher.Match result : results) {
-            if (result.confidence() < config.confidenceThreshold()) continue;
-
             SymbolTemplate template = tplIndex.get(result.templateId().toString());
             if (template == null) continue;
 
@@ -88,8 +96,7 @@ public final class SymbolRecognizer {
             LOGGER.debug("[SymbolRecognizer] >> BEST MATCH: {} (conf={}, role={})",
                     best.symbolId(), String.format("%.3f", best.confidence()), best.role());
         } else {
-            LOGGER.debug("[SymbolRecognizer] >> NO MATCH — no template exceeded confidence threshold {}",
-                    String.format("%.2f", config.confidenceThreshold()));
+            LOGGER.debug("[SymbolRecognizer] >> NO MATCH - no template passed skeleton matcher thresholds");
         }
 
         return matches;
@@ -104,22 +111,26 @@ public final class SymbolRecognizer {
                 new RecognizerConfig(confidenceThreshold));
     }
 
-    // ═══════════════════════ Debug ═══════════════════════
+    static void saveDebugMatrixPng(int[][] matrix) {
+        if (matrix.length == 0 || matrix[0].length == 0) return;
 
-    static void printDebugGrid(int[][] pattern) {
-        StringBuilder sb = new StringBuilder("\n[SymbolRecognizer] Glyph 8×8:\n");
-        for (int by = 0; by < 8; by++) {
-            sb.append("  ");
-            for (int bx = 0; bx < 8; bx++) {
-                int count = 0;
-                for (int y = by * 4; y < (by + 1) * 4; y++)
-                    for (int x = bx * 4; x < (bx + 1) * 4; x++)
-                        if (pattern[y][x] != 0) count++;
-                char c = count >= 12 ? '█' : count >= 8 ? '▓' : count >= 4 ? '▒' : count >= 1 ? '░' : '·';
-                sb.append(c);
-            }
-            sb.append('\n');
+        File outDir = new File("build/skeleton_viz/raw_glyph");
+        if (!outDir.exists() && !outDir.mkdirs()) return;
+
+        int width = matrix[0].length;
+        int height = matrix.length;
+        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+                img.setRGB(x, y, matrix[y][x] != 0 ? 0xFF000000 : 0x00000000);
+
+        File out = new File(outDir, String.format("glyph_%05d_%dx%d.png",
+                DEBUG_IMAGE_ID.incrementAndGet(), width, height));
+        try {
+            ImageIO.write(img, "PNG", out);
+            LOGGER.debug("[SymbolRecognizer] Raw glyph matrix saved: {}", out.getPath());
+        } catch (IOException e) {
+            LOGGER.debug("[SymbolRecognizer] Failed to save raw glyph matrix PNG", e);
         }
-        LOGGER.debug(sb.toString());
     }
 }

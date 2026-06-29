@@ -15,7 +15,7 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
  *
  * <p>Registers a single generic {@link GlyphImageProvider} and
  * {@link GlyphRenderer} — color is determined per-pixel by the
- * encoded glyph_id value in the canvas effect layer.
+ * symbol_id value in the canvas effect layer.
  */
 @EventBusSubscriber(modid = Gyromancy.MODID, value = Dist.CLIENT)
 public final class ClientSetup {

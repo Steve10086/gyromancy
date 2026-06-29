@@ -1,5 +1,7 @@
 package com.astune.gyromancy.api.symbol;
 
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 
@@ -19,6 +21,14 @@ public record PixelPos(
         /** ARGB color value of this pixel */
         int color
 ) {
+    public static final Codec<PixelPos> CODEC = RecordCodecBuilder.create(i ->
+            i.group(BlockPos.CODEC.fieldOf("pos").forGetter(PixelPos::pos),
+                    Direction.CODEC.fieldOf("face").forGetter(PixelPos::face),
+                    Codec.INT.fieldOf("x").forGetter(PixelPos::x),
+                    Codec.INT.fieldOf("y").forGetter(PixelPos::y),
+                    Codec.INT.fieldOf("color").forGetter(PixelPos::color))
+             .apply(i, PixelPos::new));
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

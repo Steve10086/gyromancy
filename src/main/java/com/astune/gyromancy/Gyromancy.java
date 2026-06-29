@@ -1,6 +1,7 @@
 package com.astune.gyromancy;
 
 import com.astune.gyromancy.command.DebugCommands;
+import com.astune.gyromancy.array.MagicArrayDetector;
 import com.astune.gyromancy.element.ElementChunkEventHandler;
 import com.astune.gyromancy.element.ElementTickProcessor;
 import com.astune.gyromancy.registry.*;
@@ -45,10 +46,18 @@ public class Gyromancy {
         // Server tick for element processing
         NeoForge.EVENT_BUS.<ServerTickEvent.Post>addListener(
                 e -> ElementTickProcessor.onServerTick(e));
+        NeoForge.EVENT_BUS.<ServerTickEvent.Post>addListener(
+                e -> MagicArrayDetector.onServerTick(e));
 
         // Chunk lifecycle for element tracking
         NeoForge.EVENT_BUS.<ChunkEvent.Load>addListener(
-                e -> ElementChunkEventHandler.onChunkLoad(e));
+                e -> {
+                    ElementChunkEventHandler.onChunkLoad(e);
+                    if (e.getLevel() instanceof net.minecraft.server.level.ServerLevel level
+                            && e.getChunk() instanceof net.minecraft.world.level.chunk.LevelChunk chunk) {
+                        MagicArrayDetector.onChunkLoad(level, chunk);
+                    }
+                });
         NeoForge.EVENT_BUS.<ChunkEvent.Unload>addListener(
                 e -> ElementChunkEventHandler.onChunkUnload(e));
 

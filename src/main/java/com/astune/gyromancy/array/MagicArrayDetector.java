@@ -7,43 +7,50 @@ import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.registry.ModAttachments;
-import com.astune.gyromancy.symbol.*;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
+import com.astune.gyromancy.symbol.FloodFillScheduler;
+import com.astune.gyromancy.symbol.GlyphChunkStorage;
+import com.astune.gyromancy.symbol.GlyphMarker;
+import com.astune.gyromancy.symbol.InteriorValidator;
+import com.astune.gyromancy.symbol.ManaPixelDetector;
+import com.astune.gyromancy.symbol.SymbolRecognizer;
+import com.astune.gyromancy.symbol.SymbolRegistry;
+import com.astune.gyromancy.network.SyncGlyphPacket;
 import com.astune.painter.api.CanvasData;
 import com.astune.painter.api.CanvasDataHolder;
+import com.astune.painter.api.CanvasFace;
 import com.astune.painter.block.CanvasBlockEntity;
 import com.astune.painter.event.ServerCanvasUpdateEvent;
 import com.astune.painter.network.SyncCanvasPacket;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Bridge between Pigmentum canvas events and the symbol recognition pipeline.
- *
- * <p>Flow:
- * <ol>
- *   <li>{@code ServerCanvasUpdateEvent} → scan for mana seeds</li>
- *   <li>Submit seeds to {@link FloodFillScheduler} (with merging)</li>
- *   <li>On glyph extracted → recognize</li>
- *   <li>Interior validation → mark ONLY on success</li>
- *   <li>Store recognized glyphs as {@link PositionedGlyph}</li>
- *   <li>If outer circle + inner glyphs → ready for Phase 5</li>
- * </ol>
+ * Bridge between canvas update events and the symbol recognition pipeline.
  */
 @EventBusSubscriber(modid = Gyromancy.MODID)
 public final class MagicArrayDetector {
+
+    private static final Map<ServerLevel, Map<BlockPos, Integer>> RETRY_PLACED_CANVASES = new WeakHashMap<>();
 
     private MagicArrayDetector() {}
 
@@ -52,37 +59,232 @@ public final class MagicArrayDetector {
     }
 
     @SubscribeEvent
+    static void onCanvasUpdatePre(ServerCanvasUpdateEvent.Pre event) {
+        if (!(event.getPlayer().level() instanceof ServerLevel level)) return;
+
+        CanvasData oldData = currentCanvasData(level, event.getPos());
+        CanvasData newData = event.getCanvasData();
+
+        if (oldData == null || newData == null) return;
+        invalidateChangedGlyphs(level, event.getPos(), oldData, newData);
+    }
+
+    @SubscribeEvent
+    static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity().level() instanceof ServerLevel level)) return;
+        if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) return;
+
+        PacketDistributor.sendToPlayer(player, buildGlyphPacket(level));
+    }
+
+    @SubscribeEvent
     static void onCanvasUpdate(ServerCanvasUpdateEvent event) {
+        if (event instanceof ServerCanvasUpdateEvent.Pre) return;
+
         CanvasData data = event.getCanvasData();
         if (data == null || data.faces().isEmpty()) return;
 
         Gyromancy.LOGGER.debug("[MagicArrayDetector] Canvas updated at {} ({} faces)",
                 event.getPos(), data.faces().size());
 
-        List<PixelPos> seeds = ManaPixelDetector.scanForMana(
-                event.getPlayer().level(), event.getPos(), data);
-
-        if (seeds.isEmpty()) return;
-
-        Gyromancy.LOGGER.debug("[MagicArrayDetector] {} mana seed(s) at {}", seeds.size(), event.getPos());
-
         if (event.getPlayer().level() instanceof ServerLevel sl) {
-            FloodFillScheduler.submitBatch(sl, seeds);
+            scanCanvasAt(sl, event.getPos(), data);
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // Glyph completion callback
-    // ═══════════════════════════════════════════════════════════════
+    public static void onChunkLoad(ServerLevel level, LevelChunk chunk) {
+        GlyphChunkStorage.load(level, chunk);
+    }
+
+    public static void onBlockReplaced(ServerLevel level, LevelChunk chunk, BlockPos pos,
+                                       BlockState oldState, BlockState newState) {
+        if (oldState == newState || oldState.equals(newState)) return;
+
+        invalidateGlyphs(level, GlyphChunkStorage.touching(chunk, pos), null, null);
+        if (newState.hasBlockEntity()) retryPlacedCanvas(level, pos);
+    }
+
+    public static void onServerTick(ServerTickEvent.Post event) {
+        for (ServerLevel level : event.getServer().getAllLevels()) {
+            Map<BlockPos, Integer> retries = RETRY_PLACED_CANVASES.get(level);
+            if (retries == null || retries.isEmpty()) continue;
+
+            var it = retries.entrySet().iterator();
+            while (it.hasNext()) {
+                var entry = it.next();
+                BlockPos pos = entry.getKey();
+                int remaining = entry.getValue();
+                BlockEntity be = level.getBlockEntity(pos);
+
+                if (be instanceof CanvasDataHolder holder && handlePlacedCanvas(level, pos, holder)) {
+                    it.remove();
+                } else if (remaining <= 1) {
+                    it.remove();
+                } else {
+                    entry.setValue(remaining - 1);
+                }
+            }
+        }
+    }
+
+    private static boolean handlePlacedCanvas(ServerLevel level, BlockPos pos, CanvasDataHolder holder) {
+        CanvasData data = holder.painter$getCanvasData();
+        int cleared = clearGlyphMarks(data);
+        if (data == null || data.faces().isEmpty()) return false;
+        if (cleared > 0) syncCanvasAt(level, pos);
+        scanCanvasAt(level, pos, data);
+        return true;
+    }
+
+    private static void retryPlacedCanvas(ServerLevel level, BlockPos pos) {
+        RETRY_PLACED_CANVASES.computeIfAbsent(level, ignored -> new java.util.HashMap<>())
+                .put(pos.immutable(), 20);
+    }
+
+    public static void scanCanvasAt(ServerLevel level, BlockPos pos, CanvasData data) {
+        if (data == null || data.faces().isEmpty()) return;
+
+        List<PixelPos> seeds = ManaPixelDetector.scanForMana(level, pos, data);
+        if (seeds.isEmpty()) return;
+
+        Gyromancy.LOGGER.debug("[MagicArrayDetector] {} mana seed(s) at {}", seeds.size(), pos);
+        FloodFillScheduler.submitBatch(level, seeds);
+    }
+
+    private static void invalidateChangedGlyphs(ServerLevel level, BlockPos pos,
+                                                CanvasData oldData, CanvasData newData) {
+        Set<Integer> invalidGlyphIds = changedGlyphIds(oldData, newData);
+        if (invalidGlyphIds.isEmpty()) return;
+
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        Set<PositionedGlyph> glyphs = new HashSet<>();
+        for (int glyphId : invalidGlyphIds) {
+            PositionedGlyph glyph = mgr.getGlyph(glyphId);
+            if (glyph != null) glyphs.add(glyph);
+        }
+        glyphs.addAll(GlyphChunkStorage.touching(level.getChunkAt(pos), pos));
+        invalidateGlyphs(level, glyphs, newData, pos);
+    }
+
+    private static void invalidateGlyphs(ServerLevel level, Set<PositionedGlyph> glyphs,
+                                         CanvasData changedData, BlockPos changedPos) {
+        if (glyphs.isEmpty()) return;
+
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        Set<BlockPos> syncPositions = new HashSet<>();
+        for (PositionedGlyph glyph : glyphs) {
+            glyph = Optional.ofNullable(mgr.getGlyph(glyph.glyphUuid())).orElse(glyph);
+            if (glyph == null) continue;
+            mgr.unregisterGlyph(glyph.glyphUuid());
+            GlyphChunkStorage.remove(level, glyph);
+
+            GlyphMarker.clearMarks(glyph, level);
+            if (changedData != null && changedPos != null) {
+                clearGlyphPixelsInData(changedData, changedPos, glyph);
+            }
+            glyph.pixels().stream().map(PixelPos::pos).forEach(syncPositions::add);
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] Glyph #{} invalidated by symbol_id change at {}",
+                    glyph.glyphId(), glyph.worldPos());
+        }
+
+        for (BlockPos syncPos : syncPositions) syncCanvasAt(level, syncPos);
+        syncGlyphs(level);
+    }
+
+    private static CanvasData currentCanvasData(ServerLevel level, BlockPos pos) {
+        BlockEntity be = level.getBlockEntity(pos);
+        if (!(be instanceof CanvasDataHolder holder)) return null;
+        return holder.painter$getCanvasData();
+    }
+
+    private static void clearGlyphPixelsInData(CanvasData data, BlockPos pos, PositionedGlyph glyph) {
+        for (PixelPos pixel : glyph.pixels()) {
+            if (!pixel.pos().equals(pos)) continue;
+
+            CanvasFace face = faceByDirection(data, pixel.face());
+            if (face == null) continue;
+
+            face.setEffectValue(ManaPixelDetector.GLYPH_ID_KEY, pixel.x(), pixel.y(), 0);
+            face.setEffectValue(ManaPixelDetector.SYMBOL_ID_KEY, pixel.x(), pixel.y(), 0);
+        }
+    }
+
+    private static int clearGlyphMarks(CanvasData data) {
+        if (data == null || data.faces().isEmpty()) return 0;
+
+        int changed = 0;
+        for (CanvasFace face : data.faces()) {
+            int w = face.pixels().getWidth();
+            int h = face.pixels().getHeight();
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    if (face.getEffectValue(ManaPixelDetector.GLYPH_ID_KEY, x, y) == 0
+                            && face.getEffectValue(ManaPixelDetector.SYMBOL_ID_KEY, x, y) == 0) {
+                        continue;
+                    }
+                    face.setEffectValue(ManaPixelDetector.GLYPH_ID_KEY, x, y, 0);
+                    face.setEffectValue(ManaPixelDetector.SYMBOL_ID_KEY, x, y, 0);
+                    changed++;
+                }
+            }
+        }
+        return changed;
+    }
+
+    private static Set<Integer> changedGlyphIds(CanvasData oldData, CanvasData newData) {
+        Set<Integer> changed = new HashSet<>();
+        for (CanvasFace oldFace : oldData.faces()) {
+            CanvasFace newFace = matchingFace(newData, oldFace);
+            byte[] oldSymbols = oldFace.getEffectLayer(ManaPixelDetector.SYMBOL_ID_KEY);
+            byte[] oldGlyphs = oldFace.getEffectLayer(ManaPixelDetector.GLYPH_ID_KEY);
+            if (oldSymbols == null || oldGlyphs == null) continue;
+
+            byte[] newSymbols = newFace != null
+                    ? newFace.getEffectLayer(ManaPixelDetector.SYMBOL_ID_KEY)
+                    : null;
+
+            int w = oldFace.pixels().getWidth();
+            int h = oldFace.pixels().getHeight();
+            int count = Math.min(w * h, Math.min(oldSymbols.length, oldGlyphs.length));
+            for (int i = 0; i < count; i++) {
+                int oldSymbol = oldSymbols[i] & 0xFF;
+                if (oldSymbol == 0) continue;
+
+                int newSymbol = newSymbols != null && i < newSymbols.length ? newSymbols[i] & 0xFF : 0;
+                if (newSymbol == oldSymbol) continue;
+
+                int glyphId = oldGlyphs[i] & 0xFF;
+                if (glyphId > 0) changed.add(glyphId);
+            }
+        }
+        return changed;
+    }
+
+    private static CanvasFace matchingFace(CanvasData data, CanvasFace oldFace) {
+        for (CanvasFace face : data.faces()) {
+            if (face.primaryFace() == oldFace.primaryFace()
+                    && face.pixels().getWidth() == oldFace.pixels().getWidth()
+                    && face.pixels().getHeight() == oldFace.pixels().getHeight()) {
+                return face;
+            }
+        }
+        return null;
+    }
+
+    private static CanvasFace faceByDirection(CanvasData data, net.minecraft.core.Direction direction) {
+        for (CanvasFace face : data.faces()) {
+            if (face.primaryFace() == direction) return face;
+        }
+        return null;
+    }
 
     private static void onGlyphExtracted(ServerLevel level, ExtractedGlyph glyph) {
         Gyromancy.LOGGER.debug("[MagicArrayDetector] Glyph extracted: {} pixels across {} blocks",
                 glyph.pixels().size(), glyph.blockCount());
 
-        // 1. Recognize
         List<SymbolMatch> matches = SymbolRecognizer.recognize(glyph);
         if (matches.isEmpty()) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] No match — pixels NOT marked");
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] No match - pixels NOT marked");
             return;
         }
 
@@ -91,16 +293,13 @@ public final class MagicArrayDetector {
         Gyromancy.LOGGER.debug("[MagicArrayDetector] Best match: {} conf={} role={}",
                 best.symbolId(), String.format("%.3f", best.confidence()), role);
 
-        // 2. Interior validation + conditional marking
         if (role == SymbolRole.CENTER_SYMBOL || role == SymbolRole.PARAMETER_RUNE) {
             handleRuneMatch(level, glyph, best);
-
         } else if (role == SymbolRole.OUTER_CIRCLE) {
             handleCircleMatch(level, glyph, best);
         }
     }
 
-    // ═══════════════════════ RUNE ═══════════════════════
     private static void handleRuneMatch(ServerLevel level, ExtractedGlyph glyph, SymbolMatch best) {
         if (InteriorValidator.hasRawManaInside(glyph, level)) {
             Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} REJECTED: raw mana inside",
@@ -108,29 +307,35 @@ public final class MagicArrayDetector {
             return;
         }
 
-        // Clean → mark + store
-        int colorIndex = getGlyphColorIndex(best.symbolId());
-        int id = GlyphMarker.nextGlyphId();
-        GlyphMarker.markConsumed(glyph, colorIndex, id, level);
+        int symbolLayerValue = SymbolRegistry.symbolLayerValueFor(best.symbolId());
+        if (symbolLayerValue <= 0) {
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} REJECTED: missing symbol registry id",
+                    best.symbolId());
+            return;
+        }
 
-        // Sync modified canvas back to clients so they see the consumed marks
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        int id = mgr.nextGlyphId();
+
+        GlyphMarker.markConsumed(glyph, id, symbolLayerValue, level);
         syncAffectedCanvases(glyph, level);
 
         PositionedGlyph pg = new PositionedGlyph(
-                id, best.symbolId(), best.confidence(), best.role(),
-                glyph.pixels().iterator().next().pos(), // representative position
+                UUID.randomUUID(), id, best.symbolId(), best.confidence(), best.role(),
+                glyph.pixels().iterator().next().pos(),
                 glyph.minWorldX(), glyph.maxWorldX(),
-                glyph.minWorldY(), glyph.maxWorldY()
+                glyph.minWorldY(), glyph.maxWorldY(),
+                Set.copyOf(glyph.pixels())
         );
 
-        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
         mgr.registerGlyph(pg);
+        GlyphChunkStorage.store(level, pg);
+        syncGlyphs(level);
 
-        Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} ACCEPTED → glyph #{} stored",
+        Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} ACCEPTED - glyph #{} stored",
                 best.symbolId(), id);
     }
 
-    // ═══════════════════════ CIRCLE ═══════════════════════
     private static void handleCircleMatch(ServerLevel level, ExtractedGlyph glyph, SymbolMatch best) {
         if (InteriorValidator.hasRawManaInside(glyph, level)) {
             Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle REJECTED: raw mana inside");
@@ -142,46 +347,17 @@ public final class MagicArrayDetector {
                 glyph, level, mgr.getGlyphIndex());
 
         if (!innerGlyphs.isEmpty()) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle + {} inner glyph(s) → Phase 5 ready!",
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle + {} inner glyph(s) - Phase 5 ready!",
                     innerGlyphs.size());
             for (PositionedGlyph pg : innerGlyphs) {
                 Gyromancy.LOGGER.debug("[MagicArrayDetector]   inner: {} conf={} at {}",
                         pg.symbolId(), String.format("%.3f", pg.confidence()), pg.worldPos());
             }
-            // Phase 5 hook will go here
         } else {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle found, no inner glyphs yet — waiting");
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle found, no inner glyphs yet - waiting");
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // Color mapping — symbol → glyph color index
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * Maps a matched symbol ID to its glyph color index.
-     * The index is encoded into the glyph_id effect layer and decoded
-     * on the client by {@code GlyphImageProvider} for colored rendering.
-     */
-    private static int getGlyphColorIndex(ResourceLocation symbolId) {
-        String name = symbolId.getPath();
-        return switch (name) {
-            case "fire"  -> GlyphMarker.COLOR_FIRE;   // → Red   0xFFFF0000
-            case "water" -> GlyphMarker.COLOR_WATER;  // → Blue  0xFF0000FF
-            case "earth" -> GlyphMarker.COLOR_EARTH;  // → Brown 0xFF8B4513
-            default      -> GlyphMarker.COLOR_FIRE;   // fallback: red
-        };
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // Canvas sync — pushes modified canvas data to clients
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * Syncs all canvas blocks touched by a glyph back to clients.
-     * Called after {@link GlyphMarker#markConsumed} modifies effect layers
-     * so clients can see the consumed pixel markings.
-     */
     private static void syncAffectedCanvases(ExtractedGlyph glyph, ServerLevel level) {
         Set<BlockPos> uniquePositions = glyph.pixels().stream()
                 .map(PixelPos::pos)
@@ -192,10 +368,6 @@ public final class MagicArrayDetector {
         }
     }
 
-    /**
-     * Syncs a single canvas block to all clients tracking its chunk.
-     * Sends the full CanvasData including effect layer changes from glyph marking.
-     */
     private static void syncCanvasAt(ServerLevel level, BlockPos pos) {
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof CanvasDataHolder holder)) return;
@@ -211,5 +383,31 @@ public final class MagicArrayDetector {
                 new SyncCanvasPacket(pos, data, Optional.ofNullable(mimicked), false)
         );
         level.setBlocksDirty(pos, state, state);
+    }
+
+    private static void syncGlyphs(ServerLevel level) {
+        PacketDistributor.sendToAllPlayers(buildGlyphPacket(level));
+    }
+
+    private static SyncGlyphPacket buildGlyphPacket(ServerLevel level) {
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        List<SyncGlyphPacket.GlyphData> glyphs = new ArrayList<>();
+        for (PositionedGlyph glyph : mgr.getAllGlyphs()) {
+            PixelPos sample = glyph.pixels().isEmpty() ? null : glyph.pixels().iterator().next();
+            if (sample == null) continue;
+
+            glyphs.add(new SyncGlyphPacket.GlyphData(
+                    glyph.glyphId(),
+                    glyph.symbolId(),
+                    glyph.confidence(),
+                    sample.pos(),
+                    sample.face(),
+                    glyph.minWorldX(),
+                    glyph.maxWorldX(),
+                    glyph.minWorldY(),
+                    glyph.maxWorldY()
+            ));
+        }
+        return new SyncGlyphPacket(glyphs);
     }
 }

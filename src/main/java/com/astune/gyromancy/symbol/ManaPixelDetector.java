@@ -12,58 +12,37 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Detects "mana pixels" — pixels drawn with magical/elemental ink
- * that should trigger symbol recognition.
+ * Detects mana pixels drawn with magical ink.
  *
- * <p>Detection is based on Pigmentum CanvasFace effect layers.
- * When the GyromancyPaintProvider (Phase 4) draws with magical ink,
- * it writes {@link #MANA_EFFECT_KEY} to the effect layer at the pixel position.
- * This detector reads that effect layer to identify mana pixels.
- *
- * <p>Also tracks consumed pixels via {@link #GLYPH_ID_KEY} to prevent
- * re-detection of already-recognized symbols.
+ * <p>Detection is based strictly on Pigmentum CanvasFace effect layers. Ordinary
+ * non-transparent paint must not enter symbol recognition unless it carries
+ * {@link #MANA_EFFECT_KEY}.
  */
 public final class ManaPixelDetector {
 
-    /** Effect layer key written by GyromancyPaintProvider for magical ink pixels */
+    /** Effect layer key written by magical ink pixels. */
     public static final String MANA_EFFECT_KEY = "gyromancy:mana";
 
-    /** Effect layer key written by GlyphMarker to mark consumed pixels */
+    /** Effect layer key written by GlyphMarker to mark consumed pixels. */
     public static final String GLYPH_ID_KEY = "gyromancy:glyph_id";
 
-    /** Fallback: minimum alpha threshold for color-based mana detection */
-    private static final int MIN_ALPHA = 0x80;
+    /** Effect layer key written by GlyphMarker to store the symbol registry id + 1. */
+    public static final String SYMBOL_ID_KEY = "gyromancy:symbol_id";
 
     private ManaPixelDetector() {}
 
     /**
      * Checks whether a pixel at the given CanvasFace coordinates is a mana pixel.
-     * First checks the effect layer, then falls back to color-based detection.
      */
     public static boolean isManaPixel(CanvasFace face, int x, int y) {
-        // Primary: check effect layer
-        if (face.getEffectValue(MANA_EFFECT_KEY, x, y) > 0) {
-            return true;
-        }
-
-        // Fallback: color-based heuristic — non-transparent pixel
-        int color = face.pixels().getPixel(x, y);
-        return isOpaqueColor(color);
+        return face.getEffectValue(MANA_EFFECT_KEY, x, y) > 0;
     }
 
     /**
      * Checks if a pixel has already been consumed (marked as part of a recognized glyph).
      */
     public static boolean isMarked(CanvasFace face, int x, int y) {
-        return face.getEffectValue(GLYPH_ID_KEY, x, y) > 0;
-    }
-
-    /**
-     * Checks if a pixel color is sufficiently opaque to be considered drawn.
-     */
-    public static boolean isOpaqueColor(int argb) {
-        int alpha = (argb >> 24) & 0xFF;
-        return alpha >= MIN_ALPHA;
+        return face.getEffectValue(SYMBOL_ID_KEY, x, y) > 0;
     }
 
     /**

@@ -25,7 +25,7 @@ public final class InteriorValidator {
 
     /**
      * Checks whether the interior of a glyph contains any raw mana pixels
-     * (pixels with {@code gyromancy:mana > 0} but not yet marked as {@code gyromancy:glyph_id}).
+     * (pixels with {@code gyromancy:mana > 0} but not yet marked as {@code gyromancy:symbol_id}).
      *
      * <p>Scans all blocks within the glyph's world-space bounding box that are NOT
      * already part of the glyph's involved blocks.
@@ -87,7 +87,7 @@ public final class InteriorValidator {
                     for (CanvasFace face : faces) {
                         for (int py = 0; py < 16; py++) {
                             for (int px = 0; px < 16; px++) {
-                                // Check: mana > 0 AND glyph_id == 0 (not yet consumed)
+                                // Check: mana > 0 AND symbol_id == 0 (not yet consumed)
                                 if (ManaPixelDetector.isManaPixel(face, px, py)
                                         && !ManaPixelDetector.isMarked(face, px, py)) {
                                     return true;
@@ -110,7 +110,7 @@ public final class InteriorValidator {
      */
     public static List<PositionedGlyph> findGlyphsInside(
             ExtractedGlyph glyph, ServerLevel level,
-            Map<Integer, PositionedGlyph> glyphIndex) {
+            Map<?, PositionedGlyph> glyphIndex) {
 
         List<PositionedGlyph> found = new ArrayList<>();
         double minX = glyph.minWorldX() + 0.5;
