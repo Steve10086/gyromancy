@@ -41,6 +41,10 @@ List<SymbolMatch> matches = SymbolRecognizer.recognize(glyph);
 
 1. `FloodFillExtractor.rawGlyphMatrix(glyph)` converts the `ExtractedGlyph` into a binary matrix.
 2. `SkeletonMatcher.getInstance().recognize(rawMatrix)` returns match results.
+3. For each accepted match, `SymbolRecognizer` derives glyph pose data:
+   - `rotationDegrees`: template-to-drawn rotation from the skeleton matcher.
+   - `front`: world-space `Vec3` pointing toward the glyph front.
+   - `length` / `width`: glyph span along `front` and perpendicular to it.
 
 If there is no match, the flow stops. Pixels are not marked and no glyph object is created.
 
@@ -77,6 +81,9 @@ new PositionedGlyph(
     best.symbolId(),
     best.confidence(),
     best.role(),
+    best.front(),
+    best.length(),
+    best.width(),
     representativeBlockPos,
     glyph.minWorldX(),
     glyph.maxWorldX(),
@@ -159,6 +166,9 @@ PacketDistributor.sendToAllPlayers(buildGlyphPacket(level));
 - `confidence`
 - sample `BlockPos`
 - sample `Direction`
+- `front`
+- `length`
+- `width`
 - bounding box: `minWorldX/maxWorldX/minWorldY/maxWorldY`
 
 `ModNetwork` registers `SyncGlyphPacket` as a play-to-client payload:
@@ -184,7 +194,7 @@ ElementDebugRenderer.replaceGlyphData(packet.glyphs());
 When `/gyromancy debug true` is enabled, `ElementDebugRenderer.onRenderLevelStage` renders both:
 
 - element concentration debug quads;
-- glyph debug labels.
+- glyph debug labels and direction arrows.
 
 Glyph labels use `SyncGlyphPacket.GlyphData`. They are debug-only and do not affect the official glyph overlay.
 
@@ -193,16 +203,17 @@ Glyph labels use `SyncGlyphPacket.GlyphData`. They are debug-only and do not aff
 1. Computes the label position from the glyph bounding box center.
 2. Offsets the label outward from the sample canvas face using the face normal and `LABEL_FACE_OFFSET`.
 3. Skips labels farther than `RADIUS + 4` from the player.
-4. Renders billboard text:
+4. Renders a cyan arrow from the label position along `GlyphData.front()`.
+5. Renders billboard text:
 
 ```text
-<symbol path> <confidence>
+<symbol path> <confidence> <length>x<width>
 ```
 
 Example:
 
 ```text
-fire 0.842
+fire 0.842 0.50x0.25
 ```
 
 Element debug data is stored as an immutable snapshot through `replaceDebugData(Map.copyOf(...))`. Glyph debug data is refreshed through `replaceGlyphData`.

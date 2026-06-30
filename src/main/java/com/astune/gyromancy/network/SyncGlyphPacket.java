@@ -8,6 +8,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.ArrayList;
@@ -30,12 +31,15 @@ public record SyncGlyphPacket(List<GlyphData> glyphs) implements CustomPacketPay
                 float confidence = buf.readFloat();
                 BlockPos samplePos = BlockPos.STREAM_CODEC.decode(buf);
                 Direction face = Direction.values()[buf.readUnsignedByte() % Direction.values().length];
+                Vec3 front = new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble());
+                double length = buf.readDouble();
+                double width = buf.readDouble();
                 double minWorldX = buf.readDouble();
                 double maxWorldX = buf.readDouble();
                 double minWorldY = buf.readDouble();
                 double maxWorldY = buf.readDouble();
                 glyphs.add(new GlyphData(glyphId, symbolId, confidence, samplePos, face,
-                        minWorldX, maxWorldX, minWorldY, maxWorldY));
+                        front, length, width, minWorldX, maxWorldX, minWorldY, maxWorldY));
             }
             return new SyncGlyphPacket(glyphs);
         }
@@ -49,6 +53,11 @@ public record SyncGlyphPacket(List<GlyphData> glyphs) implements CustomPacketPay
                 buf.writeFloat(glyph.confidence());
                 BlockPos.STREAM_CODEC.encode(buf, glyph.samplePos());
                 buf.writeByte(glyph.face().ordinal());
+                buf.writeDouble(glyph.front().x);
+                buf.writeDouble(glyph.front().y);
+                buf.writeDouble(glyph.front().z);
+                buf.writeDouble(glyph.length());
+                buf.writeDouble(glyph.width());
                 buf.writeDouble(glyph.minWorldX());
                 buf.writeDouble(glyph.maxWorldX());
                 buf.writeDouble(glyph.minWorldY());
@@ -72,6 +81,9 @@ public record SyncGlyphPacket(List<GlyphData> glyphs) implements CustomPacketPay
             float confidence,
             BlockPos samplePos,
             Direction face,
+            Vec3 front,
+            double length,
+            double width,
             double minWorldX,
             double maxWorldX,
             double minWorldY,

@@ -1,6 +1,7 @@
 package com.astune.gyromancy.api.symbol;
 
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Result of matching a drawn symbol against a template.
@@ -16,6 +17,12 @@ public record SymbolMatch(
         boolean mirrored,
         /** Scale factor relative to the template (1.0 = same size) */
         float scale,
+        /** Unit world-space vector pointing toward the rune's front */
+        Vec3 front,
+        /** Glyph size along {@link #front} in world-block units */
+        double length,
+        /** Glyph size perpendicular to {@link #front} on the canvas plane */
+        double width,
         /** The bounding box center of this symbol on the canvas (normalized 0-1) */
         float centerX,
         float centerY,

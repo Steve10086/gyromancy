@@ -5,7 +5,9 @@ import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolTemplate;
 import com.astune.gyromancy.registry.GyromancyRegistries;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Registry;
+import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 
 import javax.imageio.ImageIO;
@@ -81,11 +83,13 @@ public final class SymbolRecognizer {
 
             float centerX = (float) ((glyph.minWorldX() + glyph.maxWorldX()) / 2.0);
             float centerY = (float) ((glyph.minWorldY() + glyph.maxWorldY()) / 2.0);
+            Pose pose = computePose(glyph, result.rotationDegrees());
 
             matches.add(new SymbolMatch(
                     template.id(),
                     result.confidence(),
-                    0f, false, 1f,
+                    result.rotationDegrees(), false, 1f,
+                    pose.front(), pose.length(), pose.width(),
                     centerX, centerY,
                     template.defaultRole()
             ));
@@ -100,6 +104,56 @@ public final class SymbolRecognizer {
         }
 
         return matches;
+    }
+
+    private record Pose(Vec3 front, double length, double width) {}
+
+    private static Pose computePose(ExtractedGlyph glyph, float rotationDegrees) {
+        PixelBasis basis = pixelBasis(rotationDegrees);
+        Vec3 front = worldFront(glyph, basis.frontX(), basis.frontY());
+        double[] size = projectedSize(glyph, basis.frontX(), basis.frontY());
+        return new Pose(front, size[0], size[1]);
+    }
+
+    private record PixelBasis(double frontX, double frontY) {}
+
+    private static PixelBasis pixelBasis(float rotationDegrees) {
+        double radians = Math.toRadians(rotationDegrees - 90.0);
+        return new PixelBasis(Math.cos(radians), Math.sin(radians));
+    }
+
+    private static Vec3 worldFront(ExtractedGlyph glyph, double fx, double fy) {
+        Direction face = glyph.pixels().isEmpty()
+                ? Direction.NORTH
+                : glyph.pixels().iterator().next().face();
+        Vec3 front = switch (face) {
+            case NORTH, SOUTH -> new Vec3(fx, fy, 0);
+            case EAST, WEST -> new Vec3(0, fy, fx);
+            case UP, DOWN -> new Vec3(fx, 0, fy);
+        };
+        return front.lengthSqr() > 1e-12 ? front.normalize() : Vec3.ZERO;
+    }
+
+    private static double[] projectedSize(ExtractedGlyph glyph, double fx, double fy) {
+        if (glyph.worldX().length == 0) return new double[]{0.0, 0.0};
+
+        double rx = -fy;
+        double ry = fx;
+        double minFront = Double.POSITIVE_INFINITY;
+        double maxFront = Double.NEGATIVE_INFINITY;
+        double minRight = Double.POSITIVE_INFINITY;
+        double maxRight = Double.NEGATIVE_INFINITY;
+        for (int i = 0; i < glyph.worldX().length; i++) {
+            double x = glyph.worldX()[i];
+            double y = glyph.worldY()[i];
+            double along = x * fx + y * fy;
+            double across = x * rx + y * ry;
+            minFront = Math.min(minFront, along);
+            maxFront = Math.max(maxFront, along);
+            minRight = Math.min(minRight, across);
+            maxRight = Math.max(maxRight, across);
+        }
+        return new double[]{maxFront - minFront, maxRight - minRight};
     }
 
     public static List<SymbolMatch> recognize(ExtractedGlyph glyph) {

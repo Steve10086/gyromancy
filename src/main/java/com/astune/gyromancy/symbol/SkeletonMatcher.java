@@ -55,7 +55,7 @@ public final class SkeletonMatcher {
 
             MatchScore score = minGraphEditMatch(tpl, target);
             if (!passesSoftThresholds(template.thresholds(), score)) continue;
-            results.add(new Match(e.getKey(), (float) score.combined()));
+            results.add(new Match(e.getKey(), (float) score.combined(), (float) score.rotationDegrees()));
         }
         results.sort((a, b) -> Float.compare(b.confidence, a.confidence));
         return results;
@@ -81,7 +81,7 @@ public final class SkeletonMatcher {
                 && target.innerOpenLines == tpl.innerOpenLines;
     }
 
-    public record Match(ResourceLocation templateId, float confidence) {}
+    public record Match(ResourceLocation templateId, float confidence, float rotationDegrees) {}
 
     static boolean passesSoftThresholds(SoftThresholds t, MatchScore score) {
         return score.segment() >= t.segment()
@@ -273,7 +273,7 @@ public final class SkeletonMatcher {
 
         int nT = tplLive.size(), nG = tgtLive.size();
         double editSim = editConfidence(tpl, target, tplEdited, tgtEdited);
-        if (nT == 0 || nG == 0) return new MatchScore(editSim, 1.0, 1.0, 1.0, 1.0, editSim);
+        if (nT == 0 || nG == 0) return new MatchScore(editSim, 1.0, 1.0, 1.0, 1.0, editSim, 0.0);
 
         // Rectangular Hungarian: pad to square with high cost
         int N = Math.max(nT, nG);
@@ -297,6 +297,8 @@ public final class SkeletonMatcher {
         double totalLength = 0;
         double totalTurning = 0;
         double totalEndpointAngle = 0;
+        double rotSin = 0;
+        double rotCos = 0;
         int validPairs = 0;
         for (int i = 0; i < N; i++) {
             int j = assignment[i];
@@ -310,10 +312,14 @@ public final class SkeletonMatcher {
             totalLength += sim.length();
             totalTurning += sim.turning();
             totalEndpointAngle += sim.endpointAngle();
+            double delta = matchedEdgeRotationRadians(tpl, target, tplOrigIdx, tgtOrigIdx);
+            double weight = Math.max(1.0, edgePathLength(tpl.preEdges.get(tplOrigIdx)));
+            rotSin += Math.sin(delta) * weight;
+            rotCos += Math.cos(delta) * weight;
             validPairs++;
         }
 
-        if (validPairs == 0) return new MatchScore(editSim, 1.0, 1.0, 1.0, 1.0, editSim);
+        if (validPairs == 0) return new MatchScore(editSim, 1.0, 1.0, 1.0, 1.0, editSim, 0.0);
 
         double segment = totalSegment / validPairs;
         double length = totalLength / validPairs;
@@ -321,9 +327,10 @@ public final class SkeletonMatcher {
         double endpointAngle = totalEndpointAngle / validPairs;
         double combined = 0.18 * segment + 0.18 * length
                 + 0.26 * turning + 0.20 * endpointAngle + 0.18 * editSim;
+        double rotationDegrees = normalizeDegrees(Math.toDegrees(Math.atan2(rotSin, rotCos)));
         return new MatchScore(
                 Math.max(0.0, combined),
-                segment, length, turning, endpointAngle, editSim);
+                segment, length, turning, endpointAngle, editSim, rotationDegrees);
     }
 
     // ── Graph edit operations ──
@@ -660,6 +667,36 @@ public final class SkeletonMatcher {
         return Math.max(direct, flipped);
     }
 
+    private static double matchedEdgeRotationRadians(SkeletonStats tpl, SkeletonStats target,
+            int tplPreIdx, int tgtPreIdx) {
+        SkelEdge te = tpl.preEdges.get(tplPreIdx);
+        SkelEdge ge = target.preEdges.get(tgtPreIdx);
+
+        double directScore = endpointAngleScore(tpl, tplPreIdx, te.from(), target, tgtPreIdx, ge.from())
+                + endpointAngleScore(tpl, tplPreIdx, te.to(), target, tgtPreIdx, ge.to());
+        double flippedScore = endpointAngleScore(tpl, tplPreIdx, te.from(), target, tgtPreIdx, ge.to())
+                + endpointAngleScore(tpl, tplPreIdx, te.to(), target, tgtPreIdx, ge.from());
+
+        double tplAngle = directedAngleFromNode(tpl.preNodes, te, te.from());
+        double tgtAngle = directScore >= flippedScore
+                ? directedAngleFromNode(target.preNodes, ge, ge.from())
+                : directedAngleFromNode(target.preNodes, ge, ge.to());
+        return signedAngleDelta(tplAngle, tgtAngle);
+    }
+
+    private static double signedAngleDelta(double from, double to) {
+        double d = to - from;
+        while (d <= -Math.PI) d += Math.PI * 2;
+        while (d > Math.PI) d -= Math.PI * 2;
+        return d;
+    }
+
+    private static double normalizeDegrees(double degrees) {
+        degrees %= 360.0;
+        if (degrees < 0) degrees += 360.0;
+        return degrees;
+    }
+
     private static double endpointAngleScore(SkeletonStats a, int aEdgeIdx, int aNodeId,
             SkeletonStats b, int bEdgeIdx, int bNodeId) {
         double[] aa = endpointAngleSignature(a.preNodes, a.preEdges, aEdgeIdx, aNodeId);
@@ -951,7 +988,8 @@ public final class SkeletonMatcher {
     record TemplateEntry(SkeletonStats stats, SoftThresholds thresholds) {}
 
     record MatchScore(double combined, double segment, double length,
-                      double turning, double endpointAngle, double edit) {}
+                      double turning, double endpointAngle, double edit,
+                      double rotationDegrees) {}
 
     record EdgeScore(double combined, double segment, double length,
                      double turning, double endpointAngle) {}

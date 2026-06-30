@@ -256,7 +256,7 @@ client.ElementDebugRenderer
 
 ##### `SymbolMatch.java` (record)
 **Role:** Result of matching a drawn glyph against a `SymbolTemplate`.  
-**Fields:** `symbolId`, `confidence`, `rotationDegrees`, `mirrored`, `scale`, `centerX`, `centerY`, `role`  
+**Fields:** `symbolId`, `confidence`, `rotationDegrees`, `mirrored`, `scale`, `front`, `length`, `width`, `centerX`, `centerY`, `role`  
 **Methods:** `isConfident(float threshold)`
 
 ##### `PixelPos.java` (record)
@@ -265,8 +265,8 @@ client.ElementDebugRenderer
 
 ##### `PositionedGlyph.java` (record)
 **Role:** A recognized glyph with world-space bounding info.  
-**Fields:** `glyphUuid` (persistent identity), `glyphId` (runtime canvas mark), `symbolId`, `confidence`, `role`, `worldPos`, bounding box, `pixels` (Set<PixelPos>)  
-**Serialization:** Codec support for chunk attachment storage, including `UUID -> PositionedGlyph` map entries.
+**Fields:** `glyphUuid` (persistent identity), `glyphId` (runtime canvas mark), `symbolId`, `confidence`, `role`, `front`, `length`, `width`, `worldPos`, bounding box, `pixels` (Set<PixelPos>)  
+**Serialization:** Codec support for chunk attachment storage, including `UUID -> PositionedGlyph` map entries. Pose fields default to zero for old saved glyphs.
 
 ##### `ParameterRune.java` (record)
 **Role:** A parameter rune with value.  
@@ -430,6 +430,7 @@ SymbolRecognizer
   ├── SkeletonMatcher (primary matcher)
   │     ├── Stage 1: hard layer pass (open/closed line counts)
   │     ├── Stage 2: soft threshold pass (graph edit distance + Hungarian assignment)
+  │     ├── Matched edge pairs produce rotationDegrees
   │     └── SymbolTemplate lookup from SymbolRegistry
   │
   └── MLSymbolMatcher (optional ML fallback)
@@ -500,7 +501,7 @@ SymbolRecognizer
 ##### `SymbolRecognizer.java`
 **Role:** Main entry point for symbol recognition.  
 **Config:** `confidenceThreshold` default 0.40f.  
-**Flow:** Rasterize `ExtractedGlyph` → `SkeletonMatcher.recognize()` → `SymbolMatch` list. Supports debug PNG output.
+**Flow:** Rasterize `ExtractedGlyph` → `SkeletonMatcher.recognize()` → add glyph pose (`front`, `length`, `width`) → `SymbolMatch` list. Supports debug PNG output.
 
 **Calls/Depends on:** `SymbolMatch`, `SymbolTemplate`, `SkeletonMatcher`, `GyromancyRegistries`, `ExtractedGlyph`
 
@@ -513,6 +514,7 @@ SymbolRecognizer
 1. `computeStats()` — fill holes → upscale to min 128px → Gaussian smooth → Guo-Hall skeletonize → extract nodes → trace edges → merge zero-edges → prune short branches → split at support points
 2. **Hard layer pass:** compare open-line counts, closed-loop counts, inner/outer classification
 3. **Soft threshold pass:** minimum graph edit matching via Hungarian assignment of surviving edges; sub-edge chain shape comparison (segment count, path length, turning angles, endpoint angles)
+4. **Rotation output:** matched edge pairs produce `rotationDegrees`, reused by `SymbolRecognizer` for glyph pose
 
 **Key types:** `SkeletonStats`, `TemplateEntry`, `MatchScore`, `EdgeScore`, `SoftThresholds`
 
@@ -582,7 +584,7 @@ Registers `SymbolTemplate` instances into `GyromancyRegistries.SYMBOL`.
 |-------|-----------|---------|
 | `ModNetwork.java` | — | `@EventBusSubscriber`: registers both packet types under version `"1"` |
 | `SyncDebugElementPacket.java` | Server→Client | Full snapshot: `List<BlockPos>` + flat `long[] values, derivatives`. Client handler → `ElementDebugRenderer.replaceDebugData()` |
-| `SyncGlyphPacket.java` | Server→Client | Full snapshot: `List<GlyphData>` (glyphId, symbolId, confidence, pos, face, bounding box). Client handler → `ElementDebugRenderer.replaceGlyphData()` |
+| `SyncGlyphPacket.java` | Server→Client | Full snapshot: `List<GlyphData>` (glyphId, symbolId, confidence, pos, face, front, length, width, bounding box). Client handler → `ElementDebugRenderer.replaceGlyphData()` |
 
 ---
 
@@ -596,7 +598,8 @@ Registers `SymbolTemplate` instances into `GyromancyRegistries.SYMBOL`.
 **Data sources:** `SyncDebugElementPacket` (element data), `SyncGlyphPacket` (glyph data).  
 **Rendering:**
 - Colored translucent quads on nearby blocks (radius 12), colored by dominant element type
-- Floating text labels for recognized glyphs (symbol path + confidence %)
+- Floating text labels for recognized glyphs (symbol path + confidence + size)
+- Cyan direction arrows for recognized glyphs, using synced `front`
 **Toggle:** `/gyromancy debug <bool>`
 
 ##### `GlyphImageProvider.java` (implements `CanvasImageProvider`)
@@ -787,12 +790,12 @@ Biome default (ElementBiomeProvider)
 3. FloodFillScheduler budgets extraction across ticks (max 20 blocks/tick)
 4. FloodFillExtractor BFS connects cross-block mana pixels → ExtractedGlyph
 5. Callback: SymbolRecognizer rasterizes → SkeletonMatcher computes stats
-6. Stage 1 hard pass (open/closed lines) → Stage 2 soft pass (graph edit)
+6. Stage 1 hard pass (open/closed lines) → Stage 2 soft pass (graph edit) → pose from matched edge rotation
 7. InteriorValidator checks no raw mana remains inside
 8. GlyphMarker marks pixels consumed
 9. MagicArrayManager indexes PositionedGlyph at runtime
 10. GlyphChunkStorage persists PositionedGlyph on touched chunks
-11. SyncGlyphPacket → client for debug labels
+11. SyncGlyphPacket → client for debug labels and direction arrows
 ```
 
 ### 6.3 Network Sync
@@ -813,7 +816,7 @@ Client-side:
   SyncGlyphPacket.handleClient()
     → ElementDebugRenderer.replaceGlyphData()
   ElementDebugRenderer.onRenderLevelStage (AFTER_PARTICLES)
-    → renders colored quads + floating text
+    → renders colored quads + glyph text/arrows
 ```
 
 ---

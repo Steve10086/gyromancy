@@ -322,6 +322,7 @@ public final class MagicArrayDetector {
 
         PositionedGlyph pg = new PositionedGlyph(
                 UUID.randomUUID(), id, best.symbolId(), best.confidence(), best.role(),
+                best.front(), best.length(), best.width(),
                 glyph.pixels().iterator().next().pos(),
                 glyph.minWorldX(), glyph.maxWorldX(),
                 glyph.minWorldY(), glyph.maxWorldY(),
@@ -402,6 +403,9 @@ public final class MagicArrayDetector {
                     glyph.confidence(),
                     sample.pos(),
                     sample.face(),
+                    glyph.front(),
+                    glyph.length(),
+                    glyph.width(),
                     glyph.minWorldX(),
                     glyph.maxWorldX(),
                     glyph.minWorldY(),

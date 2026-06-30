@@ -35,6 +35,8 @@ public final class ElementDebugRenderer {
     private static final long ALPHA_REFERENCE = 6000L;
     private static final float MAX_ALPHA = 0.5f;
     private static final double LABEL_FACE_OFFSET = 0.03;
+    private static final double GLYPH_ARROW_MIN = 0.25;
+    private static final double GLYPH_ARROW_MAX = 1.0;
 
     // ── Client-side mirror of overrides (populated by network packet) ──
     private static volatile Map<BlockPos, ElementConcentrations> debugData = Map.of();
@@ -134,12 +136,23 @@ public final class ElementDebugRenderer {
         Vec3 camPos = camera.getPosition();
         Vec3 playerCenter = Vec3.atCenterOf(mc.player.blockPosition());
 
+        poseStack.pushPose();
+        poseStack.translate(-camPos.x, -camPos.y, -camPos.z);
+        VertexConsumer lineConsumer = bufferSource.getBuffer(RenderType.lines());
+        for (GlyphData glyph : glyphData.values()) {
+            Vec3 labelPos = glyphLabelPosition(glyph);
+            if (labelPos.distanceTo(playerCenter) > RADIUS + 4) continue;
+            renderGlyphArrow(poseStack, lineConsumer, glyph, labelPos);
+        }
+        poseStack.popPose();
+
         for (GlyphData glyph : glyphData.values()) {
             Vec3 labelPos = glyphLabelPosition(glyph);
             if (labelPos.distanceTo(playerCenter) > RADIUS + 4) continue;
 
             String text = glyph.symbolId().getPath()
-                    + " " + String.format("%.3f", glyph.confidence());
+                    + " " + String.format("%.3f", glyph.confidence())
+                    + " " + String.format("%.2fx%.2f", glyph.length(), glyph.width());
             poseStack.pushPose();
             poseStack.translate(labelPos.x - camPos.x, labelPos.y - camPos.y, labelPos.z - camPos.z);
             poseStack.mulPose(camera.rotation());
@@ -153,6 +166,47 @@ public final class ElementDebugRenderer {
         }
 
         bufferSource.endBatch();
+    }
+
+    private static void renderGlyphArrow(PoseStack poseStack, VertexConsumer consumer,
+                                         GlyphData glyph, Vec3 start) {
+        if (glyph.front().lengthSqr() < 1e-8) return;
+
+        Vec3 front = glyph.front().normalize();
+        double arrowLen = Math.clamp(glyph.length(), GLYPH_ARROW_MIN, GLYPH_ARROW_MAX);
+        Vec3 end = start.add(front.scale(arrowLen));
+
+        Vec3 normal = Vec3.atLowerCornerOf(glyph.face().getNormal());
+        Vec3 side = cross(normal, front);
+        if (side.lengthSqr() < 1e-8) return;
+        side = side.normalize();
+
+        double headLen = Math.min(0.18, arrowLen * 0.35);
+        double headWidth = headLen * 0.65;
+        Vec3 base = end.subtract(front.scale(headLen));
+        addLine(poseStack, consumer, start, end);
+        addLine(poseStack, consumer, end, base.add(side.scale(headWidth)));
+        addLine(poseStack, consumer, end, base.subtract(side.scale(headWidth)));
+    }
+
+    private static void addLine(PoseStack poseStack, VertexConsumer consumer, Vec3 from, Vec3 to) {
+        Vec3 dir = to.subtract(from);
+        if (dir.lengthSqr() < 1e-8) return;
+        dir = dir.normalize();
+        consumer.addVertex(poseStack.last(), (float) from.x, (float) from.y, (float) from.z)
+                .setColor(0xFF00FFFF)
+                .setNormal(poseStack.last(), (float) dir.x, (float) dir.y, (float) dir.z);
+        consumer.addVertex(poseStack.last(), (float) to.x, (float) to.y, (float) to.z)
+                .setColor(0xFF00FFFF)
+                .setNormal(poseStack.last(), (float) dir.x, (float) dir.y, (float) dir.z);
+    }
+
+    private static Vec3 cross(Vec3 a, Vec3 b) {
+        return new Vec3(
+                a.y * b.z - a.z * b.y,
+                a.z * b.x - a.x * b.z,
+                a.x * b.y - a.y * b.x
+        );
     }
 
     private static Vec3 glyphLabelPosition(GlyphData glyph) {

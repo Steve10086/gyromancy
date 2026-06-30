@@ -4,6 +4,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.Set;
@@ -19,17 +20,29 @@ public record PositionedGlyph(
         ResourceLocation symbolId,
         float confidence,
         SymbolRole role,
+        Vec3 front,
+        double length,
+        double width,
         BlockPos worldPos,
         double minWorldX, double maxWorldX,
         double minWorldY, double maxWorldY,
         Set<PixelPos> pixels
 ) {
+    private static final Codec<Vec3> VEC3_CODEC = RecordCodecBuilder.create(i ->
+            i.group(Codec.DOUBLE.fieldOf("x").forGetter(v -> v.x),
+                    Codec.DOUBLE.fieldOf("y").forGetter(v -> v.y),
+                    Codec.DOUBLE.fieldOf("z").forGetter(v -> v.z))
+             .apply(i, Vec3::new));
+
     public static final Codec<PositionedGlyph> CODEC = RecordCodecBuilder.create(i ->
             i.group(Codec.STRING.xmap(UUID::fromString, UUID::toString).fieldOf("uuid").forGetter(PositionedGlyph::glyphUuid),
                     Codec.INT.fieldOf("glyph_id").forGetter(PositionedGlyph::glyphId),
                     ResourceLocation.CODEC.fieldOf("symbol_id").forGetter(PositionedGlyph::symbolId),
                     Codec.FLOAT.fieldOf("confidence").forGetter(PositionedGlyph::confidence),
                     SymbolRole.CODEC.fieldOf("role").forGetter(PositionedGlyph::role),
+                    VEC3_CODEC.optionalFieldOf("front", Vec3.ZERO).forGetter(PositionedGlyph::front),
+                    Codec.DOUBLE.optionalFieldOf("length", 0.0).forGetter(PositionedGlyph::length),
+                    Codec.DOUBLE.optionalFieldOf("width", 0.0).forGetter(PositionedGlyph::width),
                     BlockPos.CODEC.fieldOf("world_pos").forGetter(PositionedGlyph::worldPos),
                     Codec.DOUBLE.fieldOf("min_world_x").forGetter(PositionedGlyph::minWorldX),
                     Codec.DOUBLE.fieldOf("max_world_x").forGetter(PositionedGlyph::maxWorldX),
@@ -39,7 +52,8 @@ public record PositionedGlyph(
              .apply(i, PositionedGlyph::new));
 
     public PositionedGlyph withGlyphId(int newGlyphId) {
-        return new PositionedGlyph(glyphUuid, newGlyphId, symbolId, confidence, role, worldPos,
+        return new PositionedGlyph(glyphUuid, newGlyphId, symbolId, confidence, role,
+                front, length, width, worldPos,
                 minWorldX, maxWorldX, minWorldY, maxWorldY, pixels);
     }
 
