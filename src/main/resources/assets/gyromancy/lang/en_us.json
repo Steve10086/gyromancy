@@ -1,8 +1,11 @@
 {
-  "itemGroup.gyromancy": "Example Mod Tab",
-  "block.gyromancy.example_block": "Example Block",
-  "item.gyromancy.example_item": "Example Item",
-
+  "itemGroup.gyromancy": "Gyromancy",
+  "item.gyromancy.debug_brush": "Debug Brush",
+  "item.gyromancy.pen": "Mana Pen",
+  "item.gyromancy.ink_bottle": "Ink Bottle",
+  "item.gyromancy.ink_bottle.filled": "%s Ink Bottle",
+  "ink.gyromancy.mana_ink": "Mana",
+  "tooltip.gyromancy.ink_remaining": "Ink: %s",
   "gyromancy.configuration.title": "Gyromancy Configs",
   "gyromancy.configuration.section.gyromancy.common.toml": "Gyromancy Configs",
   "gyromancy.configuration.section.gyromancy.common.toml.title": "Gyromancy Configs",

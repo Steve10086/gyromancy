@@ -15,7 +15,7 @@ public record PenProperties(
         float precision,        // Affects symbol recognition quality [0.0-1.0], 1.0 = perfect
         int drawingSpeed        // Ticks between paint actions (lower = faster drawing)
 ) {
-    public static final PenProperties DEFAULT = new PenProperties(1.0f, 64, 1.0f, 2);
+    public static final PenProperties DEFAULT = new PenProperties(1/16.0f, 64, 1.0f, 2);
 
     public static final Codec<PenProperties> CODEC = RecordCodecBuilder.create(instance ->
             instance.group(

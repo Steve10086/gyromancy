@@ -26,6 +26,8 @@ public final class ModCreativeTabs {
                     .icon(() -> ModItems.DEBUG_BRUSH.get().getDefaultInstance())
                     .displayItems((parameters, output) -> {
                         output.accept(ModItems.DEBUG_BRUSH.get());
+                        output.accept(ModItems.PEN.get());
+                        output.accept(ModItems.INK_BOTTLE.get());
                     })
                     .build());
 }
