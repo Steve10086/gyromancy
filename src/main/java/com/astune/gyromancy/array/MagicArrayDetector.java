@@ -1,7 +1,9 @@
 package com.astune.gyromancy.array;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.array.MagicArrayManager;
+import com.astune.gyromancy.api.symbol.ParameterRune;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
@@ -172,12 +174,25 @@ public final class MagicArrayDetector {
 
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
         Set<BlockPos> syncPositions = new HashSet<>();
+        Set<UUID> tornDownArrays = new HashSet<>();
+
         for (PositionedGlyph glyph : glyphs) {
             glyph = Optional.ofNullable(mgr.getGlyph(glyph.glyphUuid())).orElse(glyph);
             if (glyph == null) continue;
+
+            // Array teardown: if this glyph is bound to an active array, destroy it
+            ArrayObject arr = mgr.getArrayForGlyph(glyph.glyphUuid());
+            if (arr != null && tornDownArrays.add(arr.arrayId())) {
+                List<ParameterRune> runeParams = toRuneParams(arr.runeGlyphs());
+                SymbolRegistry.EndEffect end = SymbolRegistry.getEndEffect(arr.centerGlyph().symbolId());
+                end.execute(level, arr.circleGlyph().worldPos(), runeParams, arr.scratchData());
+                Gyromancy.LOGGER.info("[MagicArrayDetector] Array deactivated: center={}",
+                        arr.centerGlyph().symbolId());
+                mgr.unregisterArrayObj(arr.arrayId());
+            }
+
             mgr.unregisterGlyph(glyph.glyphUuid());
             GlyphChunkStorage.remove(level, glyph);
-
             GlyphMarker.clearMarks(glyph, level);
             if (changedData != null && changedPos != null) {
                 clearGlyphPixelsInData(changedData, changedPos, glyph);
@@ -301,11 +316,11 @@ public final class MagicArrayDetector {
     }
 
     private static void handleRuneMatch(ServerLevel level, ExtractedGlyph glyph, SymbolMatch best) {
-        if (InteriorValidator.hasRawManaInside(glyph, level)) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} REJECTED: raw mana inside",
-                    best.symbolId());
-            return;
-        }
+        //if (InteriorValidator.hasRawManaInside(glyph, level)) {
+        //    Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} REJECTED: raw mana inside",
+        //            best.symbolId());
+        //    return;
+        //}
 
         int symbolLayerValue = SymbolRegistry.symbolLayerValueFor(best.symbolId());
         if (symbolLayerValue <= 0) {
@@ -338,25 +353,75 @@ public final class MagicArrayDetector {
     }
 
     private static void handleCircleMatch(ServerLevel level, ExtractedGlyph glyph, SymbolMatch best) {
-        if (InteriorValidator.hasRawManaInside(glyph, level)) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle REJECTED: raw mana inside");
-            return;
-        }
+        //if (InteriorValidator.hasRawManaInside(glyph, level)) {
+        //    Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle REJECTED: raw mana inside");
+        //    return;
+        //}
 
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
         List<PositionedGlyph> innerGlyphs = InteriorValidator.findGlyphsInside(
                 glyph, level, mgr.getGlyphIndex());
 
-        if (!innerGlyphs.isEmpty()) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle + {} inner glyph(s) - Phase 5 ready!",
-                    innerGlyphs.size());
-            for (PositionedGlyph pg : innerGlyphs) {
-                Gyromancy.LOGGER.debug("[MagicArrayDetector]   inner: {} conf={} at {}",
-                        pg.symbolId(), String.format("%.3f", pg.confidence()), pg.worldPos());
-            }
-        } else {
+        if (innerGlyphs.isEmpty()) {
             Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle found, no inner glyphs yet - waiting");
+            return;
         }
+
+        // Stage 1: structural validation — exactly 1 center symbol, 0+ runes
+        List<PositionedGlyph> centers = new ArrayList<>();
+        List<PositionedGlyph> runes = new ArrayList<>();
+        for (PositionedGlyph pg : innerGlyphs) {
+            if (pg.role() == SymbolRole.CENTER_SYMBOL) centers.add(pg);
+            else if (pg.role() == SymbolRole.PARAMETER_RUNE) runes.add(pg);
+        }
+
+        if (centers.size() != 1) {
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] Array REJECTED: {} center symbol(s)",
+                    centers.size());
+            return;
+        }
+
+        // Store circle as a PositionedGlyph for invalidation binding
+        int circleSymbolLayer = SymbolRegistry.symbolLayerValueFor(best.symbolId());
+        int circleId = mgr.nextGlyphId();
+        GlyphMarker.markConsumed(glyph, circleId, circleSymbolLayer, level);
+        syncAffectedCanvases(glyph, level);
+
+        PositionedGlyph circleGlyph = new PositionedGlyph(
+                UUID.randomUUID(), circleId, best.symbolId(), best.confidence(), best.role(),
+                best.front(), best.length(), best.width(),
+                glyph.pixels().iterator().next().pos(),
+                glyph.minWorldX(), glyph.maxWorldX(),
+                glyph.minWorldY(), glyph.maxWorldY(),
+                Set.copyOf(glyph.pixels())
+        );
+        mgr.registerGlyph(circleGlyph);
+        GlyphChunkStorage.store(level, circleGlyph);
+
+        PositionedGlyph centerGlyph = centers.getFirst();
+        List<ParameterRune> runeParams = toRuneParams(runes);
+
+        // Stage 2: create array object, dispatch centerEffect
+        Map<String, Object> scratchData = Map.of();
+        ArrayObject arr = new ArrayObject(
+                UUID.randomUUID(), circleGlyph, centerGlyph, runes, scratchData);
+        mgr.registerArrayObj(arr);
+
+        SymbolRegistry.CenterEffect effect = SymbolRegistry.getCenterEffect(centerGlyph.symbolId());
+        scratchData = effect.execute(level, glyph.pixels().iterator().next().pos(), runeParams);
+        mgr.setArrayScratchData(arr.arrayId(), scratchData);
+
+        syncGlyphs(level);
+        Gyromancy.LOGGER.info("[MagicArrayDetector] Array activated: center={}, runes={}",
+                centerGlyph.symbolId(), runeParams.size());
+    }
+
+    private static List<ParameterRune> toRuneParams(List<PositionedGlyph> runes) {
+        List<ParameterRune> params = new ArrayList<>(runes.size());
+        for (PositionedGlyph pg : runes) {
+            params.add(new ParameterRune(pg.symbolId(), pg.confidence(), ""));
+        }
+        return params;
     }
 
     private static void syncAffectedCanvases(ExtractedGlyph glyph, ServerLevel level) {

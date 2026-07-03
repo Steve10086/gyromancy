@@ -20,6 +20,10 @@ public class MagicArrayManager {
     private final Map<Integer, UUID> glyphIdIndex = new HashMap<>();
     private int nextGlyphId = 1;
 
+    // ── phrase5 array-object tracking ──
+    private final Map<UUID, ArrayObject> activeArrays = new HashMap<>();
+    private final Map<UUID, UUID> glyphToArray = new HashMap<>(); // glyphUuid → arrayId
+
     public MagicArrayManager() {}
 
     // ═══════════════════ arrays ═══════════════════
@@ -119,5 +123,41 @@ public class MagicArrayManager {
 
     public Map<UUID, PositionedGlyph> getGlyphIndex() {
         return glyphIndex;
+    }
+
+    // ═══════════════════ phrase5 array objects ═══════════════════
+
+    public void registerArrayObj(ArrayObject arr) {
+        activeArrays.put(arr.arrayId(), arr);
+        for (PositionedGlyph pg : arr.allBoundGlyphs()) {
+            glyphToArray.put(pg.glyphUuid(), arr.arrayId());
+        }
+    }
+
+    public void unregisterArrayObj(UUID arrayId) {
+        ArrayObject arr = activeArrays.remove(arrayId);
+        if (arr != null) {
+            for (PositionedGlyph pg : arr.allBoundGlyphs()) {
+                glyphToArray.remove(pg.glyphUuid());
+            }
+        }
+    }
+
+    public ArrayObject getArrayForGlyph(UUID glyphUuid) {
+        UUID arrayId = glyphToArray.get(glyphUuid);
+        return arrayId != null ? activeArrays.get(arrayId) : null;
+    }
+
+    public Collection<ArrayObject> getAllArrayObjs() {
+        return Collections.unmodifiableCollection(activeArrays.values());
+    }
+
+    public void setArrayScratchData(UUID arrayId, Map<String, Object> data) {
+        ArrayObject existing = activeArrays.get(arrayId);
+        if (existing != null) {
+            activeArrays.put(arrayId, new ArrayObject(
+                    existing.arrayId(), existing.circleGlyph(), existing.centerGlyph(),
+                    existing.runeGlyphs(), data));
+        }
     }
 }
