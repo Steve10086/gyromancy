@@ -51,7 +51,7 @@ If there is no match, the flow stops. Pixels are not marked and no glyph object 
 If matches exist, `matches.getFirst()` is used as the best match. The result is routed by `SymbolRole`:
 
 - `CENTER_SYMBOL` / `PARAMETER_RUNE`: handled by `handleRuneMatch`.
-- `OUTER_CIRCLE`: handled by `handleCircleMatch`; currently it only searches for inner glyphs and does not create a glyph object for the circle itself.
+- `OUTER_CIRCLE`: handled by `handleCircleMatch` — stores the circle as a `PositionedGlyph` (for invalidation binding) and drives array lifecycle.
 
 ## 4. Glyph Id And Canvas Marks
 
@@ -217,3 +217,78 @@ fire 0.842 0.50x0.25
 ```
 
 Element debug data is stored as an immutable snapshot through `replaceDebugData(Map.copyOf(...))`. Glyph debug data is refreshed through `replaceGlyphData`.
+
+## 10. Array Lifecycle (phrase5)
+
+When `handleCircleMatch` is called for an `OUTER_CIRCLE` glyph, it drives the array lifecycle.
+
+### 10.1 Circle Glyph Storage
+
+The circle is stored as a `PositionedGlyph` with `OUTER_CIRCLE` role, using the same pipeline as runes:
+
+1. `SymbolRegistry.symbolLayerValueFor(circle.symbolId())` → symbol layer value.
+2. `GlyphMarker.markConsumed()` — writes `glyph_id` + `symbol_id` effect layers.
+3. `MagicArrayManager.registerGlyph()` + `GlyphChunkStorage.store()`.
+
+This ensures circle redraws are caught by the normal `symbol_id` diff in `ServerCanvasUpdateEvent.Pre`, which triggers glyph invalidation.
+
+### 10.2 Structural Validation
+
+`InteriorValidator.findGlyphsInside()` collects glyphs whose bounding boxes fall within the circle. The inner glyphs are classified by `SymbolRole`:
+
+- **Stage 1 pass:** exactly 1 `CENTER_SYMBOL`, any number (0+) of `PARAMETER_RUNE`.
+- **Rejection:** 0 centers, or 2+ centers → log and return. No array is created.
+
+### 10.3 ArrayObject Creation
+
+A passing validation creates an `ArrayObject`:
+
+```java
+new ArrayObject(
+    UUID.randomUUID(),
+    circleGlyph,
+    centerGlyph,
+    runeGlyphs,          // List<PositionedGlyph>
+    Map.of()             // scratchData, initially empty
+)
+```
+
+The center symbol's `CenterEffect` is called with the runes:
+
+```java
+Map<String, Object> scratchData = centerEffect.execute(level, pos, runeParams);
+MagicArrayManager.setArrayScratchData(arrayId, scratchData);
+```
+
+`CenterEffect` is a `@FunctionalInterface` defined inside `SymbolRegistry` and fused into `SymbolDef`. Default returns empty map.
+
+### 10.4 Array Teardown
+
+When any glyph bound to an `ArrayObject` is invalidated (via `invalidateGlyphs`):
+
+1. `MagicArrayManager.getArrayForGlyph(glyphUuid)` finds the array.
+2. The center symbol's `EndEffect` fires: `endEffect.execute(level, pos, runeParams, scratchData)`.
+3. `MagicArrayManager.unregisterArrayObj()` removes the array and its reverse index.
+4. Only the triggering glyph is cleaned up. Runes and center symbol survive independently — a new circle can find them later and re-form the array.
+5. Sync and glyph packet update follow.
+
+### 10.5 Effect Registration
+
+`EndEffect` (like `CenterEffect`) is a `@FunctionalInterface` in `SymbolRegistry`:
+
+```java
+@FunctionalInterface
+public interface EndEffect {
+    void execute(ServerLevel level, BlockPos arrayPos,
+                 List<ParameterRune> runes, Map<String, Object> scratchData);
+}
+```
+
+Both are fields on `SymbolDef`. Existing `SYMBOLS` entries default to no-op. To add behaviors, include them in the `SymbolDef` entry:
+
+```java
+new SymbolDef("fire", 3, false, SymbolRole.CENTER_SYMBOL, FIRE_GLYPH_COLOR,
+        (level, pos, runes) -> { /* activate */ return Map.of(); },
+        (level, pos, runes, data) -> { /* deactivate */ });
+```
+

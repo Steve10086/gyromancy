@@ -1,11 +1,15 @@
 package com.astune.gyromancy.client.glyph;
 
+import com.astune.gyromancy.client.effect.ClientRayEffects;
+import com.astune.gyromancy.symbol.ManaPixelDetector;
 import com.astune.painter.api.CanvasFace;
+import com.astune.painter.api.IPixelMatrix;
 import com.astune.painter.api.render.CanvasPixelRenderer;
 import com.astune.painter.api.render.RenderContext;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
 
@@ -62,7 +66,22 @@ public final class GlyphRenderer implements CanvasPixelRenderer {
         addVertex(vc, pose, corners[2], 1, 1, nx, ny, nz, FULL_BRIGHT, context.packedOverlay);
         addVertex(vc, pose, corners[3], 0, 1, nx, ny, nz, FULL_BRIGHT, context.packedOverlay);
 
+        // Spawn ray effect: world-up beam from face center
+        Vec3 worldCenter = worldFaceCenter(context.pos, corners);
+        Vec3 sourceU = corners[1].subtract(corners[0]);
+        Vec3 sourceV = corners[0].subtract(corners[3]);
+        IPixelMatrix pixels = face.pixels();
+        ClientRayEffects.spawnOrRefresh(worldCenter, dir, normal, sourceU, sourceV,
+                context.texture, face.getEffectLayer(ManaPixelDetector.SYMBOL_ID_KEY),
+                pixels.getWidth(), pixels.getHeight(), GlyphImageProvider::glyphColor,
+                0xA0FFFFFF, 40, 0.3, 20);
+
         return true; // face rendered — stop trying further renderers
+    }
+
+    static Vec3 worldFaceCenter(BlockPos pos, Vec3[] corners) {
+        Vec3 localCenter = corners[0].add(corners[1]).add(corners[2]).add(corners[3]).scale(0.25);
+        return Vec3.atLowerCornerOf(pos).add(0.5, 0.5, 0.5).add(localCenter);
     }
 
     private static void addVertex(VertexConsumer vc, PoseStack.Pose pose, Vec3 pos,

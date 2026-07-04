@@ -1,6 +1,7 @@
 package com.astune.gyromancy;
 
 import com.astune.gyromancy.client.ElementDebugRenderer;
+import com.astune.gyromancy.client.effect.ClientRayEffects;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -43,6 +44,9 @@ public class GyromancyClient {
         // ── Debug renderer — AFTER_PARTICLES overlay ──
         NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(
                 e -> ElementDebugRenderer.onRenderLevelStage(e));
+
+        NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(
+                ClientRayEffects::onRenderLevelStage);
 
         Gyromancy.LOGGER.info("[Gyromancy] Client handlers wired on NeoForge.EVENT_BUS");
     }

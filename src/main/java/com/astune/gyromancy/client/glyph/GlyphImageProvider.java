@@ -65,7 +65,7 @@ public final class GlyphImageProvider implements CanvasImageProvider {
         return img;
     }
 
-    private static int glyphColor(int symbolValue) {
+    public static int glyphColor(int symbolValue) {
         int registryId = symbolValue - 1;
         SymbolTemplate template = GyromancyRegistries.SYMBOL.byId(registryId);
         return template != null ? template.glyphColor() : SymbolRegistry.DEFAULT_GLYPH_COLOR;

@@ -36,6 +36,7 @@ com.astune.gyromancy/
 ├── api/                              ← shared API (no Minecraft-world coupling)
 │   ├── array/
 │   │   ├── ArrayActivationResult.java
+│   │   ├── ArrayObject.java
 │   │   ├── IArrayEffect.java
 │   │   ├── MagicArrayComponents.java
 │   │   ├── MagicArrayManager.java
@@ -235,16 +236,23 @@ client.ElementDebugRenderer
 **Tracks:** UUID, canvas position, effect, params, tick counter, active flag, runtime data map.  
 **Methods:** `activate()`, `tick()`, `deactivate()` — fire hooks on `IArrayEffect`
 
+##### `ArrayObject.java` (record)
+**Role:** A validated magic array bound to its constituent glyphs.  
+**Fields:** `arrayId` (UUID), `circleGlyph` (PositionedGlyph), `centerGlyph` (PositionedGlyph), `runeGlyphs` (List<PositionedGlyph>), `scratchData` (Map<String,Object>)  
+**Methods:** `allBoundGlyphs()` — returns circle + center + runes for bulk invalidation lookup. When any bound glyph is invalidated, the array's `EndEffect` fires with scratchData and the array is destroyed.
+
 ##### `MagicArrayManager.java`
 **Role:** Tracks all active arrays + runtime glyph indexes in one dimension (stored as a NeoForge `AttachmentType` on `Level`).  
 **Data structures:**
-- `Map<UUID, MagicArrayState>` — active arrays
-- `Map<BlockPos, UUID>` — position→array index
-- `LinkedHashMap<UUID, PositionedGlyph>` — runtime recognized glyphs
+- `Map<UUID, MagicArrayState>` — legacy active arrays (unused, pending cleanup)
+- `Map<BlockPos, UUID>` — legacy position→array index
+- `LinkedHashMap<UUID, PositionedGlyph>` — runtime recognized glyphs (includes circle glyphs)
 - `Map<Integer, UUID>` — runtime canvas glyph id→persistent glyph UUID
-**Methods:** runtime glyph-id allocation, array/glyph registration, lookup, tick-all, restore persisted glyphs
+- `Map<UUID, ArrayObject>` — phrase5 active array objects
+- `Map<UUID, UUID>` — glyph UUID→array ID reverse index for teardown lookup
+**Methods:** runtime glyph-id allocation, glyph registration/lookup, array-object registration (`registerArrayObj`/`unregisterArrayObj`), `getArrayForGlyph(UUID)` → reverse lookup, `setArrayScratchData()`
 
-**Calls/Depends on:** `PositionedGlyph`, `SymbolRole`, `FloodFillExtractor.ExtractedGlyph`
+**Calls/Depends on:** `PositionedGlyph`, `ArrayObject`, `SymbolRole`, `FloodFillExtractor.ExtractedGlyph`
 
 ---
 
@@ -542,7 +550,12 @@ SymbolRecognizer
 **Role:** Unified symbol template registry.  
 **Defines 9 symbols:** `arrow`, `circle_outer`, `earth` (green), `figure_8`, `fire` (red), `revert`, `star`, `water` (blue), `wind` (cyan).  
 Each has custom matching thresholds (circle_outer is strictest: 0.95 all-around).  
-Registers `SymbolTemplate` instances into `GyromancyRegistries.SYMBOL`.
+Registers `SymbolTemplate` instances into `GyromancyRegistries.SYMBOL`.  
+
+**Effect system:** Each `SymbolDef` carries two behavior functions:
+- `CenterEffect`: called when a valid array forms around this center symbol — returns `Map<String,Object>` scratch data (default no-op, returns empty map)
+- `EndEffect`: called when the array is destroyed — receives scratch data from `CenterEffect` (default no-op)
+Both are fused into `SymbolDef` as fields; the `SYMBOLS` configuration array is the single extension point.
 
 **Calls/Depends on:** `SymbolRole`, `SymbolTemplate`, `SkeletonMatcher`, `TemplateLoader`, `GyromancyRegistries`
 
@@ -568,6 +581,18 @@ Registers `SymbolTemplate` instances into `GyromancyRegistries.SYMBOL`.
 3. `GlyphMarker.markConsumed()` — consume pixels
 4. Store as `PositionedGlyph` in `MagicArrayManager` and `GlyphChunkStorage`
 5. Sync via `SyncCanvasPacket` + `SyncGlyphPacket`
+
+**OUTER_CIRCLE handler (`handleCircleMatch`) — array lifecycle:**
+- Circle is stored as a `PositionedGlyph` (role=`OUTER_CIRCLE`) for invalidation binding
+- Searches for inner glyphs via `InteriorValidator.findGlyphsInside()`
+- **Stage 1 (structural validation):** exactly 1 `CENTER_SYMBOL`, 0+ `PARAMETER_RUNE` → reject otherwise
+- **Stage 2 (dispatch):** creates `ArrayObject(circleGlyph, centerGlyph, runeGlyphs)`, calls center symbol's `CenterEffect`, stores returned scratchData in the array object, registers via `MagicArrayManager.registerArrayObj()`
+
+**Glyph invalidation — array teardown:**
+- When any glyph is invalidated (`symbol_id` change, block replacement), `invalidateGlyphs` checks if the glyph is bound to an `ArrayObject` via `MagicArrayManager.getArrayForGlyph()`
+- If bound: fires the center symbol's `EndEffect(scratchData)` and unregisters the array
+- Only the triggering glyph is cleaned up — runes and center symbol survive independently
+- A new circle drawn over the old area will find the surviving inner glyphs and re-form the array
 
 **Block replacement handling:**
 - `LevelChunkMixin` calls `onBlockReplaced()` from `LevelChunk.setBlockState`
@@ -690,6 +715,7 @@ Registers `SymbolTemplate` instances into `GyromancyRegistries.SYMBOL`.
     │ ElementType     │  │ ElementEventBus, ThresholdEvent,    │
     │ ElementConcent  │  │ ChangeEvent, Activation, Cleanup    │
     │ SymbolTemplate  │  └────────────────────────────────────┘
+    │ ArrayObject     │
     │ SymbolMatch     │
     │ MagicArrayMgr   │  ┌────────────────────────────────────┐
     │ IArrayEffect    │  │ network.*                          │
@@ -798,7 +824,27 @@ Biome default (ElementBiomeProvider)
 11. SyncGlyphPacket → client for debug labels and direction arrows
 ```
 
-### 6.3 Network Sync
+### 6.3 Array Lifecycle (phrase5)
+```
+OUTER_CIRCLE drawn on canvas:
+  handleCircleMatch
+    → InteriorValidator.findGlyphsInside() → classify by role
+    → Stage 1: exactly 1 CENTER_SYMBOL? 0+ PARAMETER_RUNE?
+    → If invalid: log reject, return
+    → Store circle as PositionedGlyph (OUTER_CIRCLE role)
+    → Create ArrayObject(circle, center, runes)
+    → Call center symbol's CenterEffect → store scratchData
+    → MagicArrayManager.registerArrayObj()
+
+Any bound glyph invalidated (circle redrawn, rune overwritten):
+  invalidateGlyphs
+    → MagicArrayManager.getArrayForGlyph(glyphUuid)
+    → Fire EndEffect(scratchData)
+    → MagicArrayManager.unregisterArrayObj()
+    → Only the triggering glyph is cleaned up; other bound glyphs (runes, center) survive independently
+```
+
+### 6.4 Network Sync
 ```
 Server-side:
   ElementTickProcessor (every 10 ticks)
