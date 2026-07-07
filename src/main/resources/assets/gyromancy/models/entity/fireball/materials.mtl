@@ -1,0 +1,12 @@
+# Made in Blockbench 5.1.4
+newmtl m_ad4e6950-c92a-085a-4b7a-01773908b222
+map_Kd texture.png
+newmtl m_c1f1f44c-f1af-95c8-1023-778975c87efe
+map_Kd texture1.png
+newmtl m_b582598b-1155-26de-12e6-b772921adaa6
+map_Kd fireball_texture_refined.png
+newmtl m_664d2008-a804-81ce-e447-b8f3e41a67fd
+map_Kd texture2.png
+newmtl m_e058fce8-0043-d235-134a-03cef65e020c
+map_Kd texture3.png
+newmtl none

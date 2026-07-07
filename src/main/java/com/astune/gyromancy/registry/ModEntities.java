@@ -1,9 +1,8 @@
 package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
-import com.astune.gyromancy.api.entity.PseudoEntity;
+import com.astune.gyromancy.entity.FireballEntity;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -21,14 +20,11 @@ public final class ModEntities {
     public static final DeferredRegister<EntityType<?>> ENTITIES =
             DeferredRegister.create(Registries.ENTITY_TYPE, Gyromancy.MODID);
 
-    // EntityTypes will be registered here in Phase 7 as PseudoEntity subclasses are implemented.
-    // Example registration pattern:
-    //
-    // public static final Supplier<EntityType<WispEntity>> WISP =
-    //     ENTITIES.register("wisp", () -> EntityType.Builder
-    //         .of(WispEntity::new, MobCategory.MISC)
-    //         .sized(0.3f, 0.3f)
-    //         .updateInterval(10)
-    //         .clientTrackingRange(32)
-    //         .build(Gyromancy.MODID + ":wisp"));
+    public static final Supplier<EntityType<FireballEntity>> FIREBALL =
+            ENTITIES.register("fireball", () -> EntityType.Builder
+                    .<FireballEntity>of(FireballEntity::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F)
+                    .updateInterval(1)
+                    .clientTrackingRange(64)
+                    .build(Gyromancy.MODID + ":fireball"));
 }

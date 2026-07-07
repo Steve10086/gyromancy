@@ -1,0 +1,169 @@
+# com.microsoft.onnxruntime-onnxruntime Guide
+
+Generated fallback guide. Prefer an upstream GUIDE.md/SKILL.md when available.
+
+## Public Surface
+
+- `ai.onnxruntime.MapInfo`
+- `ai.onnxruntime.NodeInfo`
+- `ai.onnxruntime.OnnxJavaType`
+- `ai.onnxruntime.OnnxMap`
+- `ai.onnxruntime.OnnxModelMetadata`
+- `ai.onnxruntime.OnnxRuntime`
+- `ai.onnxruntime.OnnxSequence`
+- `ai.onnxruntime.OnnxSparseTensor`
+- `ai.onnxruntime.OnnxTensor`
+- `ai.onnxruntime.OnnxTensorLike`
+- `ai.onnxruntime.OnnxValue`
+- `ai.onnxruntime.OrtAllocator`
+- `ai.onnxruntime.OrtEnvironment`
+- `ai.onnxruntime.OrtException`
+- `ai.onnxruntime.OrtLoggingLevel`
+- `ai.onnxruntime.OrtProvider`
+- `ai.onnxruntime.OrtProviderOptions`
+- `ai.onnxruntime.OrtSession`
+- `ai.onnxruntime.OrtTrainingSession`
+- `ai.onnxruntime.OrtUtil`
+- `ai.onnxruntime.SequenceInfo`
+- `ai.onnxruntime.TensorInfo`
+- `ai.onnxruntime.ValueInfo`
+- `ai.onnxruntime.platform.Fp16Conversions`
+- `ai.onnxruntime.providers.CoreMLFlags`
+- `ai.onnxruntime.providers.NNAPIFlags`
+- `ai.onnxruntime.providers.OrtCUDAProviderOptions`
+- `ai.onnxruntime.providers.OrtFlags`
+- `ai.onnxruntime.providers.OrtTensorRTProviderOptions`
+- `ai.onnxruntime.providers.StringConfigProviderOptions`
+
+## Sample Signatures
+
+- `public class ai.onnxruntime.MapInfo implements ai.onnxruntime.ValueInfo {`
+- `public final int size;`
+- `public final ai.onnxruntime.OnnxJavaType keyType;`
+- `public final ai.onnxruntime.OnnxJavaType valueType;`
+- `public java.lang.String toString();`
+- `public class ai.onnxruntime.NodeInfo {`
+- `public ai.onnxruntime.NodeInfo(java.lang.String, ai.onnxruntime.ValueInfo);`
+- `public java.lang.String getName();`
+- `public ai.onnxruntime.ValueInfo getInfo();`
+- `public java.lang.String toString();`
+- `public final class ai.onnxruntime.OnnxJavaType extends java.lang.Enum<ai.onnxruntime.OnnxJavaType> {`
+- `public static final ai.onnxruntime.OnnxJavaType FLOAT;`
+- `public static final ai.onnxruntime.OnnxJavaType DOUBLE;`
+- `public static final ai.onnxruntime.OnnxJavaType INT8;`
+- `public static final ai.onnxruntime.OnnxJavaType INT16;`
+- `public static final ai.onnxruntime.OnnxJavaType INT32;`
+- `public static final ai.onnxruntime.OnnxJavaType INT64;`
+- `public static final ai.onnxruntime.OnnxJavaType BOOL;`
+- `public class ai.onnxruntime.OnnxMap implements ai.onnxruntime.OnnxValue {`
+- `public int size();`
+- `public ai.onnxruntime.OnnxValue$OnnxValueType getType();`
+- `public java.util.Map<? extends java.lang.Object, ? extends java.lang.Object> getValue() throws ai.onnxruntime.OrtException;`
+- `public ai.onnxruntime.MapInfo getInfo();`
+- `public java.lang.String toString();`
+- `public synchronized boolean isClosed();`
+- `public synchronized void close();`
+- `public final class ai.onnxruntime.OnnxModelMetadata {`
+- `public ai.onnxruntime.OnnxModelMetadata(ai.onnxruntime.OnnxModelMetadata);`
+- `public boolean equals(java.lang.Object);`
+- `public int hashCode();`
+- `public java.lang.String getProducerName();`
+- `public java.lang.String getGraphName();`
+- `public java.lang.String getGraphDescription();`
+- `public java.lang.String getDomain();`
+- `public class ai.onnxruntime.OnnxSequence implements ai.onnxruntime.OnnxValue {`
+- `public ai.onnxruntime.OnnxValue$OnnxValueType getType();`
+- `public java.util.List<? extends ai.onnxruntime.OnnxValue> getValue() throws ai.onnxruntime.OrtException;`
+- `public ai.onnxruntime.SequenceInfo getInfo();`
+- `public java.lang.String toString();`
+- `public synchronized boolean isClosed();`
+- `public synchronized void close();`
+- `public ai.onnxruntime.ValueInfo getInfo();`
+- `public final class ai.onnxruntime.OnnxSparseTensor extends ai.onnxruntime.OnnxTensorLike {`
+- `public static <T extends java.nio.Buffer> ai.onnxruntime.OnnxSparseTensor createSparseTensor(ai.onnxruntime.OrtEnvironment, ai.onnxruntime.OnnxSparseTensor$SparseTensor<T>) throws ai.onnxruntime.OrtException;`
+- `public ai.onnxruntime.OnnxValue$OnnxValueType getType();`
+- `public ai.onnxruntime.OnnxSparseTensor$SparseTensor<? extends java.nio.Buffer> getValue() throws ai.onnxruntime.OrtException;`
+- `public synchronized void close();`
+- `public ai.onnxruntime.OnnxSparseTensor$SparseTensorType getSparseTensorType();`
+- `public java.nio.Buffer getIndicesBuffer();`
+- `public java.nio.LongBuffer getInnerIndicesBuffer();`
+- `public class ai.onnxruntime.OnnxTensor extends ai.onnxruntime.OnnxTensorLike {`
+- `public boolean ownsBuffer();`
+- `public java.util.Optional<java.nio.Buffer> getBufferRef();`
+- `public ai.onnxruntime.OnnxValue$OnnxValueType getType();`
+- `public java.lang.Object getValue() throws ai.onnxruntime.OrtException;`
+- `public java.lang.String toString();`
+- `public synchronized void close();`
+- `public java.nio.ByteBuffer getByteBuffer();`
+- `public abstract class ai.onnxruntime.OnnxTensorLike implements ai.onnxruntime.OnnxValue {`
+- `public ai.onnxruntime.TensorInfo getInfo();`
+- `public synchronized boolean isClosed();`
+- `public ai.onnxruntime.ValueInfo getInfo();`
+- `public interface ai.onnxruntime.OnnxValue extends java.lang.AutoCloseable {`
+- `public abstract ai.onnxruntime.OnnxValue$OnnxValueType getType();`
+- `public abstract java.lang.Object getValue() throws ai.onnxruntime.OrtException;`
+- `public abstract ai.onnxruntime.ValueInfo getInfo();`
+- `public abstract boolean isClosed();`
+- `public abstract void close();`
+- `public static void close(java.lang.Iterable<? extends ai.onnxruntime.OnnxValue>);`
+- `public static void close(java.util.Map<java.lang.String, ? extends ai.onnxruntime.OnnxValue>);`
+- `public boolean isClosed();`
+- `public boolean isDefault();`
+- `public void close() throws ai.onnxruntime.OrtException;`
+- `public final class ai.onnxruntime.OrtEnvironment implements java.lang.AutoCloseable {`
+- `public static final java.lang.String DEFAULT_NAME;`
+- `public static synchronized ai.onnxruntime.OrtEnvironment getEnvironment();`
+- `public static ai.onnxruntime.OrtEnvironment getEnvironment(java.lang.String);`
+- `public static ai.onnxruntime.OrtEnvironment getEnvironment(ai.onnxruntime.OrtLoggingLevel);`
+- `public static synchronized ai.onnxruntime.OrtEnvironment getEnvironment(ai.onnxruntime.OrtLoggingLevel, java.lang.String);`
+- `public static synchronized ai.onnxruntime.OrtEnvironment getEnvironment(ai.onnxruntime.OrtLoggingLevel, java.lang.String, ai.onnxruntime.OrtEnvironment$ThreadingOptions);`
+- `public ai.onnxruntime.OrtSession createSession(java.lang.String) throws ai.onnxruntime.OrtException;`
+- `public class ai.onnxruntime.OrtException extends java.lang.Exception {`
+- `public ai.onnxruntime.OrtException(java.lang.String);`
+- `public ai.onnxruntime.OrtException(int, java.lang.String);`
+- `public ai.onnxruntime.OrtException(ai.onnxruntime.OrtException$OrtErrorCode, java.lang.String);`
+- `public ai.onnxruntime.OrtException$OrtErrorCode getCode();`
+- `public final class ai.onnxruntime.OrtLoggingLevel extends java.lang.Enum<ai.onnxruntime.OrtLoggingLevel> {`
+- `public static final ai.onnxruntime.OrtLoggingLevel ORT_LOGGING_LEVEL_VERBOSE;`
+- `public static final ai.onnxruntime.OrtLoggingLevel ORT_LOGGING_LEVEL_INFO;`
+- `public static final ai.onnxruntime.OrtLoggingLevel ORT_LOGGING_LEVEL_WARNING;`
+- `public static final ai.onnxruntime.OrtLoggingLevel ORT_LOGGING_LEVEL_ERROR;`
+- `public static final ai.onnxruntime.OrtLoggingLevel ORT_LOGGING_LEVEL_FATAL;`
+- `public static ai.onnxruntime.OrtLoggingLevel[] values();`
+- `public static ai.onnxruntime.OrtLoggingLevel valueOf(java.lang.String);`
+- `public final class ai.onnxruntime.OrtProvider extends java.lang.Enum<ai.onnxruntime.OrtProvider> {`
+- `public static final ai.onnxruntime.OrtProvider CPU;`
+- `public static final ai.onnxruntime.OrtProvider CUDA;`
+- `public static final ai.onnxruntime.OrtProvider DNNL;`
+- `public static final ai.onnxruntime.OrtProvider OPEN_VINO;`
+- `public static final ai.onnxruntime.OrtProvider VITIS_AI;`
+- `public static final ai.onnxruntime.OrtProvider TENSOR_RT;`
+- `public static final ai.onnxruntime.OrtProvider NNAPI;`
+- `public abstract class ai.onnxruntime.OrtProviderOptions implements java.lang.AutoCloseable {`
+- `public abstract ai.onnxruntime.OrtProvider getProvider();`
+- `public synchronized boolean isClosed();`
+- `public void close();`
+- `public class ai.onnxruntime.OrtSession implements java.lang.AutoCloseable {`
+- `public long getNumInputs();`
+- `public long getNumOutputs();`
+- `public java.util.Set<java.lang.String> getInputNames();`
+- `public java.util.Set<java.lang.String> getOutputNames();`
+- `public java.util.Map<java.lang.String, ai.onnxruntime.NodeInfo> getInputInfo() throws ai.onnxruntime.OrtException;`
+- `public java.util.Map<java.lang.String, ai.onnxruntime.NodeInfo> getOutputInfo() throws ai.onnxruntime.OrtException;`
+- `public ai.onnxruntime.OrtSession$Result run(java.util.Map<java.lang.String, ? extends ai.onnxruntime.OnnxTensorLike>) throws ai.onnxruntime.OrtException;`
+- `public final class ai.onnxruntime.OrtTrainingSession implements java.lang.AutoCloseable {`
+- `public java.util.Set<java.lang.String> getTrainInputNames();`
+- `public java.util.Set<java.lang.String> getTrainOutputNames();`
+- `public java.util.Set<java.lang.String> getEvalInputNames();`
+- `public java.util.Set<java.lang.String> getEvalOutputNames();`
+- `public void addProperty(java.lang.String, float) throws ai.onnxruntime.OrtException;`
+- `public void addProperty(java.lang.String, int) throws ai.onnxruntime.OrtException;`
+- `public void addProperty(java.lang.String, java.lang.String) throws ai.onnxruntime.OrtException;`
+- `public final class ai.onnxruntime.OrtUtil {`
+- `public static int[] transformShape(long[]);`
+- `public static long[] transformShape(int[]);`
+- `public static java.lang.Object newBooleanArray(long[]);`
+- `public static java.lang.Object newByteArray(long[]);`
+- `public static java.lang.Object newShortArray(long[]);`
+- `public static java.lang.Object newIntArray(long[]);`
+- `public static java.lang.Object newLongArray(long[]);`

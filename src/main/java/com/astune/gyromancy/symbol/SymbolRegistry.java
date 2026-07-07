@@ -2,13 +2,18 @@ package com.astune.gyromancy.symbol;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.ParameterRune;
+import com.astune.gyromancy.api.symbol.PixelPos;
+import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.api.symbol.SymbolTemplate;
+import com.astune.gyromancy.entity.FireballEntity;
 import com.astune.gyromancy.registry.GyromancyRegistries;
 import com.astune.gyromancy.util.TemplateLoader;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -38,7 +43,7 @@ public final class SymbolRegistry {
     // ═══════════════════ Configuration point — add new symbols here ═══════════════════
 
     private static final SkeletonMatcher.SoftThresholds ARROW_THRESHOLDS =
-            new SkeletonMatcher.SoftThresholds(0.70, 0.75, 0.70, 0.70, 0.95);
+            new SkeletonMatcher.SoftThresholds(0.70, 0.75, 0.70, 0.70, 0.75);
     private static final SkeletonMatcher.SoftThresholds CIRCLE_OUTER_THRESHOLDS =
             new SkeletonMatcher.SoftThresholds(0.95, 0.95, 0.95, 0.95, 0.95);
 
@@ -46,7 +51,9 @@ public final class SymbolRegistry {
      *  @return scratch data passed to {@link EndEffect} when the array is destroyed. */
     @FunctionalInterface
     public interface CenterEffect {
-        Map<String, Object> execute(ServerLevel level, BlockPos arrayPos, List<ParameterRune> runes);
+        Map<String, Object> execute(ServerLevel level, BlockPos arrayPos,
+                                    PositionedGlyph circleGlyph, PositionedGlyph centerGlyph,
+                                    List<PositionedGlyph> runes);
     }
 
     /** Behavior executed when an array bound to this center symbol is destroyed. */
@@ -56,7 +63,7 @@ public final class SymbolRegistry {
                      Map<String, Object> scratchData);
     }
 
-    private static final CenterEffect NOOP_CENTER = (level, pos, runes) -> Map.of();
+    private static final CenterEffect NOOP_CENTER = (level, pos, circle, center, runes) -> Map.of();
     private static final EndEffect NOOP_END = (level, pos, runes, data) -> {};
 
     record SymbolDef(String name, int featurePoints, boolean allowRotation,
@@ -88,7 +95,9 @@ public final class SymbolRegistry {
             new SymbolDef("circle_outer",   0, false, SymbolRole.OUTER_CIRCLE, CIRCLE_OUTER_THRESHOLDS),
             new SymbolDef("earth",          4, false, SymbolRole.CENTER_SYMBOL, EARTH_GLYPH_COLOR),
             new SymbolDef("figure_8",       0, false, SymbolRole.PARAMETER_RUNE),
-            new SymbolDef("fire",           3, false, SymbolRole.CENTER_SYMBOL, FIRE_GLYPH_COLOR),
+            new SymbolDef("fire",           3, false, SymbolRole.CENTER_SYMBOL,
+                    SkeletonMatcher.DEFAULT_THRESHOLDS, FIRE_GLYPH_COLOR,
+                    SymbolRegistry::launchFireball, NOOP_END),
             new SymbolDef("revert",         0, false, SymbolRole.PARAMETER_RUNE),
             new SymbolDef("star",           5, true,  SymbolRole.CENTER_SYMBOL, STAR_GLYPH_COLOR),
             new SymbolDef("water",          0, false, SymbolRole.CENTER_SYMBOL, WATER_GLYPH_COLOR),
@@ -127,6 +136,57 @@ public final class SymbolRegistry {
     }
 
     private SymbolRegistry() {}
+
+    private static Map<String, Object> launchFireball(ServerLevel level, BlockPos arrayPos,
+                                                      PositionedGlyph circleGlyph,
+                                                      PositionedGlyph centerGlyph,
+                                                      List<PositionedGlyph> runes) {
+        if (runes.stream().anyMatch(rune -> !"arrow".equals(rune.symbolId().getPath()))) return Map.of();
+
+        Vec3 velocity = Vec3.ZERO;
+        double arrowSizeSum = 0.0;
+        for (PositionedGlyph rune : runes) {
+            arrowSizeSum += rune.length();
+            if (rune.front().lengthSqr() < 1e-8) continue;
+            velocity = velocity.add(rune.front().normalize().scale(rune.length()));
+        }
+
+        double area = Math.max(0.0, circleGlyph.length() * circleGlyph.width());
+        float size = (float)Math.max(0.1, Math.sqrt(area) * 0.5);
+        double speed = velocity.length();
+        double lift = (arrowSizeSum - speed) + 0.2 * speed;
+        lift *= isFacingDown(circleGlyph) ? -1.0 : 1.0;
+        Vec3 initialVelocity = velocity.add(0.0, lift, 0.0);
+        Vec3 acceleration = runes.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
+        Vec3 spawnPos = glyphCenter(centerGlyph).add(faceNormal(centerGlyph).scale(size * 2.0));
+        level.addFreshEntity(new FireballEntity(level, spawnPos, initialVelocity, acceleration, size));
+        return Map.of();
+    }
+
+    private static boolean isFacingDown(PositionedGlyph glyph) {
+        return glyph.pixels().stream().findAny().map(PixelPos::face).orElse(Direction.UP) == Direction.DOWN;
+    }
+
+    private static Vec3 glyphCenter(PositionedGlyph glyph) {
+        double a = (glyph.minWorldX() + glyph.maxWorldX()) * 0.5;
+        double b = (glyph.minWorldY() + glyph.maxWorldY()) * 0.5;
+        PixelPos sample = glyph.pixels().stream().findAny().orElse(null);
+        if (sample == null) return Vec3.atCenterOf(glyph.worldPos());
+
+        Direction face = sample.face();
+        Vec3 normal = Vec3.atLowerCornerOf(face.getNormal());
+        Vec3 plane = Vec3.atCenterOf(sample.pos()).add(normal.scale(0.5));
+        return switch (face) {
+            case NORTH, SOUTH -> new Vec3(a, b, plane.z);
+            case EAST, WEST -> new Vec3(plane.x, b, a);
+            case UP, DOWN -> new Vec3(a, plane.y, b);
+        };
+    }
+
+    private static Vec3 faceNormal(PositionedGlyph glyph) {
+        Direction face = glyph.pixels().stream().findAny().map(PixelPos::face).orElse(Direction.UP);
+        return Vec3.atLowerCornerOf(face.getNormal());
+    }
 
     @SubscribeEvent
     static void onRegister(RegisterEvent event) {

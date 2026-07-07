@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
  *
  * <p>Coordinate system: all world-space mapping uses CanvasFace.corner0-3
  * with dot-product projection. This is the single source of truth for
- * pixel↔world conversion, compatible with partial faces, overlapping
+ * pixel/world conversion, compatible with partial faces, overlapping
  * faces, and rotated quads.
  */
 public final class FloodFillExtractor {
@@ -28,9 +28,7 @@ public final class FloodFillExtractor {
 
     private FloodFillExtractor() {}
 
-    // ═══════════════════════════════════════════════════════════════
     // Types
-    // ═══════════════════════════════════════════════════════════════
 
     public record ExtractedGlyph(
             Set<PixelPos> pixels,
@@ -101,9 +99,7 @@ public final class FloodFillExtractor {
 
     public record ExtractionResult(ExtractedGlyph glyph, FloodFillState continuation) {}
 
-    // ═══════════════════════════════════════════════════════════════
-    // Core: pixel ↔ world coordinate mapping
-    // ═══════════════════════════════════════════════════════════════
+    // Core: pixel/world coordinate mapping
 
     static Vec3 worldFromPixel(BlockPos pos, CanvasFace face, int px, int py) {
         Vec3 c0 = face.corner0();
@@ -144,9 +140,7 @@ public final class FloodFillExtractor {
         };
     }
 
-    // ═══════════════════════════════════════════════════════════════
     // Public API
-    // ═══════════════════════════════════════════════════════════════
 
     /** Map of all active states (passed from FloodFillScheduler) for origin-based merging */
     private static Map<Integer, FloodFillState> allSeeds = null;
@@ -176,6 +170,17 @@ public final class FloodFillExtractor {
             }
 
             if (state.dominantFace == null) state.dominantFace = face.primaryFace();
+
+            if (!state.involvedBlocks.contains(curr.pos())) {
+                if (blocksVisitedThisCall >= maxBlocks) {
+                    state.queue.addFirst(curr);
+                    Gyromancy.LOGGER.debug("[FloodFill] budget exhausted, deferring");
+                    return new ExtractionResult(null, state);
+                }
+                blocksVisitedThisCall++;
+                Gyromancy.LOGGER.debug("[FloodFill] + block {} -> {} total",
+                        curr.pos(), state.involvedBlocks.size() + 1);
+            }
 
             state.visited.add(curr);
             state.involvedBlocks.add(curr.pos());
@@ -208,21 +213,11 @@ public final class FloodFillExtractor {
                     } else {
                         List<PixelPos> adjacents = findAdjacentByCorner(level, curr, face, nx, ny);
                         if (!adjacents.isEmpty()) {
-                            Gyromancy.LOGGER.debug("[FloodFill] edge ({},{})→({},{}) from {} → {} adj",
+                            Gyromancy.LOGGER.debug("[FloodFill] edge ({},{}) -> ({},{}) from {} -> {} adj",
                                     curr.x(), curr.y(), nx, ny, curr.pos(), adjacents.size());
                         }
                         for (PixelPos adj : adjacents) {
                             if (!state.visited.contains(adj) && !state.processed.contains(adj)) {
-                                if (!state.involvedBlocks.contains(adj.pos())) {
-                                    blocksVisitedThisCall++;
-                                    Gyromancy.LOGGER.debug("[FloodFill] + block {} from {} → {} total",
-                                            adj.pos(), curr.pos(), state.involvedBlocks.size() + 1);
-                                    if (blocksVisitedThisCall > maxBlocks) {
-                                        state.queue.addFirst(curr);
-                                        Gyromancy.LOGGER.debug("[FloodFill] budget exhausted, deferring");
-                                        return new ExtractionResult(null, state);
-                                    }
-                                }
                                 state.queue.add(adj);
                             }
                         }
@@ -231,9 +226,9 @@ public final class FloodFillExtractor {
             }
         }
 
-        // Dead loop guard: no progress → cancel
+        // Dead loop guard: no progress -> cancel
         if (state.visited.size() == visitedBefore) {
-            Gyromancy.LOGGER.debug("[FloodFill] No progress this round — canceling state #{}", state.stateId);
+            Gyromancy.LOGGER.debug("[FloodFill] No progress this round - canceling state #{}", state.stateId);
             return enqueueNextComponent(level, state)
                     ? new ExtractionResult(null, state)
                     : new ExtractionResult(null, null);
@@ -247,10 +242,10 @@ public final class FloodFillExtractor {
             if (!state.processed.contains(s)) added++;
         }
         if (added > 0) {
-            Gyromancy.LOGGER.debug("[FloodFill] Glyph: {} pixels {} blocks — {} disconnected seeds remain",
+            Gyromancy.LOGGER.debug("[FloodFill] Glyph: {} pixels {} blocks - {} disconnected seeds remain",
                     glyph.pixels().size(), glyph.blockCount(), added);
         } else {
-            Gyromancy.LOGGER.debug("[FloodFill] DONE: {} pixels across {} blocks (bbox: {},{} → {},{})",
+            Gyromancy.LOGGER.debug("[FloodFill] DONE: {} pixels across {} blocks (bbox: {},{} -> {},{})",
                     glyph.pixels().size(), glyph.blockCount(),
                     String.format("%.1f", glyph.minWorldX()), String.format("%.1f", glyph.minWorldY()),
                     String.format("%.1f", glyph.maxWorldX()), String.format("%.1f", glyph.maxWorldY()));
@@ -311,50 +306,35 @@ public final class FloodFillExtractor {
         return false;
     }
 
-    // ═══════════════════════════════════════════════════════════════
     // Adjacent face lookup
-    // ═══════════════════════════════════════════════════════════════
 
     private static List<PixelPos> findAdjacentByCorner(
             ServerLevel level, PixelPos curr, CanvasFace face, int nx, int ny) {
 
         Vec3 worldNeighbor = worldFromPixel(curr.pos(), face, nx, ny);
 
-        Vec3 c0 = face.corner0();
-        Vec3 sideW = face.corner1().subtract(c0);
-        Vec3 sideH = face.corner3().subtract(c0);
+        Set<PixelPos> results = new LinkedHashSet<>();
+        BlockPos base = curr.pos();
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    BlockPos adjPos = base.offset(dx, dy, dz);
+                    if (adjPos.equals(base)) continue;
 
-        int pw = face.pixels().getWidth();
-        int ph = face.pixels().getHeight();
-
-        Vec3 edgeDirection = Vec3.ZERO;
-        if (nx < 0)       edgeDirection = sideW.scale(-1);
-        else if (nx >= pw) edgeDirection = sideW;
-        if (ny < 0)       edgeDirection = edgeDirection.add(sideH.scale(-1));
-        else if (ny >= ph) edgeDirection = edgeDirection.add(sideH);
-
-        if (edgeDirection.lengthSqr() < EPSILON) return List.of();
-
-        edgeDirection = edgeDirection.normalize();
-        Direction adjDir = Direction.getNearest(edgeDirection.x, edgeDirection.y, edgeDirection.z);
-        BlockPos adjPos = curr.pos().relative(adjDir);
-
-        if (adjPos.equals(curr.pos())) return List.of();
-
-        List<PixelPos> results = new ArrayList<>();
-        for (CanvasFace adjFace : getFacesAt(level, adjPos)) {
-            PixelPos mapped = pixelFromWorld(worldNeighbor, adjPos, adjFace);
-            if (mapped != null
-                    && ManaPixelDetector.isManaPixel(adjFace, mapped.x(), mapped.y())) {
-                results.add(mapped);
+                    for (CanvasFace adjFace : getFacesAt(level, adjPos)) {
+                        PixelPos mapped = pixelFromWorld(worldNeighbor, adjPos, adjFace);
+                        if (mapped != null
+                                && ManaPixelDetector.isManaPixel(adjFace, mapped.x(), mapped.y())) {
+                            results.add(mapped);
+                        }
+                    }
+                }
             }
         }
-        return results;
+        return new ArrayList<>(results);
     }
 
-    // ═══════════════════════════════════════════════════════════════
     // Normalization
-    // ═══════════════════════════════════════════════════════════════
 
     public static int[][] rawGlyphMatrix(ExtractedGlyph glyph) {
         int n = glyph.worldX.length;
@@ -417,9 +397,7 @@ public final class FloodFillExtractor {
         return result;
     }
 
-    // ═══════════════════════════════════════════════════════════════
     // Canvas access
-    // ═══════════════════════════════════════════════════════════════
 
     static List<CanvasFace> getFacesAt(ServerLevel level, BlockPos pos, Direction dir) {
         List<CanvasFace> result = new ArrayList<>();

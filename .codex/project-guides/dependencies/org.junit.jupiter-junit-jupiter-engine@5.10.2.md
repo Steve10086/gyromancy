@@ -1,0 +1,205 @@
+# org.junit.jupiter-junit-jupiter-engine Guide
+
+Generated fallback guide. Prefer an upstream GUIDE.md/SKILL.md when available.
+
+## Public Surface
+
+- `module-info`
+- `org.junit.jupiter.engine.Constants`
+- `org.junit.jupiter.engine.JupiterTestEngine`
+- `org.junit.jupiter.engine.config.CachingJupiterConfiguration`
+- `org.junit.jupiter.engine.config.DefaultJupiterConfiguration`
+- `org.junit.jupiter.engine.config.EnumConfigurationParameterConverter`
+- `org.junit.jupiter.engine.config.InstantiatingConfigurationParameterConverter`
+- `org.junit.jupiter.engine.config.JupiterConfiguration`
+- `org.junit.jupiter.engine.descriptor.AbstractExtensionContext`
+- `org.junit.jupiter.engine.descriptor.ClassBasedTestDescriptor`
+- `org.junit.jupiter.engine.descriptor.ClassExtensionContext`
+- `org.junit.jupiter.engine.descriptor.ClassTestDescriptor`
+- `org.junit.jupiter.engine.descriptor.DefaultDynamicTestInvocationContext`
+- `org.junit.jupiter.engine.descriptor.DefaultTestInstanceFactoryContext`
+- `org.junit.jupiter.engine.descriptor.DisplayNameUtils`
+- `org.junit.jupiter.engine.descriptor.DynamicContainerTestDescriptor`
+- `org.junit.jupiter.engine.descriptor.DynamicDescendantFilter`
+- `org.junit.jupiter.engine.descriptor.DynamicExtensionContext`
+- `org.junit.jupiter.engine.descriptor.DynamicNodeTestDescriptor`
+- `org.junit.jupiter.engine.descriptor.DynamicTestTestDescriptor`
+- `org.junit.jupiter.engine.descriptor.ExtensionUtils`
+- `org.junit.jupiter.engine.descriptor.Filterable`
+- `org.junit.jupiter.engine.descriptor.JupiterEngineDescriptor`
+- `org.junit.jupiter.engine.descriptor.JupiterEngineExtensionContext`
+- `org.junit.jupiter.engine.descriptor.JupiterTestDescriptor`
+- `org.junit.jupiter.engine.descriptor.LifecycleMethodUtils`
+- `org.junit.jupiter.engine.descriptor.MethodBasedTestDescriptor`
+- `org.junit.jupiter.engine.descriptor.MethodExtensionContext`
+- `org.junit.jupiter.engine.descriptor.MethodSourceSupport`
+- `org.junit.jupiter.engine.descriptor.NestedClassTestDescriptor`
+- `org.junit.jupiter.engine.descriptor.TestFactoryTestDescriptor`
+- `org.junit.jupiter.engine.descriptor.TestInstanceLifecycleUtils`
+- `org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor`
+- `org.junit.jupiter.engine.descriptor.TestTemplateExtensionContext`
+- `org.junit.jupiter.engine.descriptor.TestTemplateInvocationTestDescriptor`
+- `org.junit.jupiter.engine.descriptor.TestTemplateTestDescriptor`
+- `org.junit.jupiter.engine.discovery.AbstractAnnotatedDescriptorWrapper`
+- `org.junit.jupiter.engine.discovery.AbstractOrderingVisitor`
+- `org.junit.jupiter.engine.discovery.ClassOrderingVisitor`
+- `org.junit.jupiter.engine.discovery.ClassSelectorResolver`
+- `org.junit.jupiter.engine.discovery.DefaultClassDescriptor`
+- `org.junit.jupiter.engine.discovery.DefaultClassOrdererContext`
+- `org.junit.jupiter.engine.discovery.DefaultMethodDescriptor`
+- `org.junit.jupiter.engine.discovery.DefaultMethodOrdererContext`
+- `org.junit.jupiter.engine.discovery.DiscoverySelectorResolver`
+- `org.junit.jupiter.engine.discovery.MethodFinder`
+- `org.junit.jupiter.engine.discovery.MethodOrderingVisitor`
+- `org.junit.jupiter.engine.discovery.MethodSelectorResolver`
+- `org.junit.jupiter.engine.discovery.predicates.IsInnerClass`
+- `org.junit.jupiter.engine.discovery.predicates.IsNestedTestClass`
+- `org.junit.jupiter.engine.discovery.predicates.IsPotentialTestContainer`
+- `org.junit.jupiter.engine.discovery.predicates.IsTestClassWithTests`
+- `org.junit.jupiter.engine.discovery.predicates.IsTestFactoryMethod`
+- `org.junit.jupiter.engine.discovery.predicates.IsTestMethod`
+- `org.junit.jupiter.engine.discovery.predicates.IsTestTemplateMethod`
+- `org.junit.jupiter.engine.discovery.predicates.IsTestableMethod`
+- `org.junit.jupiter.engine.execution.AfterEachMethodAdapter`
+- `org.junit.jupiter.engine.execution.BeforeEachMethodAdapter`
+- `org.junit.jupiter.engine.execution.ConditionEvaluationException`
+- `org.junit.jupiter.engine.execution.ConditionEvaluator`
+- `org.junit.jupiter.engine.execution.ConstructorInvocation`
+- `org.junit.jupiter.engine.execution.DefaultExecutableInvoker`
+- `org.junit.jupiter.engine.execution.DefaultParameterContext`
+- `org.junit.jupiter.engine.execution.DefaultTestInstances`
+- `org.junit.jupiter.engine.execution.InterceptingExecutableInvoker`
+- `org.junit.jupiter.engine.execution.InvocationInterceptorChain`
+- `org.junit.jupiter.engine.execution.JupiterEngineExecutionContext`
+- `org.junit.jupiter.engine.execution.MethodInvocation`
+- `org.junit.jupiter.engine.execution.NamespaceAwareStore`
+- `org.junit.jupiter.engine.execution.ParameterResolutionUtils`
+- `org.junit.jupiter.engine.execution.TestInstancesProvider`
+- `org.junit.jupiter.engine.extension.DefaultRepetitionInfo`
+- `org.junit.jupiter.engine.extension.DisabledCondition`
+- `org.junit.jupiter.engine.extension.ExtensionRegistrar`
+- `org.junit.jupiter.engine.extension.ExtensionRegistry`
+- `org.junit.jupiter.engine.extension.MutableExtensionRegistry`
+- `org.junit.jupiter.engine.extension.RepeatedTestDisplayNameFormatter`
+- `org.junit.jupiter.engine.extension.RepeatedTestExtension`
+- `org.junit.jupiter.engine.extension.RepeatedTestInvocationContext`
+- `org.junit.jupiter.engine.extension.RepetitionExtension`
+- `org.junit.jupiter.engine.extension.SameThreadTimeoutInvocation`
+- `org.junit.jupiter.engine.extension.SeparateThreadTimeoutInvocation`
+- `org.junit.jupiter.engine.extension.TempDirectory`
+- `org.junit.jupiter.engine.extension.TestInfoParameterResolver`
+- `org.junit.jupiter.engine.extension.TestReporterParameterResolver`
+- `org.junit.jupiter.engine.extension.TimeoutConfiguration`
+- `org.junit.jupiter.engine.extension.TimeoutDuration`
+- `org.junit.jupiter.engine.extension.TimeoutDurationParser`
+- `org.junit.jupiter.engine.extension.TimeoutExceptionFactory`
+- `org.junit.jupiter.engine.extension.TimeoutExtension`
+- `org.junit.jupiter.engine.extension.TimeoutInvocationFactory`
+- `org.junit.jupiter.engine.support.JupiterThrowableCollectorFactory`
+- `org.junit.jupiter.engine.support.OpenTest4JAndJUnit4AwareThrowableCollector`
+
+## Sample Signatures
+
+- `public final class org.junit.jupiter.engine.Constants {`
+- `public static final java.lang.String DEACTIVATE_CONDITIONS_PATTERN_PROPERTY_NAME;`
+- `public static final java.lang.String DEACTIVATE_ALL_CONDITIONS_PATTERN;`
+- `public static final java.lang.String DEFAULT_DISPLAY_NAME_GENERATOR_PROPERTY_NAME;`
+- `public static final java.lang.String EXTENSIONS_AUTODETECTION_ENABLED_PROPERTY_NAME;`
+- `public static final java.lang.String DEFAULT_TEST_INSTANCE_LIFECYCLE_PROPERTY_NAME;`
+- `public static final java.lang.String PARALLEL_EXECUTION_ENABLED_PROPERTY_NAME;`
+- `public static final java.lang.String DEFAULT_PARALLEL_EXECUTION_MODE;`
+- `public final class org.junit.jupiter.engine.JupiterTestEngine extends org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine<org.junit.jupiter.engine.execution.JupiterEngineExecutionContext> {`
+- `public org.junit.jupiter.engine.JupiterTestEngine();`
+- `public java.lang.String getId();`
+- `public java.util.Optional<java.lang.String> getGroupId();`
+- `public java.util.Optional<java.lang.String> getArtifactId();`
+- `public org.junit.platform.engine.TestDescriptor discover(org.junit.platform.engine.EngineDiscoveryRequest, org.junit.platform.engine.UniqueId);`
+- `public class org.junit.jupiter.engine.config.CachingJupiterConfiguration implements org.junit.jupiter.engine.config.JupiterConfiguration {`
+- `public org.junit.jupiter.engine.config.CachingJupiterConfiguration(org.junit.jupiter.engine.config.JupiterConfiguration);`
+- `public java.util.Optional<java.lang.String> getRawConfigurationParameter(java.lang.String);`
+- `public <T> java.util.Optional<T> getRawConfigurationParameter(java.lang.String, java.util.function.Function<java.lang.String, T>);`
+- `public boolean isParallelExecutionEnabled();`
+- `public boolean isExtensionAutoDetectionEnabled();`
+- `public org.junit.jupiter.api.parallel.ExecutionMode getDefaultExecutionMode();`
+- `public org.junit.jupiter.api.parallel.ExecutionMode getDefaultClassesExecutionMode();`
+- `public class org.junit.jupiter.engine.config.DefaultJupiterConfiguration implements org.junit.jupiter.engine.config.JupiterConfiguration {`
+- `public org.junit.jupiter.engine.config.DefaultJupiterConfiguration(org.junit.platform.engine.ConfigurationParameters);`
+- `public java.util.Optional<java.lang.String> getRawConfigurationParameter(java.lang.String);`
+- `public <T> java.util.Optional<T> getRawConfigurationParameter(java.lang.String, java.util.function.Function<java.lang.String, T>);`
+- `public boolean isParallelExecutionEnabled();`
+- `public boolean isExtensionAutoDetectionEnabled();`
+- `public org.junit.jupiter.api.parallel.ExecutionMode getDefaultExecutionMode();`
+- `public org.junit.jupiter.api.parallel.ExecutionMode getDefaultClassesExecutionMode();`
+- `public class org.junit.jupiter.engine.config.EnumConfigurationParameterConverter<E extends java.lang.Enum<E>> {`
+- `public org.junit.jupiter.engine.config.EnumConfigurationParameterConverter(java.lang.Class<E>, java.lang.String);`
+- `public E get(java.lang.String, java.util.function.Function<java.lang.String, java.util.Optional<java.lang.String>>, E);`
+- `public org.junit.jupiter.engine.config.InstantiatingConfigurationParameterConverter(java.lang.Class<T>, java.lang.String);`
+- `public interface org.junit.jupiter.engine.config.JupiterConfiguration {`
+- `public static final java.lang.String DEACTIVATE_CONDITIONS_PATTERN_PROPERTY_NAME;`
+- `public static final java.lang.String PARALLEL_EXECUTION_ENABLED_PROPERTY_NAME;`
+- `public static final java.lang.String DEFAULT_EXECUTION_MODE_PROPERTY_NAME;`
+- `public static final java.lang.String DEFAULT_CLASSES_EXECUTION_MODE_PROPERTY_NAME;`
+- `public static final java.lang.String EXTENSIONS_AUTODETECTION_ENABLED_PROPERTY_NAME;`
+- `public static final java.lang.String DEFAULT_TEST_INSTANCE_LIFECYCLE_PROPERTY_NAME;`
+- `public static final java.lang.String DEFAULT_DISPLAY_NAME_GENERATOR_PROPERTY_NAME;`
+- `public void close();`
+- `public java.lang.String getUniqueId();`
+- `public java.lang.String getDisplayName();`
+- `public void publishReportEntry(java.util.Map<java.lang.String, java.lang.String>);`
+- `public java.util.Optional<org.junit.jupiter.api.extension.ExtensionContext> getParent();`
+- `public org.junit.jupiter.api.extension.ExtensionContext getRoot();`
+- `public org.junit.jupiter.api.extension.ExtensionContext$Store getStore(org.junit.jupiter.api.extension.ExtensionContext$Namespace);`
+- `public java.util.Set<java.lang.String> getTags();`
+- `public abstract class org.junit.jupiter.engine.descriptor.ClassBasedTestDescriptor extends org.junit.jupiter.engine.descriptor.JupiterTestDescriptor {`
+- `public final java.lang.Class<?> getTestClass();`
+- `public abstract java.util.List<java.lang.Class<?>> getEnclosingTestClasses();`
+- `public org.junit.platform.engine.TestDescriptor$Type getType();`
+- `public java.lang.String getLegacyReportingName();`
+- `public void setDefaultChildExecutionMode(org.junit.platform.engine.support.hierarchical.Node$ExecutionMode);`
+- `public java.util.Set<org.junit.platform.engine.support.hierarchical.ExclusiveResource> getExclusiveResources();`
+- `public org.junit.jupiter.engine.execution.JupiterEngineExecutionContext prepare(org.junit.jupiter.engine.execution.JupiterEngineExecutionContext);`
+- `public java.util.Optional<java.lang.reflect.AnnotatedElement> getElement();`
+- `public java.util.Optional<java.lang.Class<?>> getTestClass();`
+- `public java.util.Optional<org.junit.jupiter.api.TestInstance$Lifecycle> getTestInstanceLifecycle();`
+- `public java.util.Optional<java.lang.Object> getTestInstance();`
+- `public java.util.Optional<org.junit.jupiter.api.extension.TestInstances> getTestInstances();`
+- `public java.util.Optional<java.lang.reflect.Method> getTestMethod();`
+- `public java.util.Optional<java.lang.Throwable> getExecutionException();`
+- `public class org.junit.jupiter.engine.descriptor.ClassTestDescriptor extends org.junit.jupiter.engine.descriptor.ClassBasedTestDescriptor {`
+- `public static final java.lang.String SEGMENT_TYPE;`
+- `public org.junit.jupiter.engine.descriptor.ClassTestDescriptor(org.junit.platform.engine.UniqueId, java.lang.Class<?>, org.junit.jupiter.engine.config.JupiterConfiguration);`
+- `public java.util.Set<org.junit.platform.engine.TestTag> getTags();`
+- `public java.util.List<java.lang.Class<?>> getEnclosingTestClasses();`
+- `public org.junit.platform.engine.support.hierarchical.Node$ExecutionMode getExecutionMode();`
+- `public org.junit.jupiter.api.function.Executable getExecutable();`
+- `public java.lang.Class<?> getTestClass();`
+- `public java.util.Optional<java.lang.Object> getOuterInstance();`
+- `public java.lang.String toString();`
+- `public org.junit.platform.engine.TestDescriptor$Type getType();`
+- `public org.junit.jupiter.engine.execution.JupiterEngineExecutionContext execute(org.junit.jupiter.engine.execution.JupiterEngineExecutionContext, org.junit.platform.engine.support.hierarchical.Node$DynamicTestExecutor) throws java.lang.Exception;`
+- `public org.junit.platform.engine.support.hierarchical.EngineExecutionContext execute(org.junit.platform.engine.support.hierarchical.EngineExecutionContext, org.junit.platform.engine.support.hierarchical.Node$DynamicTestExecutor) throws java.lang.Exception;`
+- `public class org.junit.jupiter.engine.descriptor.DynamicDescendantFilter implements java.util.function.BiPredicate<org.junit.platform.engine.UniqueId, java.lang.Integer> {`
+- `public org.junit.jupiter.engine.descriptor.DynamicDescendantFilter();`
+- `public void allowUniqueIdPrefix(org.junit.platform.engine.UniqueId);`
+- `public void allowIndex(java.util.Set<java.lang.Integer>);`
+- `public void allowAll();`
+- `public boolean test(org.junit.platform.engine.UniqueId, java.lang.Integer);`
+- `public org.junit.jupiter.engine.descriptor.DynamicDescendantFilter withoutIndexFiltering();`
+- `public boolean test(java.lang.Object, java.lang.Object);`
+- `public java.util.Optional<java.lang.reflect.AnnotatedElement> getElement();`
+- `public java.util.Optional<java.lang.Class<?>> getTestClass();`
+- `public java.util.Optional<org.junit.jupiter.api.TestInstance$Lifecycle> getTestInstanceLifecycle();`
+- `public java.util.Optional<java.lang.Object> getTestInstance();`
+- `public java.util.Optional<org.junit.jupiter.api.extension.TestInstances> getTestInstances();`
+- `public java.util.Optional<java.lang.reflect.Method> getTestMethod();`
+- `public java.util.Optional<java.lang.Throwable> getExecutionException();`
+- `public java.lang.String getLegacyReportingName();`
+- `public org.junit.jupiter.engine.execution.JupiterEngineExecutionContext prepare(org.junit.jupiter.engine.execution.JupiterEngineExecutionContext);`
+- `public org.junit.platform.engine.support.hierarchical.Node$SkipResult shouldBeSkipped(org.junit.jupiter.engine.execution.JupiterEngineExecutionContext);`
+- `public org.junit.platform.engine.support.hierarchical.Node$SkipResult shouldBeSkipped(org.junit.platform.engine.support.hierarchical.EngineExecutionContext) throws java.lang.Exception;`
+- `public org.junit.platform.engine.support.hierarchical.EngineExecutionContext prepare(org.junit.platform.engine.support.hierarchical.EngineExecutionContext) throws java.lang.Exception;`
+- `public org.junit.platform.engine.TestDescriptor$Type getType();`
+- `public org.junit.jupiter.engine.execution.JupiterEngineExecutionContext execute(org.junit.jupiter.engine.execution.JupiterEngineExecutionContext, org.junit.platform.engine.support.hierarchical.Node$DynamicTestExecutor);`
+- `public void after(org.junit.jupiter.engine.execution.JupiterEngineExecutionContext) throws java.lang.Exception;`
+- `public void after(org.junit.platform.engine.support.hierarchical.EngineExecutionContext) throws java.lang.Exception;`
+- `public org.junit.platform.engine.support.hierarchical.EngineExecutionContext execute(org.junit.platform.engine.support.hierarchical.EngineExecutionContext, org.junit.platform.engine.support.hierarchical.Node$DynamicTestExecutor) throws java.lang.Exception;`

@@ -1,0 +1,218 @@
+# maven.modrinth-pigmentum Guide
+
+Generated fallback guide. Prefer an upstream GUIDE.md/SKILL.md when available.
+
+## Public Surface
+
+- `com.astune.painter.CanvasProperties`
+- `com.astune.painter.Config`
+- `com.astune.painter.Painter`
+- `com.astune.painter.PainterClient`
+- `com.astune.painter.api.BlendMode`
+- `com.astune.painter.api.CanvasData`
+- `com.astune.painter.api.CanvasDataHolder`
+- `com.astune.painter.api.CanvasFace`
+- `com.astune.painter.api.CompositePainting`
+- `com.astune.painter.api.ExposurePredicate`
+- `com.astune.painter.api.IPaintLayer`
+- `com.astune.painter.api.IPaintProvider`
+- `com.astune.painter.api.IPixelMatrix`
+- `com.astune.painter.api.PaintPattern`
+- `com.astune.painter.api.PaintProviders`
+- `com.astune.painter.api.PixelMatrix`
+- `com.astune.painter.api.PixelProvider`
+- `com.astune.painter.api.ResourcesBundle`
+- `com.astune.painter.api.blend.BlendContext`
+- `com.astune.painter.api.blend.BlendFunction`
+- `com.astune.painter.api.blend.DefaultBlendFunctions`
+- `com.astune.painter.api.imageProvider.CanvasImageProvider`
+- `com.astune.painter.api.imageProvider.CanvasImageProviderRegistry`
+- `com.astune.painter.api.imageProvider.DefaultCanvasImageProvider`
+- `com.astune.painter.api.imageProvider.ImageProviderContext`
+- `com.astune.painter.api.render.CanvasPixelRenderer`
+- `com.astune.painter.api.render.CanvasRendererRegistry`
+- `com.astune.painter.api.render.DefaultCanvasPixelRenderer`
+- `com.astune.painter.api.render.RenderContext`
+- `com.astune.painter.block.CanvasBlock`
+- `com.astune.painter.block.CanvasBlockEntity`
+- `com.astune.painter.block.CanvasBlockHelper`
+- `com.astune.painter.block.CanvasBlockItem`
+- `com.astune.painter.block.CanvasBlockModel`
+- `com.astune.painter.block.NoOcclusionCanvasBlock`
+- `com.astune.painter.block.OcclusionCanvasBlock`
+- `com.astune.painter.client.CanvasBlockClientExtensions`
+- `com.astune.painter.client.CanvasBlockEntityRenderer`
+- `com.astune.painter.client.CanvasRenderEventHandler`
+- `com.astune.painter.client.CanvasTextureManager`
+- `com.astune.painter.client.ClientPistonCache`
+- `com.astune.painter.client.ClientSetup`
+- `com.astune.painter.client.CompositeRenderer`
+- `com.astune.painter.client.PaintInputHandler`
+- `com.astune.painter.client.PixelQuadBuilder`
+- `com.astune.painter.client.inventory.BrushConfigScreen`
+- `com.astune.painter.command.PainterCommands`
+- `com.astune.painter.event.CanvasBlockReplacedEvent`
+- `com.astune.painter.event.ClientCanvasFrameEvent`
+- `com.astune.painter.event.ClientCanvasTickEvent`
+- `com.astune.painter.event.ModBusEvents`
+- `com.astune.painter.event.PaintEvents`
+- `com.astune.painter.event.ServerCanvasUpdateEvent`
+- `com.astune.painter.item.CanvasSheet`
+- `com.astune.painter.item.DebugPaintbrush`
+- `com.astune.painter.item.EffectCreator`
+- `com.astune.painter.item.Paintbrush`
+- `com.astune.painter.mixin.AbstractContainerMenuMixin`
+- `com.astune.painter.mixin.BlockEntityMixin`
+- `com.astune.painter.mixin.BlockEntityRenderersAccessor`
+- `com.astune.painter.mixin.BlockMixin`
+- `com.astune.painter.mixin.BlockRenderDispatcherMixin`
+- `com.astune.painter.mixin.BlockStateBaseMixin`
+- `com.astune.painter.mixin.DoorBlockMixin`
+- `com.astune.painter.mixin.ForgeHooksClientMixin`
+- `com.astune.painter.mixin.ItemCombinerMenuMixin`
+- `com.astune.painter.mixin.ItemFrameRendererMixin`
+- `com.astune.painter.mixin.LevelAccessorMixin`
+- `com.astune.painter.mixin.LevelMixin`
+- `com.astune.painter.mixin.LevelRendererMixin`
+- `com.astune.painter.mixin.PistonBaseBlockMixin`
+- `com.astune.painter.mixin.PistonMovingBlockEntityMixin`
+- `com.astune.painter.mixin.PistonStructureResolverMixin`
+- `com.astune.painter.network.CanvasAction`
+- `com.astune.painter.network.CanvasBlockReplacePacket`
+- `com.astune.painter.network.CanvasPistonDataCache`
+- `com.astune.painter.network.CanvasStrokeHistory`
+- `com.astune.painter.network.CanvasUploadPacket`
+- `com.astune.painter.network.ClientCanvasCache`
+- `com.astune.painter.network.ItemSyncPacket`
+- `com.astune.painter.network.PaintPixelPacket`
+- `com.astune.painter.network.SyncCanvasPacket`
+- `com.astune.painter.registry.ModAttachments`
+- `com.astune.painter.registry.ModBlockEntities`
+- `com.astune.painter.registry.ModBlocks`
+- `com.astune.painter.registry.ModCreativeTabs`
+- `com.astune.painter.registry.ModDataComponents`
+- `com.astune.painter.registry.ModItems`
+- `com.astune.painter.registry.ModPaintProviders`
+- `com.astune.painter.util.CanvasBlacklist`
+- `com.astune.painter.util.CanvasBlockSetController`
+
+## Sample Signatures
+
+- `public class com.astune.painter.CanvasProperties {`
+- `public static final net.minecraft.world.level.block.state.properties.BooleanProperty HAVE_CANVAS;`
+- `public com.astune.painter.CanvasProperties();`
+- `public class com.astune.painter.Config {`
+- `public static final net.neoforged.neoforge.common.ModConfigSpec$DoubleValue CANVAS_RENDER_LAYER_OFFSET;`
+- `public static final net.neoforged.neoforge.common.ModConfigSpec$IntValue STROKE_UNDO_HISTORY_LIMIT;`
+- `public static final net.neoforged.neoforge.common.ModConfigSpec$IntValue STROKE_REDO_HISTORY_LIMIT;`
+- `public com.astune.painter.Config();`
+- `public class com.astune.painter.Painter {`
+- `public static final java.lang.String MODID;`
+- `public static final org.slf4j.Logger LOGGER;`
+- `public com.astune.painter.Painter(net.neoforged.bus.api.IEventBus, net.neoforged.fml.ModContainer);`
+- `public void onServerStarting(net.neoforged.neoforge.event.server.ServerStartingEvent);`
+- `public void onRegisterCommands(net.neoforged.neoforge.event.RegisterCommandsEvent);`
+- `public class com.astune.painter.PainterClient {`
+- `public com.astune.painter.PainterClient(net.neoforged.fml.ModContainer);`
+- `public final class com.astune.painter.api.BlendMode extends java.lang.Enum<com.astune.painter.api.BlendMode> {`
+- `public static final com.astune.painter.api.BlendMode OVERWRITE;`
+- `public static final com.astune.painter.api.BlendMode ADD;`
+- `public static final com.astune.painter.api.BlendMode MULTIPLY;`
+- `public static final com.astune.painter.api.BlendMode ERASE;`
+- `public static com.astune.painter.api.BlendMode[] values();`
+- `public static com.astune.painter.api.BlendMode valueOf(java.lang.String);`
+- `public java.lang.String getTranslationKey();`
+- `public class com.astune.painter.api.CanvasData {`
+- `public static final com.mojang.serialization.Codec<com.astune.painter.api.CanvasData> CODEC;`
+- `public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, com.astune.painter.api.CanvasData> STREAM_CODEC;`
+- `public long getVersion();`
+- `public void incrementVersion();`
+- `public java.util.List<com.astune.painter.api.CanvasFace> faces();`
+- `public com.astune.painter.api.CanvasData(java.util.List<com.astune.painter.api.CanvasFace>);`
+- `public static com.astune.painter.api.CanvasData empty();`
+- `public interface com.astune.painter.api.CanvasDataHolder {`
+- `public default com.astune.painter.api.CanvasData painter$getCanvasData();`
+- `public default void painter$setCanvasData(com.astune.painter.api.CanvasData);`
+- `public abstract java.util.List<com.mojang.datafixers.util.Pair<com.astune.painter.api.CanvasFace, com.astune.painter.api.ResourcesBundle>> painter$getCachedFaceTextures();`
+- `public abstract void painter$regenerateTextures(com.astune.painter.api.CanvasData);`
+- `public abstract void painter$releaseTextures();`
+- `public class com.astune.painter.api.CanvasFace {`
+- `public static final com.mojang.serialization.Codec<com.astune.painter.api.CanvasFace> CODEC;`
+- `public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, com.astune.painter.api.CanvasFace> STREAM_CODEC;`
+- `public com.astune.painter.api.CanvasFace(net.minecraft.core.Direction, net.minecraft.world.phys.Vec3, net.minecraft.world.phys.Vec3, net.minecraft.world.phys.Vec3, net.minecraft.world.phys.Vec3, com.astune.painter.api.PixelMatrix);`
+- `public com.astune.painter.api.CanvasFace(net.minecraft.core.Direction, net.minecraft.world.phys.Vec3, net.minecraft.world.phys.Vec3, net.minecraft.world.phys.Vec3, net.minecraft.world.phys.Vec3, com.astune.painter.api.PixelMatrix, java.util.Map<java.lang.String, byte[]>);`
+- `public com.astune.painter.api.CanvasFace(net.minecraft.core.Direction, net.minecraft.world.phys.Vec3, com.astune.painter.api.PixelMatrix);`
+- `public com.astune.painter.api.CanvasFace(net.minecraft.core.Direction, net.minecraft.world.phys.Vec3, com.astune.painter.api.PixelMatrix, java.util.Map<java.lang.String, byte[]>);`
+- `public void removeEffectLayer(java.util.function.Predicate<java.lang.String>);`
+- `public class com.astune.painter.api.CompositePainting {`
+- `public java.util.Set<net.minecraft.core.BlockPos> getInvolvedPositions();`
+- `public java.util.Map<net.minecraft.core.Direction, java.util.List<com.astune.painter.api.IPaintLayer>> groupByFacing();`
+- `public com.astune.painter.api.IPixelMatrix combineToMatrix();`
+- `public interface com.astune.painter.api.ExposurePredicate {`
+- `public static final com.astune.painter.api.ExposurePredicate DEFAULT;`
+- `public abstract boolean isExposed(net.minecraft.world.level.Level, net.minecraft.core.BlockPos, net.minecraft.core.Direction);`
+- `public interface com.astune.painter.api.IPaintLayer {`
+- `public abstract net.minecraft.core.BlockPos getPos();`
+- `public abstract net.minecraft.core.Direction getFace();`
+- `public abstract com.astune.painter.api.IPixelMatrix getPixels();`
+- `public abstract net.minecraft.world.level.block.state.BlockState getBlockState(net.minecraft.world.level.Level);`
+- `public abstract net.minecraft.world.level.block.entity.BlockEntity getBlockEntity(net.minecraft.world.level.Level);`
+- `public abstract net.minecraft.nbt.CompoundTag save();`
+- `public interface com.astune.painter.api.IPaintProvider {`
+- `public abstract java.lang.Integer getColor(net.minecraft.world.item.ItemStack, net.minecraft.world.entity.player.Player, net.minecraft.world.level.Level, net.minecraft.core.BlockPos, com.astune.painter.api.CanvasFace, int, int);`
+- `public abstract com.astune.painter.api.PaintPattern getPattern(net.minecraft.world.item.ItemStack, net.minecraft.world.entity.player.Player, net.minecraft.world.level.Level, net.minecraft.core.BlockPos, net.minecraft.world.phys.Vec3);`
+- `public default java.lang.Double getStep();`
+- `public default boolean onPaintTick(net.minecraft.world.item.ItemStack, net.minecraft.world.entity.player.Player, net.minecraft.world.level.Level);`
+- `public default int getPaintInterval();`
+- `public default com.astune.painter.api.blend.BlendFunction getCustomBlendFunction(net.minecraft.world.item.ItemStack);`
+- `public default boolean shouldPaint(net.minecraft.world.entity.player.Player);`
+- `public interface com.astune.painter.api.IPixelMatrix {`
+- `public static final int SIZE;`
+- `public static final int PIXEL_COUNT;`
+- `public abstract int getWidth();`
+- `public abstract int getHeight();`
+- `public abstract int getPixel(int, int);`
+- `public abstract boolean setPixel(int, int, int);`
+- `public abstract com.astune.painter.api.IPixelMatrix copy();`
+- `public final class com.astune.painter.api.PaintPattern extends java.lang.Record {`
+- `public com.astune.painter.api.PaintPattern(double, double, com.astune.painter.api.PixelProvider);`
+- `public final java.lang.String toString();`
+- `public final int hashCode();`
+- `public final boolean equals(java.lang.Object);`
+- `public double width();`
+- `public double height();`
+- `public com.astune.painter.api.PixelProvider provider();`
+- `public class com.astune.painter.api.PaintProviders {`
+- `public com.astune.painter.api.PaintProviders();`
+- `public static void register(net.minecraft.world.item.Item, com.astune.painter.api.IPaintProvider);`
+- `public static com.astune.painter.api.IPaintProvider getProvider(net.minecraft.world.item.ItemStack);`
+- `public static boolean isPaintbrush(net.minecraft.world.item.ItemStack);`
+- `public class com.astune.painter.api.PixelMatrix implements com.astune.painter.api.IPixelMatrix {`
+- `public static final com.mojang.serialization.Codec<com.astune.painter.api.PixelMatrix> CODEC;`
+- `public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, com.astune.painter.api.PixelMatrix> STREAM_CODEC;`
+- `public com.astune.painter.api.PixelMatrix(int, int);`
+- `public com.astune.painter.api.PixelMatrix();`
+- `public com.astune.painter.api.PixelMatrix copy();`
+- `public int getWidth();`
+- `public int getHeight();`
+- `public interface com.astune.painter.api.PixelProvider {`
+- `public abstract com.astune.painter.api.BlendMode getBlendMode();`
+- `public default com.astune.painter.api.BlendMode getBlendMode(double, double);`
+- `public abstract java.lang.Integer getPixel(double, double);`
+- `public default java.util.Map<java.lang.String, java.lang.Integer> getEffectValues(double, double);`
+- `public final class com.astune.painter.api.ResourcesBundle extends java.lang.Record {`
+- `public com.astune.painter.api.ResourcesBundle(net.minecraft.resources.ResourceLocation[]);`
+- `public net.minecraft.resources.ResourceLocation[] resourceLocations();`
+- `public final java.lang.String toString();`
+- `public final int hashCode();`
+- `public final boolean equals(java.lang.Object);`
+- `public class com.astune.painter.api.blend.BlendContext {`
+- `public final com.astune.painter.api.CanvasFace face;`
+- `public final int px;`
+- `public final int py;`
+- `public final int existingColor;`
+- `public final int newColor;`
+- `public final com.astune.painter.api.BlendMode mode;`
+- `public final net.minecraft.world.item.ItemStack brushStack;`
+- `public interface com.astune.painter.api.blend.BlendFunction {`
+- `public abstract boolean apply(com.astune.painter.api.blend.BlendContext);`

@@ -408,7 +408,7 @@ public final class MagicArrayDetector {
         mgr.registerArrayObj(arr);
 
         SymbolRegistry.CenterEffect effect = SymbolRegistry.getCenterEffect(centerGlyph.symbolId());
-        scratchData = effect.execute(level, glyph.pixels().iterator().next().pos(), runeParams);
+        scratchData = effect.execute(level, glyph.pixels().iterator().next().pos(), circleGlyph, centerGlyph, runes);
         mgr.setArrayScratchData(arr.arrayId(), scratchData);
 
         syncGlyphs(level);
