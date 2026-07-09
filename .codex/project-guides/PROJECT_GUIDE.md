@@ -1,44 +1,56 @@
 # Project Guide
 
-Generated: 2026-07-04 06:20:38Z
+Generated: 2026-07-09 07:09:38Z
 
 <!-- guideweaver:start -->
 
 ## Repo Shape
 
-- Files indexed: 264
-- Files changed in this refresh: 264
+- Files indexed: 396
+- Files changed in this refresh: 396
 - Git remotes: none detected
 - Manifests: build.gradle, settings.gradle
-- Top-level source roots: .github, gradle, libs, net, src, tools, train
+- Top-level source roots: .codex, .github, assets, gradle, libs, net, src, tools, train
 
 ## File Types
 
-- `.png`: 128
-- `.java`: 86
-- `.json`: 17
-- `.fsh`: 6
-- `.md`: 5
+- `.png`: 136
+- `.obj`: 97
+- `.java`: 95
+- `.json`: 21
+- `.md`: 11
+- `.fsh`: 7
+- `.mcmeta`: 5
 - `.onnx`: 4
 - `(none)`: 3
 - `.txt`: 3
 - `.gradle`: 2
 - `.properties`: 2
 - `.py`: 2
+- `.vsh`: 2
 - `.bat`: 1
 - `.ckpt`: 1
 - `.jar`: 1
+- `.mtl`: 1
 - `.toml`: 1
-- `.vsh`: 1
 - `.yml`: 1
 
 ## Changed Files
 
+- `.codex/project-guides/GUIDE_INDEX.json`
+- `.codex/project-guides/PROJECT_GUIDE.md`
+- `.codex/project-guides/dependencies/com.microsoft.onnxruntime-onnxruntime@1.18.0.md`
+- `.codex/project-guides/dependencies/maven.modrinth-pigmentum@0.5.8beta.md`
+- `.codex/project-guides/dependencies/org.junit.jupiter-junit-jupiter-engine@5.10.2.md`
+- `.codex/project-guides/dependencies/org.junit.jupiter-junit-jupiter@5.10.2.md`
+- `.codex/project-guides/index.json`
 - `.gitattributes`
 - `.github/workflows/build.yml`
 - `.gitignore`
 - `README.md`
 - `TEMPLATE_LICENSE.txt`
+- `assets/magic_mist_vortex_vertical.png`
+- `assets/magic_mist_vortex_vertical_preview.png`
 - `build.gradle`
 - `gradle.properties`
 - `gradle/wrapper/gradle-wrapper.jar`
@@ -51,6 +63,7 @@ Generated: 2026-07-04 06:20:38Z
 - `net/minecraft/client/Camera.java`
 - `net/minecraft/client/renderer/entity/EntityRenderer.java`
 - `settings.gradle`
+- `shader.md`
 - `src/main/java/com/astune/gyromancy/Config.java`
 - `src/main/java/com/astune/gyromancy/Gyromancy.java`
 - `src/main/java/com/astune/gyromancy/GyromancyClient.java`
@@ -77,8 +90,14 @@ Generated: 2026-07-04 06:20:38Z
 - `src/main/java/com/astune/gyromancy/client/ClientSetup.java`
 - `src/main/java/com/astune/gyromancy/client/ElementDebugRenderer.java`
 - `src/main/java/com/astune/gyromancy/client/effect/ClientRayEffects.java`
+- `src/main/java/com/astune/gyromancy/client/effect/FireballSpawnEffect.java`
+- `src/main/java/com/astune/gyromancy/client/effect/FlipbookEffect.java`
+- `src/main/java/com/astune/gyromancy/client/entity/FireballRenderer.java`
 - `src/main/java/com/astune/gyromancy/client/glyph/GlyphImageProvider.java`
 - `src/main/java/com/astune/gyromancy/client/glyph/GlyphRenderer.java`
+- `src/main/java/com/astune/gyromancy/client/render/FrameAnimation.java`
+- `src/main/java/com/astune/gyromancy/client/render/ObjFrameModel.java`
+- `src/main/java/com/astune/gyromancy/client/render/RenderAnimation.java`
 - `src/main/java/com/astune/gyromancy/command/DebugCommands.java`
 - `src/main/java/com/astune/gyromancy/element/ElementBiomeProvider.java`
 - `src/main/java/com/astune/gyromancy/element/ElementChunkEventHandler.java`
@@ -95,31 +114,17 @@ Generated: 2026-07-04 06:20:38Z
 - `src/main/java/com/astune/gyromancy/element/event/ElementEventSubscription.java`
 - `src/main/java/com/astune/gyromancy/element/event/ElementThresholdEvent.java`
 - `src/main/java/com/astune/gyromancy/element/event/ThresholdDirection.java`
+- `src/main/java/com/astune/gyromancy/entity/FireballEntity.java`
 - `src/main/java/com/astune/gyromancy/ink/InkRegistry.java`
 - `src/main/java/com/astune/gyromancy/item/DebugBrushItem.java`
-- `src/main/java/com/astune/gyromancy/item/InkBottleItem.java`
-- `src/main/java/com/astune/gyromancy/item/PenItem.java`
-- `src/main/java/com/astune/gyromancy/mixin/LevelChunkMixin.java`
-- `src/main/java/com/astune/gyromancy/network/ModNetwork.java`
-- `src/main/java/com/astune/gyromancy/network/SyncDebugElementPacket.java`
-- `src/main/java/com/astune/gyromancy/network/SyncGlyphPacket.java`
-- `src/main/java/com/astune/gyromancy/registry/GyromancyRegistries.java`
-- `src/main/java/com/astune/gyromancy/registry/ModAttachments.java`
-- `src/main/java/com/astune/gyromancy/registry/ModBlockEntities.java`
-- `src/main/java/com/astune/gyromancy/registry/ModBlocks.java`
-- `src/main/java/com/astune/gyromancy/registry/ModCreativeTabs.java`
-- `src/main/java/com/astune/gyromancy/registry/ModDataComponents.java`
-- `src/main/java/com/astune/gyromancy/registry/ModEntities.java`
-- `src/main/java/com/astune/gyromancy/registry/ModItems.java`
-- `src/main/java/com/astune/gyromancy/symbol/FloodFillExtractor.java`
-- `src/main/java/com/astune/gyromancy/symbol/FloodFillScheduler.java`
-- `src/main/java/com/astune/gyromancy/symbol/GeometricMatcher.java`
 
 ## Dependency Guides
 
 - `com.microsoft.onnxruntime-onnxruntime`@1.18.0: `.codex/project-guides/dependencies/com.microsoft.onnxruntime-onnxruntime@1.18.0.md`
 - `maven.modrinth-pigmentum`@0.5.8beta: `.codex/project-guides/dependencies/maven.modrinth-pigmentum@0.5.8beta.md`
+- `org.appliedenergistics.yoga-yoga`@1.0.0: `.codex/project-guides/dependencies/org.appliedenergistics.yoga-yoga@1.0.0.md`
 - `org.junit.jupiter-junit-jupiter-engine`@5.10.2: `.codex/project-guides/dependencies/org.junit.jupiter-junit-jupiter-engine@5.10.2.md`
 - `org.junit.jupiter-junit-jupiter`@5.10.2: `.codex/project-guides/dependencies/org.junit.jupiter-junit-jupiter@5.10.2.md`
+- `photon`: `.codex/project-guides/dependencies/photon.md`
 
 <!-- guideweaver:end -->

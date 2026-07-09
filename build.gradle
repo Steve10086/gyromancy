@@ -58,6 +58,16 @@ repositories {
             includeGroup "foundry.veil"
         }
     }
+
+    // ── Photon + LDLib2 — VFX library ──
+    maven {
+        name = "FirstDark"
+        url = "https://maven.firstdark.dev/snapshots"
+        content {
+            includeGroup "com.lowdragmc.ldlib2"
+            includeGroup "com.lowdragmc.photon"
+        }
+    }
 }
 
 base {
@@ -152,6 +162,13 @@ sourceSets { test { compileClasspath += sourceSets.main.compileClasspath; runtim
 dependencies {
     implementation "maven.modrinth:pigmentum:0.5.8beta"
     implementation "foundry.veil:veil-neoforge-${minecraft_version}:${veil_version}"
+
+    // ── Photon + LDLib2 — VFX library ──
+    // :all classifier bundles Yoga inside, remove transitive to avoid classpath conflicts
+    implementation("com.lowdragmc.ldlib2:ldlib2-neoforge-${minecraft_version}:${ldlib2_version}:all") { transitive = false }
+    implementation("com.lowdragmc.photon:photon-neoforge-${minecraft_version}:${photon2_version}") { transitive = false }
+    compileOnly("org.appliedenergistics.yoga:yoga:1.0.0")
+
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"

@@ -1,0 +1,188 @@
+# org.appliedenergistics.yoga-yoga Guide
+
+Generated fallback guide. Prefer an upstream GUIDE.md/SKILL.md when available.
+
+## Public Surface
+
+- `org.appliedenergistics.yoga.LogLevel`
+- `org.appliedenergistics.yoga.YogaAlign`
+- `org.appliedenergistics.yoga.YogaBaselineFunction`
+- `org.appliedenergistics.yoga.YogaBoxSizing`
+- `org.appliedenergistics.yoga.YogaCloneNodeFunction`
+- `org.appliedenergistics.yoga.YogaConstants`
+- `org.appliedenergistics.yoga.YogaDimension`
+- `org.appliedenergistics.yoga.YogaDirection`
+- `org.appliedenergistics.yoga.YogaDirtiedFunction`
+- `org.appliedenergistics.yoga.YogaDisplay`
+- `org.appliedenergistics.yoga.YogaEdge`
+- `org.appliedenergistics.yoga.YogaErrata`
+- `org.appliedenergistics.yoga.YogaExperimentalFeature`
+- `org.appliedenergistics.yoga.YogaFlexDirection`
+- `org.appliedenergistics.yoga.YogaGutter`
+- `org.appliedenergistics.yoga.YogaJustify`
+- `org.appliedenergistics.yoga.YogaMeasureFunction`
+- `org.appliedenergistics.yoga.YogaMeasureMode`
+- `org.appliedenergistics.yoga.YogaNode`
+- `org.appliedenergistics.yoga.YogaNodeType`
+- `org.appliedenergistics.yoga.YogaOverflow`
+- `org.appliedenergistics.yoga.YogaPhysicalEdge`
+- `org.appliedenergistics.yoga.YogaPositionType`
+- `org.appliedenergistics.yoga.YogaProps`
+- `org.appliedenergistics.yoga.YogaSize`
+- `org.appliedenergistics.yoga.YogaUnit`
+- `org.appliedenergistics.yoga.YogaValue`
+- `org.appliedenergistics.yoga.YogaWrap`
+- `org.appliedenergistics.yoga.algorithm.AbsoluteLayout`
+- `org.appliedenergistics.yoga.algorithm.AlignUtil`
+- `org.appliedenergistics.yoga.algorithm.Baseline`
+- `org.appliedenergistics.yoga.algorithm.BoundAxis`
+- `org.appliedenergistics.yoga.algorithm.Cache`
+- `org.appliedenergistics.yoga.algorithm.CalculateLayout`
+- `org.appliedenergistics.yoga.algorithm.FlexDirectionUtil`
+- `org.appliedenergistics.yoga.algorithm.FlexLine`
+- `org.appliedenergistics.yoga.algorithm.FlexLineRunningLayout`
+- `org.appliedenergistics.yoga.algorithm.PixelGrid`
+- `org.appliedenergistics.yoga.algorithm.SizingMode`
+- `org.appliedenergistics.yoga.algorithm.TrailingPosition`
+- `org.appliedenergistics.yoga.config.MutableYogaConfig`
+- `org.appliedenergistics.yoga.config.YogaConfig`
+- `org.appliedenergistics.yoga.config.YogaLogger`
+- `org.appliedenergistics.yoga.event.LayoutData`
+- `org.appliedenergistics.yoga.event.LayoutPassReason`
+- `org.appliedenergistics.yoga.event.LayoutType`
+- `org.appliedenergistics.yoga.event.YogaEvent`
+- `org.appliedenergistics.yoga.event.YogaEventType`
+- `org.appliedenergistics.yoga.node.CachedMeasurement`
+- `org.appliedenergistics.yoga.node.LayoutResults`
+- `org.appliedenergistics.yoga.node.LayoutableChildren`
+- `org.appliedenergistics.yoga.numeric.Comparison`
+- `org.appliedenergistics.yoga.numeric.FloatOptional`
+- `org.appliedenergistics.yoga.style.SmallValueBuffer`
+- `org.appliedenergistics.yoga.style.StyleLength`
+- `org.appliedenergistics.yoga.style.StyleSizeLength`
+- `org.appliedenergistics.yoga.style.StyleValueHandle`
+- `org.appliedenergistics.yoga.style.StyleValuePool`
+- `org.appliedenergistics.yoga.style.YogaStyle`
+
+## Sample Signatures
+
+- `public final class org.appliedenergistics.yoga.LogLevel extends java.lang.Enum<org.appliedenergistics.yoga.LogLevel> {`
+- `public static final org.appliedenergistics.yoga.LogLevel ERROR;`
+- `public static final org.appliedenergistics.yoga.LogLevel WARN;`
+- `public static final org.appliedenergistics.yoga.LogLevel INFO;`
+- `public static final org.appliedenergistics.yoga.LogLevel DEBUG;`
+- `public static final org.appliedenergistics.yoga.LogLevel VERBOSE;`
+- `public static final org.appliedenergistics.yoga.LogLevel FATAL;`
+- `public static org.appliedenergistics.yoga.LogLevel[] values();`
+- `public final class org.appliedenergistics.yoga.YogaAlign extends java.lang.Enum<org.appliedenergistics.yoga.YogaAlign> {`
+- `public static final org.appliedenergistics.yoga.YogaAlign AUTO;`
+- `public static final org.appliedenergistics.yoga.YogaAlign FLEX_START;`
+- `public static final org.appliedenergistics.yoga.YogaAlign CENTER;`
+- `public static final org.appliedenergistics.yoga.YogaAlign FLEX_END;`
+- `public static final org.appliedenergistics.yoga.YogaAlign STRETCH;`
+- `public static final org.appliedenergistics.yoga.YogaAlign BASELINE;`
+- `public static final org.appliedenergistics.yoga.YogaAlign SPACE_BETWEEN;`
+- `public interface org.appliedenergistics.yoga.YogaBaselineFunction {`
+- `public abstract float baseline(org.appliedenergistics.yoga.YogaNode, float, float);`
+- `public final class org.appliedenergistics.yoga.YogaBoxSizing extends java.lang.Enum<org.appliedenergistics.yoga.YogaBoxSizing> {`
+- `public static final org.appliedenergistics.yoga.YogaBoxSizing BORDER_BOX;`
+- `public static final org.appliedenergistics.yoga.YogaBoxSizing CONTENT_BOX;`
+- `public static org.appliedenergistics.yoga.YogaBoxSizing[] values();`
+- `public static org.appliedenergistics.yoga.YogaBoxSizing valueOf(java.lang.String);`
+- `public java.lang.String toString();`
+- `public interface org.appliedenergistics.yoga.YogaCloneNodeFunction {`
+- `public abstract org.appliedenergistics.yoga.YogaNode cloneNode(org.appliedenergistics.yoga.YogaNode, org.appliedenergistics.yoga.YogaNode, int);`
+- `public class org.appliedenergistics.yoga.YogaConstants {`
+- `public static final float UNDEFINED;`
+- `public org.appliedenergistics.yoga.YogaConstants();`
+- `public static boolean isUndefined(float);`
+- `public static boolean isUndefined(org.appliedenergistics.yoga.YogaValue);`
+- `public final class org.appliedenergistics.yoga.YogaDimension extends java.lang.Enum<org.appliedenergistics.yoga.YogaDimension> {`
+- `public static final org.appliedenergistics.yoga.YogaDimension WIDTH;`
+- `public static final org.appliedenergistics.yoga.YogaDimension HEIGHT;`
+- `public static org.appliedenergistics.yoga.YogaDimension[] values();`
+- `public static org.appliedenergistics.yoga.YogaDimension valueOf(java.lang.String);`
+- `public java.lang.String toString();`
+- `public final class org.appliedenergistics.yoga.YogaDirection extends java.lang.Enum<org.appliedenergistics.yoga.YogaDirection> {`
+- `public static final org.appliedenergistics.yoga.YogaDirection INHERIT;`
+- `public static final org.appliedenergistics.yoga.YogaDirection LTR;`
+- `public static final org.appliedenergistics.yoga.YogaDirection RTL;`
+- `public static org.appliedenergistics.yoga.YogaDirection[] values();`
+- `public static org.appliedenergistics.yoga.YogaDirection valueOf(java.lang.String);`
+- `public java.lang.String toString();`
+- `public interface org.appliedenergistics.yoga.YogaDirtiedFunction {`
+- `public abstract void onDirtied(org.appliedenergistics.yoga.YogaNode);`
+- `public final class org.appliedenergistics.yoga.YogaDisplay extends java.lang.Enum<org.appliedenergistics.yoga.YogaDisplay> {`
+- `public static final org.appliedenergistics.yoga.YogaDisplay FLEX;`
+- `public static final org.appliedenergistics.yoga.YogaDisplay NONE;`
+- `public static final org.appliedenergistics.yoga.YogaDisplay CONTENTS;`
+- `public static org.appliedenergistics.yoga.YogaDisplay[] values();`
+- `public static org.appliedenergistics.yoga.YogaDisplay valueOf(java.lang.String);`
+- `public java.lang.String toString();`
+- `public final class org.appliedenergistics.yoga.YogaEdge extends java.lang.Enum<org.appliedenergistics.yoga.YogaEdge> {`
+- `public static final org.appliedenergistics.yoga.YogaEdge LEFT;`
+- `public static final org.appliedenergistics.yoga.YogaEdge TOP;`
+- `public static final org.appliedenergistics.yoga.YogaEdge RIGHT;`
+- `public static final org.appliedenergistics.yoga.YogaEdge BOTTOM;`
+- `public static final org.appliedenergistics.yoga.YogaEdge START;`
+- `public static final org.appliedenergistics.yoga.YogaEdge END;`
+- `public static final org.appliedenergistics.yoga.YogaEdge HORIZONTAL;`
+- `public final class org.appliedenergistics.yoga.YogaErrata extends java.lang.Enum<org.appliedenergistics.yoga.YogaErrata> {`
+- `public static final org.appliedenergistics.yoga.YogaErrata STRETCH_FLEX_BASIS;`
+- `public static final org.appliedenergistics.yoga.YogaErrata ABSOLUTE_POSITION_WITHOUT_INSETS_EXCLUDES_PADDING;`
+- `public static final org.appliedenergistics.yoga.YogaErrata ABSOLUTE_PERCENT_AGAINST_INNER_SIZE;`
+- `public static final java.util.Set<org.appliedenergistics.yoga.YogaErrata> NONE;`
+- `public static final java.util.Set<org.appliedenergistics.yoga.YogaErrata> ALL;`
+- `public static final java.util.Set<org.appliedenergistics.yoga.YogaErrata> CLASSIC;`
+- `public static org.appliedenergistics.yoga.YogaErrata[] values();`
+- `public final class org.appliedenergistics.yoga.YogaExperimentalFeature extends java.lang.Enum<org.appliedenergistics.yoga.YogaExperimentalFeature> {`
+- `public static final org.appliedenergistics.yoga.YogaExperimentalFeature WEB_FLEX_BASIS;`
+- `public static org.appliedenergistics.yoga.YogaExperimentalFeature[] values();`
+- `public static org.appliedenergistics.yoga.YogaExperimentalFeature valueOf(java.lang.String);`
+- `public java.lang.String toString();`
+- `public final class org.appliedenergistics.yoga.YogaFlexDirection extends java.lang.Enum<org.appliedenergistics.yoga.YogaFlexDirection> {`
+- `public static final org.appliedenergistics.yoga.YogaFlexDirection COLUMN;`
+- `public static final org.appliedenergistics.yoga.YogaFlexDirection COLUMN_REVERSE;`
+- `public static final org.appliedenergistics.yoga.YogaFlexDirection ROW;`
+- `public static final org.appliedenergistics.yoga.YogaFlexDirection ROW_REVERSE;`
+- `public static org.appliedenergistics.yoga.YogaFlexDirection[] values();`
+- `public static org.appliedenergistics.yoga.YogaFlexDirection valueOf(java.lang.String);`
+- `public java.lang.String toString();`
+- `public final class org.appliedenergistics.yoga.YogaGutter extends java.lang.Enum<org.appliedenergistics.yoga.YogaGutter> {`
+- `public static final org.appliedenergistics.yoga.YogaGutter COLUMN;`
+- `public static final org.appliedenergistics.yoga.YogaGutter ROW;`
+- `public static final org.appliedenergistics.yoga.YogaGutter ALL;`
+- `public static org.appliedenergistics.yoga.YogaGutter[] values();`
+- `public static org.appliedenergistics.yoga.YogaGutter valueOf(java.lang.String);`
+- `public java.lang.String toString();`
+- `public final class org.appliedenergistics.yoga.YogaJustify extends java.lang.Enum<org.appliedenergistics.yoga.YogaJustify> {`
+- `public static final org.appliedenergistics.yoga.YogaJustify FLEX_START;`
+- `public static final org.appliedenergistics.yoga.YogaJustify CENTER;`
+- `public static final org.appliedenergistics.yoga.YogaJustify FLEX_END;`
+- `public static final org.appliedenergistics.yoga.YogaJustify SPACE_BETWEEN;`
+- `public static final org.appliedenergistics.yoga.YogaJustify SPACE_AROUND;`
+- `public static final org.appliedenergistics.yoga.YogaJustify SPACE_EVENLY;`
+- `public static org.appliedenergistics.yoga.YogaJustify[] values();`
+- `public interface org.appliedenergistics.yoga.YogaMeasureFunction {`
+- `public abstract org.appliedenergistics.yoga.YogaSize measure(org.appliedenergistics.yoga.YogaNode, float, org.appliedenergistics.yoga.YogaMeasureMode, float, org.appliedenergistics.yoga.YogaMeasureMode);`
+- `public final class org.appliedenergistics.yoga.YogaMeasureMode extends java.lang.Enum<org.appliedenergistics.yoga.YogaMeasureMode> {`
+- `public static final org.appliedenergistics.yoga.YogaMeasureMode UNDEFINED;`
+- `public static final org.appliedenergistics.yoga.YogaMeasureMode EXACTLY;`
+- `public static final org.appliedenergistics.yoga.YogaMeasureMode AT_MOST;`
+- `public static org.appliedenergistics.yoga.YogaMeasureMode[] values();`
+- `public static org.appliedenergistics.yoga.YogaMeasureMode valueOf(java.lang.String);`
+- `public java.lang.String toString();`
+- `public class org.appliedenergistics.yoga.YogaNode implements org.appliedenergistics.yoga.YogaProps {`
+- `public org.appliedenergistics.yoga.YogaNode();`
+- `public org.appliedenergistics.yoga.YogaNode(org.appliedenergistics.yoga.config.YogaConfig);`
+- `public org.appliedenergistics.yoga.YogaNode(org.appliedenergistics.yoga.YogaNode);`
+- `public java.lang.Object getContext();`
+- `public boolean alwaysFormsContainingBlock();`
+- `public boolean hasNewLayout();`
+- `public org.appliedenergistics.yoga.YogaNodeType getNodeType();`
+- `public final class org.appliedenergistics.yoga.YogaNodeType extends java.lang.Enum<org.appliedenergistics.yoga.YogaNodeType> {`
+- `public static final org.appliedenergistics.yoga.YogaNodeType DEFAULT;`
+- `public static final org.appliedenergistics.yoga.YogaNodeType TEXT;`
+- `public static org.appliedenergistics.yoga.YogaNodeType[] values();`
+- `public static org.appliedenergistics.yoga.YogaNodeType valueOf(java.lang.String);`
+- `public java.lang.String toString();`

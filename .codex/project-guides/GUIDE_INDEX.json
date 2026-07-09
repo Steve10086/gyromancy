@@ -2,8 +2,10 @@
   "dependency_guides": [
     ".codex/project-guides/dependencies/com.microsoft.onnxruntime-onnxruntime@1.18.0.md",
     ".codex/project-guides/dependencies/maven.modrinth-pigmentum@0.5.8beta.md",
+    ".codex/project-guides/dependencies/org.appliedenergistics.yoga-yoga@1.0.0.md",
     ".codex/project-guides/dependencies/org.junit.jupiter-junit-jupiter-engine@5.10.2.md",
-    ".codex/project-guides/dependencies/org.junit.jupiter-junit-jupiter@5.10.2.md"
+    ".codex/project-guides/dependencies/org.junit.jupiter-junit-jupiter@5.10.2.md",
+    ".codex/project-guides/dependencies/photon.md"
   ],
   "missing_dependency_guides": [],
   "project_guide": ".codex/project-guides/PROJECT_GUIDE.md",
