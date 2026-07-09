@@ -53,6 +53,17 @@ public final class ClientRayEffects {
 
     public static void spawnOrRefresh(Vec3 center, Direction face, Vec3 worldRayDir,
                                        Vec3 sourceU, Vec3 sourceV,
+                                       byte[] symbolLayer,
+                                       int sourceWidth, int sourceHeight,
+                                       IntUnaryOperator colorBySymbolValue,
+                                       int color, int lifetime, double beamHeight) {
+        spawnOrRefresh(center, face, worldRayDir, sourceU, sourceV, null, symbolLayer,
+                sourceWidth, sourceHeight, colorBySymbolValue, color, lifetime, beamHeight,
+                DEFAULT_FADE_IN_TICKS);
+    }
+
+    public static void spawnOrRefresh(Vec3 center, Direction face, Vec3 worldRayDir,
+                                       Vec3 sourceU, Vec3 sourceV,
                                        ResourceLocation maskTexture, byte[] symbolLayer,
                                        int sourceWidth, int sourceHeight,
                                        IntUnaryOperator colorBySymbolValue,
@@ -86,7 +97,7 @@ public final class ClientRayEffects {
                 existing.keepAlive(lifetime);
                 return;
             }
-            if (existing.maskTexture.equals(maskTexture)
+            if (existing.maskTexture != null && existing.maskTexture.equals(maskTexture)
                     && existing.sourceWidth == sourceWidth
                     && existing.sourceHeight == sourceHeight) {
                 existing.refresh(worldRayDir, sourceU, sourceV, maskTexture, existing.meshVertices,

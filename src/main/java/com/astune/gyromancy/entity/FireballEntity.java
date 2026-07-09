@@ -26,12 +26,15 @@ public class FireballEntity extends Entity implements ItemSupplier {
     private static final EntityDataAccessor<Float> DATA_TARGET_SIZE =
             SynchedEntityData.defineId(FireballEntity.class, EntityDataSerializers.FLOAT);
     private static final int DEFAULT_LIFETIME = 1000;
-    private static final float SPAWN_SIZE = 0.5F;
+    private static final float SPAWN_SIZE = 0.1F;
     private static final int GROWTH_RATE = 2;
     private float explosionPower = 1.5F;
     private int lifetime = DEFAULT_LIFETIME;
     private Vec3 acceleration = Vec3.ZERO;
+    private Vec3 pendingVelocity = Vec3.ZERO;
+    private Vec3 pendingAcceleration = Vec3.ZERO;
     private float currentSize = SPAWN_SIZE;
+    private boolean launched;
 
     public FireballEntity(EntityType<FireballEntity> type, Level level) {
         super(type, level);
@@ -42,9 +45,11 @@ public class FireballEntity extends Entity implements ItemSupplier {
         this(ModEntities.FIREBALL.get(), level);
         setFireballSize(size);
         this.explosionPower = Math.max(1.0F, size);
-        this.acceleration = acceleration;
+        this.pendingVelocity = velocity;
+        this.pendingAcceleration = acceleration;
+        this.acceleration = Vec3.ZERO;
         setPos(pos);
-        setDeltaMovement(velocity);
+        setDeltaMovement(Vec3.ZERO);
     }
 
     @Override
@@ -60,6 +65,11 @@ public class FireballEntity extends Entity implements ItemSupplier {
             discard();
             return;
         }
+        if (!isFullyGrown()) {
+            setDeltaMovement(Vec3.ZERO);
+            return;
+        }
+        launchIfReady();
 
         Vec3 velocity = getDeltaMovement();
         Vec3 start = position();
@@ -77,6 +87,13 @@ public class FireballEntity extends Entity implements ItemSupplier {
         }
 
         setDeltaMovement(velocity.add(acceleration));
+    }
+
+    private void launchIfReady() {
+        if (launched) return;
+        launched = true;
+        acceleration = pendingAcceleration;
+        setDeltaMovement(pendingVelocity);
     }
 
     private boolean hitLivingEntity(Vec3 velocity) {
@@ -110,6 +127,14 @@ public class FireballEntity extends Entity implements ItemSupplier {
 
     public float getTargetFireballSize() {
         return entityData.get(DATA_TARGET_SIZE);
+    }
+
+    public boolean isFullyGrown() {
+        return currentSize >= getTargetFireballSize();
+    }
+
+    public int getGrowthTicks() {
+        return getTargetFireballSize() <= SPAWN_SIZE ? 0 : (int)Math.ceil(100.0F / GROWTH_RATE);
     }
 
     public void setFireballSize(float size) {
@@ -151,6 +176,13 @@ public class FireballEntity extends Entity implements ItemSupplier {
         if (tag.contains("AccelX")) {
             acceleration = new Vec3(tag.getDouble("AccelX"), tag.getDouble("AccelY"), tag.getDouble("AccelZ"));
         }
+        if (tag.contains("PendingVelX")) {
+            pendingVelocity = new Vec3(tag.getDouble("PendingVelX"), tag.getDouble("PendingVelY"), tag.getDouble("PendingVelZ"));
+        }
+        if (tag.contains("PendingAccelX")) {
+            pendingAcceleration = new Vec3(tag.getDouble("PendingAccelX"), tag.getDouble("PendingAccelY"), tag.getDouble("PendingAccelZ"));
+        }
+        launched = tag.getBoolean("Launched");
     }
 
     @Override
@@ -162,6 +194,13 @@ public class FireballEntity extends Entity implements ItemSupplier {
         tag.putDouble("AccelX", acceleration.x);
         tag.putDouble("AccelY", acceleration.y);
         tag.putDouble("AccelZ", acceleration.z);
+        tag.putDouble("PendingVelX", pendingVelocity.x);
+        tag.putDouble("PendingVelY", pendingVelocity.y);
+        tag.putDouble("PendingVelZ", pendingVelocity.z);
+        tag.putDouble("PendingAccelX", pendingAcceleration.x);
+        tag.putDouble("PendingAccelY", pendingAcceleration.y);
+        tag.putDouble("PendingAccelZ", pendingAcceleration.z);
+        tag.putBoolean("Launched", launched);
     }
 
     @Override

@@ -101,7 +101,7 @@ public final class FloodFillExtractor {
 
     // Core: pixel/world coordinate mapping
 
-    static Vec3 worldFromPixel(BlockPos pos, CanvasFace face, int px, int py) {
+    public static Vec3 worldFromPixel(BlockPos pos, CanvasFace face, int px, int py) {
         Vec3 c0 = face.corner0();
         Vec3 sideW = face.corner1().subtract(c0);
         Vec3 sideH = face.corner3().subtract(c0);
@@ -132,7 +132,7 @@ public final class FloodFillExtractor {
         return new PixelPos(pos, face.primaryFace(), px, py, face.pixels().getPixel(px, py));
     }
 
-    static double[] flatten(Direction face, Vec3 w) {
+    public static double[] flatten(Direction face, Vec3 w) {
         return switch (face) {
             case NORTH, SOUTH -> new double[]{w.x, w.y};
             case EAST, WEST   -> new double[]{w.z, w.y};
@@ -416,7 +416,7 @@ public final class FloodFillExtractor {
         return data.faces();
     }
 
-    static CanvasFace getFaceAt(ServerLevel level, BlockPos pos, Direction dir) {
+    public static CanvasFace getFaceAt(ServerLevel level, BlockPos pos, Direction dir) {
         var faces = getFacesAt(level, pos, dir);
         return faces.isEmpty() ? null : faces.getFirst();
     }

@@ -45,17 +45,22 @@ public final class ObjFrameModel {
 
     public void renderFrame(int frameIndex, float ageTicks, PoseStack.Pose pose, MultiBufferSource bufferSource,
                             int packedLight, ResourceLocation fallbackTexture) {
+        renderFrame(frameIndex, ageTicks, pose, bufferSource, packedLight, fallbackTexture, new RenderAnimation.State());
+    }
+
+    public void renderFrame(int frameIndex, float ageTicks, PoseStack.Pose pose, MultiBufferSource bufferSource,
+                            int packedLight, ResourceLocation fallbackTexture, RenderAnimation.State renderAnimation) {
         Frame frame = frames.get(Math.floorMod(frameIndex, frames.size()));
         for (Map.Entry<ResourceLocation, List<Face>> batch : frame.batches.entrySet()) {
             ResourceLocation texture = batch.getKey() == null ? fallbackTexture : batch.getKey();
             TextureAnimation animation = textureAnimations.computeIfAbsent(texture, ObjFrameModel::loadAnimation);
             int textureFrame = animation.frame(ageTicks);
-            VertexConsumer consumer = bufferSource.getBuffer(RenderType.entityTranslucent(texture));
+            VertexConsumer consumer = bufferSource.getBuffer(RenderType.entityCutoutNoCull(texture));
             for (Face face : batch.getValue()) {
-                emitVertex(consumer, pose, face.a, animation, textureFrame, packedLight);
-                emitVertex(consumer, pose, face.b, animation, textureFrame, packedLight);
-                emitVertex(consumer, pose, face.c, animation, textureFrame, packedLight);
-                emitVertex(consumer, pose, face.d, animation, textureFrame, packedLight);
+                emitVertex(consumer, pose, face.a, animation, textureFrame, packedLight, renderAnimation);
+                emitVertex(consumer, pose, face.b, animation, textureFrame, packedLight, renderAnimation);
+                emitVertex(consumer, pose, face.c, animation, textureFrame, packedLight, renderAnimation);
+                emitVertex(consumer, pose, face.d, animation, textureFrame, packedLight, renderAnimation);
             }
         }
     }
@@ -262,9 +267,10 @@ public final class ObjFrameModel {
     }
 
     private static void emitVertex(VertexConsumer consumer, PoseStack.Pose pose, ObjVertex vertex,
-                                   TextureAnimation animation, int textureFrame, int packedLight) {
+                                   TextureAnimation animation, int textureFrame, int packedLight,
+                                   RenderAnimation.State renderAnimation) {
         consumer.addVertex(pose, vertex.position.x(), vertex.position.y(), vertex.position.z())
-                .setColor(255, 255, 255, 255)
+                .setColor(renderAnimation.argb())
                 .setUv(vertex.uv.u, animation.v(vertex.uv.v, textureFrame))
                 .setOverlay(0)
                 .setLight(packedLight)

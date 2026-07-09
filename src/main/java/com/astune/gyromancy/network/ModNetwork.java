@@ -26,5 +26,11 @@ public final class ModNetwork {
                 SyncGlyphPacket.STREAM_CODEC,
                 SyncGlyphPacket::handleClient
         );
+
+        registrar.playToClient(
+                SyncArrayPacket.TYPE,
+                SyncArrayPacket.STREAM_CODEC,
+                SyncArrayPacket::handleClient
+        );
     }
 }

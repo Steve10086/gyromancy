@@ -2,6 +2,7 @@ package com.astune.gyromancy;
 
 import com.astune.gyromancy.client.ElementDebugRenderer;
 import com.astune.gyromancy.client.effect.ClientRayEffects;
+import com.astune.gyromancy.client.effect.FlipbookEffect;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -47,6 +48,9 @@ public class GyromancyClient {
 
         NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(
                 ClientRayEffects::onRenderLevelStage);
+
+        NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(
+                FlipbookEffect::onRenderLevelStage);
 
         Gyromancy.LOGGER.info("[Gyromancy] Client handlers wired on NeoForge.EVENT_BUS");
     }

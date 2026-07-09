@@ -10,6 +10,7 @@ import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
+import com.astune.gyromancy.symbol.FloodFillExtractor;
 import com.astune.gyromancy.symbol.FloodFillScheduler;
 import com.astune.gyromancy.symbol.GlyphChunkStorage;
 import com.astune.gyromancy.symbol.GlyphMarker;
@@ -17,6 +18,7 @@ import com.astune.gyromancy.symbol.InteriorValidator;
 import com.astune.gyromancy.symbol.ManaPixelDetector;
 import com.astune.gyromancy.symbol.SymbolRecognizer;
 import com.astune.gyromancy.symbol.SymbolRegistry;
+import com.astune.gyromancy.network.SyncArrayPacket;
 import com.astune.gyromancy.network.SyncGlyphPacket;
 import com.astune.painter.api.CanvasData;
 import com.astune.painter.api.CanvasDataHolder;
@@ -25,11 +27,13 @@ import com.astune.painter.block.CanvasBlockEntity;
 import com.astune.painter.event.ServerCanvasUpdateEvent;
 import com.astune.painter.network.SyncCanvasPacket;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -38,6 +42,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.HashSet;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -453,7 +458,60 @@ public final class MagicArrayDetector {
 
     private static void syncGlyphs(ServerLevel level) {
         PacketDistributor.sendToAllPlayers(buildGlyphPacket(level));
+        PacketDistributor.sendToAllPlayers(buildArrayPacket(level));
     }
+
+    private static SyncArrayPacket buildArrayPacket(ServerLevel level) {
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        List<SyncArrayPacket.ArrayData> arrays = new ArrayList<>();
+        for (ArrayObject arr : mgr.getAllArrayObjs()) {
+            SyncArrayPacket.ArrayData data = arrayData(level, arr);
+            if (data != null) arrays.add(data);
+        }
+        return new SyncArrayPacket(arrays);
+    }
+
+    private static SyncArrayPacket.ArrayData arrayData(ServerLevel level, ArrayObject arr) {
+        Map<BlockFace, List<PixelPos>> pixelsByFace = new HashMap<>();
+        for (PositionedGlyph glyph : arr.allBoundGlyphs()) {
+            for (PixelPos pixel : glyph.pixels()) {
+                pixelsByFace.computeIfAbsent(new BlockFace(pixel.pos(), pixel.face()), ignored -> new ArrayList<>())
+                        .add(pixel);
+            }
+        }
+
+        List<SyncArrayPacket.BlockData> parts = new ArrayList<>(pixelsByFace.size());
+        for (Map.Entry<BlockFace, List<PixelPos>> entry : pixelsByFace.entrySet()) {
+            SyncArrayPacket.BlockData part = blockData(level, entry.getKey(), entry.getValue());
+            if (part != null) parts.add(part);
+        }
+        if (parts.isEmpty()) return null;
+        return new SyncArrayPacket.ArrayData(arr.arrayId(),
+                SymbolRegistry.glyphColorFor(arr.centerGlyph().symbolId()), parts);
+    }
+
+    private static SyncArrayPacket.BlockData blockData(ServerLevel level, BlockFace key, List<PixelPos> pixels) {
+        CanvasFace face = FloodFillExtractor.getFaceAt(level, key.pos, key.face);
+        if (face == null) return null;
+
+        int width = face.pixels().getWidth();
+        int height = face.pixels().getHeight();
+        byte[] mask = new byte[width * height];
+        for (PixelPos pixel : pixels) {
+            if (pixel.x() >= 0 && pixel.x() < width && pixel.y() >= 0 && pixel.y() < height) {
+                mask[pixel.y() * width + pixel.x()] = 1;
+            }
+        }
+
+        Vec3[] corners = face.cornerWithOffset();
+        Vec3 sourceU = corners[1].subtract(corners[0]);
+        Vec3 sourceV = corners[0].subtract(corners[3]);
+        Vec3 center = Vec3.atCenterOf(key.pos)
+                .add(corners[0].add(corners[1]).add(corners[2]).add(corners[3]).scale(0.25));
+        return new SyncArrayPacket.BlockData(center, key.face, sourceU, sourceV, width, height, mask);
+    }
+
+    private record BlockFace(BlockPos pos, Direction face) {}
 
     private static SyncGlyphPacket buildGlyphPacket(ServerLevel level) {
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);

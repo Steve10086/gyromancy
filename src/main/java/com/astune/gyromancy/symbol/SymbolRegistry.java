@@ -119,6 +119,13 @@ public final class SymbolRegistry {
         return registryId < 0 ? 0 : registryId + 1;
     }
 
+    public static int glyphColorFor(ResourceLocation id) {
+        for (SymbolDef def : SYMBOLS) {
+            if (def.name.equals(id.getPath())) return def.glyphColor;
+        }
+        return DEFAULT_GLYPH_COLOR;
+    }
+
     /** Returns the center behavior for {@code symbolId}, or a no-op if none is defined. */
     public static CenterEffect getCenterEffect(ResourceLocation symbolId) {
         for (SymbolDef def : SYMBOLS) {
