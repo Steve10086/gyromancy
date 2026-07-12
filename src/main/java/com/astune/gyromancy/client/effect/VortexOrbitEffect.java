@@ -2,12 +2,6 @@ package com.astune.gyromancy.client.effect;
 
 import com.lowdragmc.photon.client.fx.*;
 import com.lowdragmc.photon.client.gameobject.IFXObject;
-import com.lowdragmc.photon.client.gameobject.emitter.data.EmissionSetting;
-import com.lowdragmc.photon.client.gameobject.emitter.data.number.NumberFunction;
-import com.lowdragmc.photon.client.gameobject.emitter.data.number.NumberFunction3;
-import com.lowdragmc.photon.client.gameobject.emitter.data.shape.Sphere;
-import com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleConfig;
-import com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleEmitter;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -17,105 +11,230 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.*;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
- * Particles: spherical spawn → accelerating spiral converge → circular orbit.
- * When target moves too far, each particle lerps back to the nearest orbit point.
+ * Continuous particle effect: spherical spawn → accelerating spiral converge → circular orbit.
+ * Emits at a given rate (particles/20ticks), recycles oldest when pool is full.
  */
 @OnlyIn(Dist.CLIENT)
 public class VortexOrbitEffect {
-    private static final ResourceLocation FX_ID =
-            ResourceLocation.fromNamespaceAndPath("gyromancy", "vortex_orb");
-
+    private final ResourceLocation fxId;
     private final List<ParticleRunner> particles = new ArrayList<>();
     private final Level level;
-    private final Supplier<Vec3> target;
-    private final int particleCount;
-    private final float spawnRadius;
-    private final int convergeTicks;
-    private final Vec3 orbitAxis;
-    private final float orbitRadius;
-    private final float centerLerp;
+    private Supplier<Vec3> target;
+    private int maxParticles;
+    private float rate; // particles per 20 ticks
+    private float spawnRadius;
+    private int convergeTicks;
+    private Vec3 orbitAxis;
+    private float orbitRadius;
+    private int initialParticles;
+    private float centerLerp;
+    private float speed;
+    private BooleanSupplier alive = () -> true;
+    private final DynamicEffectProperties properties = new DynamicEffectProperties();
+    private final Random rand = new Random();
     private FX fx;
+    private float emitAccumulator;
+    private long lastGameTick = -1;
+    private boolean started;
+
+    private final static ResourceLocation DEFAULT_FX = ResourceLocation.fromNamespaceAndPath("gyromancy", "surrounding_element");
 
     public VortexOrbitEffect(Level level, Supplier<Vec3> target,
-                             int particleCount, float spawnRadius, int convergeTicks,
+                             int maxParticles, float rate, float spawnRadius, int convergeTicks,
                              Vec3 orbitAxis, float orbitRadius) {
-        this(level, target, particleCount, spawnRadius, convergeTicks, orbitAxis, orbitRadius, 0.04f);
+        this(DEFAULT_FX, level, target, maxParticles, rate, spawnRadius, convergeTicks,
+                orbitAxis, orbitRadius, 20, 0.04f);
     }
 
     public VortexOrbitEffect(Level level, Supplier<Vec3> target,
-                             int particleCount, float spawnRadius, int convergeTicks,
-                             Vec3 orbitAxis, float orbitRadius, float centerLerp) {
+                             int maxParticles, float rate, float spawnRadius, int convergeTicks,
+                             Vec3 orbitAxis, float orbitRadius, int initialParticles) {
+        this(DEFAULT_FX, level, target, maxParticles, rate, spawnRadius, convergeTicks,
+                orbitAxis, orbitRadius, initialParticles, 0.04f);
+    }
+    public VortexOrbitEffect(ResourceLocation resourceLocation, Level level, Supplier<Vec3> target,
+                             int maxParticles, float rate, float spawnRadius, int convergeTicks,
+                             Vec3 orbitAxis, float orbitRadius, int initialParticles) {
+        this(resourceLocation, level, target, maxParticles, rate, spawnRadius, convergeTicks,
+                orbitAxis, orbitRadius, initialParticles, 0.04f);
+    }
+
+    public VortexOrbitEffect(ResourceLocation fxId, Level level, Supplier<Vec3> target,
+                             int maxParticles, float rate, float spawnRadius, int convergeTicks,
+                             Vec3 orbitAxis, float orbitRadius, int initialParticles, float centerLerp) {
+        this(fxId, level, target, maxParticles, rate, spawnRadius, convergeTicks,
+                orbitAxis, orbitRadius, initialParticles, centerLerp, 1f);
+    }
+
+    public VortexOrbitEffect(ResourceLocation fxId, Level level, Supplier<Vec3> target,
+                             int maxParticles, float rate, float spawnRadius, int convergeTicks,
+                             Vec3 orbitAxis, float orbitRadius, int initialParticles, float centerLerp,
+                             float speed) {
         this.level = level;
         this.target = target;
-        this.particleCount = particleCount;
+        this.maxParticles = maxParticles;
+        this.rate = rate;
         this.spawnRadius = spawnRadius;
         this.convergeTicks = convergeTicks;
         this.orbitAxis = orbitAxis.normalize();
         this.orbitRadius = orbitRadius;
+        this.initialParticles = initialParticles;
         this.centerLerp = centerLerp;
+        this.speed = Math.max(0, speed);
+        this.fxId = fxId;
     }
 
-    public void emit() {
-        FX fx = getOrCreateFx();
-        if (fx == null) return;
-        Random rand = new Random();
-        for (int i = 0; i < particleCount; i++) {
-            var def = OrbitDef.random(spawnRadius, convergeTicks, orbitAxis, orbitRadius, rand);
-            var p = new ParticleRunner(fx, level, target, def, centerLerp);
-            p.start();
-            particles.add(p);
+
+
+    /** Start emitting. Safe to call multiple times. */
+    public void start() {
+        if (started) return;
+        started = true;
+        fx = FXHelper.getFX(fxId);
+        if (fx == null) {
+            started = false;
+            return;
         }
+        emitAccumulator = 0;
+        for (int i = 0; i < initialParticles && i < maxParticles; i++) emitOne();
+    }
+
+    /** Call every game tick to drive emission. Safe to call at any frequency. */
+    public void tick() {
+        if (!started || fx == null) return;
+        particles.removeIf(particle -> !particle.isAlive());
+        for (var particle : particles) particle.applyProperties();
+        long now = level.getGameTime();
+        if (now == lastGameTick) return;
+        lastGameTick = now;
+        emitAccumulator += rate / 20f;
+        while (emitAccumulator >= 1f) {
+            emitOne();
+            emitAccumulator -= 1f;
+        }
+    }
+
+    private void emitOne() {
+        if (maxParticles <= 0) return;
+        // recycle oldest if at capacity
+        if (particles.size() >= maxParticles) {
+            particles.get(0).kill();
+            particles.remove(0);
+        }
+        var def = OrbitDef.random(spawnRadius, convergeTicks, orbitAxis, orbitRadius, rand);
+        var p = new ParticleRunner(fx, level, target, def, centerLerp, speed, rand, properties, alive);
+        p.start();
+        particles.add(p);
+    }
+
+    private void rebuildParticles(int count) {
+        if (!started || fx == null) return;
+        for (var particle : particles) particle.kill();
+        particles.clear();
+        for (int i = 0; i < Math.min(count, maxParticles); i++) emitOne();
     }
 
     public void kill() {
         for (var p : particles) p.kill();
         particles.clear();
+        started = false;
+        emitAccumulator = 0;
     }
 
-    private FX getOrCreateFx() {
-        if (fx != null) return fx;
-        fx = FXHelper.getFX(FX_ID);
-        if (fx == null) fx = buildFallbackFx();
-        return fx;
+    public VortexOrbitEffect setSize(float size) { properties.setSize(size); return this; }
+    
+    public VortexOrbitEffect setAlpha(float alpha) { properties.setAlpha(alpha); return this; }
+
+    public VortexOrbitEffect setOffset(Vec3 offset) {
+        return setOffset(offset.x, offset.y, offset.z);
     }
 
-    private static FX buildFallbackFx() {
-        FX fx = new FX();
-        ParticleEmitter e = new ParticleEmitter();
-        e.setName("vortex_orb");
-        ParticleConfig c = e.config;
-        c.setDuration(Integer.MAX_VALUE);
-        c.setLooping(false);
-        c.setMaxParticles(1);
-        c.setStartLifetime(NumberFunction.constant(Integer.MAX_VALUE));
-        c.setStartSpeed(NumberFunction.constant(0f));
-        c.setStartSize(new NumberFunction3(0.15f, 0.15f, 0.15f));
-        c.shape.setShape(new Sphere());
-        c.setSimulationSpace(ParticleConfig.Space.Local);
-        c.emission.setEmissionRate(NumberFunction.constant(0f));
-        EmissionSetting.Burst burst = new EmissionSetting.Burst();
-        burst.time = 0;
-        burst.setCount(NumberFunction.constant(1));
-        burst.cycles = 1;
-        c.emission.getBursts().add(burst);
-        fx.getFxData().objects().add(e);
-        return fx;
+    public VortexOrbitEffect setOffset(double x, double y, double z) {
+        properties.setOffset(x, y, z);
+        return this;
+    }
+
+    public VortexOrbitEffect setMaxParticles(int maxParticles) {
+        this.maxParticles = Math.max(0, maxParticles);
+        while (particles.size() > this.maxParticles) particles.remove(0).kill();
+        return this;
+    }
+
+    public VortexOrbitEffect setRate(float rate) { this.rate = rate; return this; }
+
+    public VortexOrbitEffect setSpawnRadius(float spawnRadius) {
+        if (this.spawnRadius == spawnRadius) return this;
+        this.spawnRadius = spawnRadius;
+        rebuildParticles(particles.size());
+        return this;
+    }
+
+    public VortexOrbitEffect setConvergeTicks(int convergeTicks) {
+        if (this.convergeTicks == convergeTicks) return this;
+        this.convergeTicks = convergeTicks;
+        rebuildParticles(particles.size());
+        return this;
+    }
+
+    public VortexOrbitEffect setOrbitAxis(Vec3 orbitAxis) {
+        orbitAxis = orbitAxis.normalize();
+        if (this.orbitAxis.equals(orbitAxis)) return this;
+        this.orbitAxis = orbitAxis;
+        rebuildParticles(particles.size());
+        return this;
+    }
+
+    public VortexOrbitEffect setOrbitRadius(float orbitRadius) {
+        if (this.orbitRadius == orbitRadius) return this;
+        this.orbitRadius = orbitRadius;
+        for (var particle : particles) particle.setOrbitRadius(orbitRadius);
+        return this;
+    }
+
+    public VortexOrbitEffect setInitialParticles(int initialParticles) {
+        this.initialParticles = Math.max(0, initialParticles);
+        rebuildParticles(this.initialParticles);
+        return this;
+    }
+
+    public VortexOrbitEffect setCenterLerp(float centerLerp) {
+        this.centerLerp = centerLerp;
+        for (var particle : particles) particle.setCenterLerp(centerLerp);
+        return this;
+    }
+
+    public VortexOrbitEffect setSpeed(float speed) {
+        this.speed = Math.max(0, speed);
+        for (var particle : particles) particle.setSpeed(this.speed);
+        return this;
+    }
+
+    public VortexOrbitEffect setAlive(BooleanSupplier alive) {
+        this.alive = alive;
+        for (var particle : particles) particle.setAlive(alive);
+        return this;
+    }
+
+    public VortexOrbitEffect setOrbitCenter(Vec3 center) {
+        this.target = () -> center;
+        for (var particle : particles) particle.setOrbitCenter(this.target, center);
+        return this;
     }
 
     // ═══ Orbit def ═══
     private static final class OrbitDef {
         final Vector3f axis, u, v;
-        final float orbitRadius, orbitSpeed;
+        float orbitRadius;
+        final float orbitSpeed;
         final int convergeTicks;
-        // spiral params
-        final Vec3 radialDir;   // unit direction in plane (orbit-plane projection of spawn)
-        final float startR;     // initial plane radius
-        final float startH;     // initial height above plane
-        final float[] angles;   // precomputed cumulative spiral radians [0..1]
-        final float orbitPhase; // starting orbital phase at spiral end
+        final Vec3 radialDir;
+        final float startR, startH;
+        float[] angles;
+        float orbitPhase;
 
         OrbitDef(Vector3f axis, Vector3f u, Vector3f v,
                  float orbitRadius, float orbitSpeed, int convergeTicks,
@@ -126,6 +245,15 @@ public class VortexOrbitEffect {
             this.convergeTicks = convergeTicks;
             this.radialDir = radialDir; this.startR = startR; this.startH = startH;
             this.angles = angles; this.orbitPhase = orbitPhase;
+        }
+
+        void setOrbitRadius(float orbitRadius) {
+            this.orbitRadius = orbitRadius;
+            this.angles = buildAngles(startR, orbitRadius, orbitSpeed, convergeTicks);
+            Vec3 endDir = rotate(radialDir, angles[ANGLE_SAMPLES], axis);
+            this.orbitPhase = (float) Math.atan2(
+                    endDir.x*v.x() + endDir.y*v.y() + endDir.z*v.z(),
+                    endDir.x*u.x() + endDir.y*u.y() + endDir.z*u.z());
         }
 
         static OrbitDef random(float spawnR, int convergeTicks,
@@ -177,12 +305,8 @@ public class VortexOrbitEffect {
                     (-u.z()*sx+v.z()*cx)*orbitRadius*orbitSpeed);
         }
 
-        /** Nearest orbit point. */
-        Vec3 nearest(Vec3 fromWorld, Vec3 center) {
-            return nearest(fromWorld, center, null);
-        }
+        Vec3 nearest(Vec3 fromWorld, Vec3 center) { return nearest(fromWorld, center, null); }
 
-        /** Nearest orbit point + fills outPhase[0] with orbital phase (if non-null). */
         Vec3 nearest(Vec3 fromWorld, Vec3 center, float[] outPhase) {
             Vec3 rel = fromWorld.subtract(center);
             float ha = (float)(rel.x*axis.x()+rel.y*axis.y()+rel.z*axis.z());
@@ -199,7 +323,6 @@ public class VortexOrbitEffect {
             return orbitPos(phase, center);
         }
 
-        // ── spiral helpers ──
         private static final int ANGLE_SAMPLES = 200;
         private static float[] buildAngles(float startR, float orbitR, float speed, int ticks) {
             float[] a = new float[ANGLE_SAMPLES+1];
@@ -249,43 +372,52 @@ public class VortexOrbitEffect {
 
     // ═══ Per-particle runtime ═══
     private static class ParticleRunner extends FXEffectExecutor {
-        // PD controller gains for re-entry — critically damped (kd = 2*sqrt(kp))
         private static final float KP = 0.05f;
         private static final float KD = 0.45f;
 
-        private final Supplier<Vec3> targetSupplier;
+        private Supplier<Vec3> targetSupplier;
         private final OrbitDef def;
-        private final float centerLerp;
+        private float centerLerp;
+        private float speed;
+        private final DynamicEffectProperties properties;
+        private BooleanSupplier alive;
         private Vec3 prevCtr, currCtr;
 
         private enum State { SPIRAL, ORBIT, REENTRY }
         private State state;
-        private int age;        // ticks in current state (SPIRAL/ORBIT)
-        private double phase;   // orbital phase (ORBIT only)
-
-        // integrated position/velocity
+        private float age;
+        private double phase;
         private Vec3 pos;
         private Vec3 vel;
 
         ParticleRunner(FX fx, Level level, Supplier<Vec3> target,
-                       OrbitDef def, float centerLerp) {
+                       OrbitDef def, float centerLerp, float speed, Random rand, DynamicEffectProperties properties,
+                       BooleanSupplier alive) {
             super(fx, level);
             this.targetSupplier = target;
             this.def = def;
             this.centerLerp = centerLerp;
+            this.speed = speed;
+            this.properties = properties;
+            this.alive = alive;
+            // stagger start by a random offset to spread out converge
+            float stagger = rand.nextFloat() * def.convergeTicks * 0.3f;
             Vec3 c = target.get();
             this.currCtr = c;
             this.prevCtr = c;
             this.state = State.SPIRAL;
-            this.age = 0;
+            this.age = -stagger;
             this.pos = def.spiralPos(0, c);
             this.vel = Vec3.ZERO;
         }
 
-        // ══ Tick ══
         @Override
         public void updateFXObjectTick(IFXObject obj) {
             if (runtime == null || obj != runtime.getRoot()) return;
+            if (!alive.getAsBoolean()) {
+                kill();
+                return;
+            }
             prevCtr = currCtr;
             currCtr = currCtr.add(targetSupplier.get().subtract(currCtr).scale(centerLerp));
 
@@ -297,7 +429,8 @@ public class VortexOrbitEffect {
         }
 
         private void tickSpiral() {
-            age++;
+            age += speed;
+            if (age < 0) return; // stagger delay
             if (age >= def.convergeTicks) {
                 state = State.ORBIT;
                 age = 0;
@@ -310,30 +443,27 @@ public class VortexOrbitEffect {
             Vec3 realTarget = targetSupplier.get();
             float dist = (float)currCtr.distanceTo(realTarget);
             if (dist > Math.max(3f, def.orbitRadius * 1.2f)) {
-                // re-entry: carry current orbital velocity
-                vel = def.orbitVel((float)phase, currCtr);
+                vel = def.orbitVel((float)phase, currCtr).scale(speed);
                 state = State.REENTRY;
                 return;
             }
-            age++;
-            phase += def.orbitSpeed;
+            age += speed;
+            phase += def.orbitSpeed * speed;
             pos = def.orbitPos((float)phase, currCtr);
         }
 
         private void tickReentry() {
-            // Target: nearest orbit point around drifted center, with orbital velocity
             float[] endPhase = new float[1];
             Vec3 targetPos = def.nearest(pos, currCtr, endPhase);
-            Vec3 targetVel = def.orbitVel(endPhase[0], currCtr);
+            Vec3 targetVel = def.orbitVel(endPhase[0], currCtr).scale(speed);
 
-            // PD controller: spring toward orbit + match orbital velocity
             Vec3 accel = targetPos.subtract(pos).scale(KP)
-                    .add(targetVel.subtract(vel).scale(KD));
+                    .add(targetVel.subtract(vel).scale(KD))
+                    .scale(speed);
 
             vel = vel.add(accel);
             pos = pos.add(vel);
 
-            // close enough to orbit → merge
             if (pos.distanceTo(targetPos) < def.orbitRadius * 0.1f) {
                 state = State.ORBIT;
                 age = 0;
@@ -342,7 +472,6 @@ public class VortexOrbitEffect {
             }
         }
 
-        // ══ Frame ══
         @Override
         public void updateFXObjectFrame(IFXObject obj, float partialTicks) {
             if (runtime == null || obj != runtime.getRoot()) return;
@@ -351,33 +480,80 @@ public class VortexOrbitEffect {
 
             switch (state) {
                 case SPIRAL -> {
-                    float s = Math.min(1f, (age + partialTicks) / def.convergeTicks);
-                    framePos = def.spiralPos(s, center);
+                    float t = age < 0 ? 0 : Math.min(1f, (age + partialTicks) / def.convergeTicks);
+                    framePos = def.spiralPos(t, center);
                 }
                 case ORBIT -> {
-                    float p = (float)(phase + partialTicks * def.orbitSpeed);
+                    float p = (float)(phase + partialTicks * def.orbitSpeed * speed);
                     framePos = def.orbitPos(p, center);
                 }
                 case REENTRY -> {
-                    // extrapolate tick position forward by partialTicks for smooth sub-tick motion
                     framePos = pos.add(vel.scale(partialTicks));
                 }
                 default -> framePos = pos;
             }
 
+            framePos = properties.offset(framePos);
             obj.updatePos(new Vector3f((float)framePos.x, (float)framePos.y, (float)framePos.z));
         }
 
         @Override
         public void start() {
-            runtime = fx.createRuntime();
+            runtime = fx.createRuntime(true);
+            Vec3 startPos = properties.offset(pos);
             runtime.getRoot().updatePos(new Vector3f(
-                    (float)pos.x, (float)pos.y, (float)pos.z));
+                    (float)startPos.x, (float)startPos.y, (float)startPos.z));
+            properties.apply(runtime);
             runtime.emmit(this, 0);
         }
 
         void kill() {
             if (runtime != null) { runtime.destroy(true); runtime = null; }
+        }
+
+        boolean isAlive() {
+            if (runtime != null && runtime.isAlive()) return true;
+            runtime = null;
+            return false;
+        }
+
+        void applyProperties() {
+            if (runtime != null) properties.apply(runtime);
+        }
+
+        void setCenterLerp(float centerLerp) {
+            this.centerLerp = centerLerp;
+        }
+
+        void setOrbitRadius(float orbitRadius) {
+            def.setOrbitRadius(orbitRadius);
+        }
+
+        void setSpeed(float speed) {
+            vel = vel.scale(this.speed == 0 ? speed : speed / this.speed);
+            this.speed = speed;
+        }
+
+        void setOrbitCenter(Supplier<Vec3> targetSupplier, Vec3 center) {
+            this.targetSupplier = targetSupplier;
+            if (center.equals(currCtr)) return;
+
+            Vec3 oldCenter = currCtr;
+            if (state == State.SPIRAL) {
+                float t = age < 0 ? 0 : Math.min(1f, age / def.convergeTicks);
+                pos = def.spiralPos(t, oldCenter);
+                vel = Vec3.ZERO;
+            } else if (state == State.ORBIT) {
+                pos = def.orbitPos((float) phase, oldCenter);
+                vel = def.orbitVel((float) phase, oldCenter).scale(speed);
+            }
+            prevCtr = center;
+            currCtr = center;
+            state = State.REENTRY;
+        }
+
+        void setAlive(BooleanSupplier alive) {
+            this.alive = alive;
         }
     }
 }

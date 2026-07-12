@@ -1,7 +1,8 @@
 package com.astune.gyromancy.client.entity;
 
 import com.astune.gyromancy.Gyromancy;
-import com.astune.gyromancy.client.effect.FireballSpawnEffect;
+import com.astune.gyromancy.client.effect.EntityEffect;
+import com.astune.gyromancy.client.effect.VortexOrbitEffect;
 import com.astune.gyromancy.client.render.FrameAnimation;
 import com.astune.gyromancy.client.render.ObjFrameModel;
 import com.astune.gyromancy.client.render.RenderAnimation;
@@ -10,8 +11,8 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
-import net.minecraft.client.renderer.entity.ThrownItemRenderer;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
@@ -20,93 +21,88 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Map;
 import java.util.WeakHashMap;
 
-import static java.lang.Math.min;
+import static java.lang.Math.max;
 
-public class FireballRenderer extends ThrownItemRenderer<FireballEntity> {
-    private static final ResourceLocation MODEL_PATH =
-            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "models/entity/fireball");
-    private static final ResourceLocation FALLBACK_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "models/entity/fireball/texture.png");
-    private static final int FULL_BRIGHT = 0x00F000F0;
-    private static final float MODEL_UNIT_SCALE = 1.5F;
+public class FireballRenderer extends EntityRenderer<FireballEntity> {
+    private static final ResourceLocation FIRE_BALL_FX =
+            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fire_ball");
+    private static final ResourceLocation SURROUNDING_FIRE_FX =
+            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "surrounding_fire");
     private static final float MODEL_Y_OFFSET = 0.5F;
     private static final double PARTICLE_PLANE_SIZE = 0.3;
     private static final double MIN_PARTICLE_SCALE = 0.1;
     private static final double PARTICLE_SCALE_RANGE = 1;
-    private ObjFrameModel model;
-    private FrameAnimation animation;
+    private static final Vec3 UP_AXIS = new Vec3(0, 1, 0);
+
     private final Map<FireballEntity, Integer> lastParticleTick = new WeakHashMap<>();
+    private final Map<FireballEntity, VortexOrbitEffect> vortexEffects = new WeakHashMap<>();
+    private final Map<FireballEntity, EntityEffect> bodyEffects = new WeakHashMap<>();
 
     public FireballRenderer(EntityRendererProvider.Context context) {
-        super(context, 1.0F, true);
+        super(context);
     }
 
     @Override
     public void render(FireballEntity entity, float entityYaw, float partialTick, PoseStack poseStack,
                        MultiBufferSource bufferSource, int packedLight) {
-        ObjFrameModel model = model();
-        float ageTicks = entity.tickCount + partialTick;
-        float scale = Math.max(0.1F, entity.getFireballSize()) * MODEL_UNIT_SCALE;
-        boolean renderSpawnEffect = !entity.isFullyGrown();
-        Vec3 effectCenter = entity.getPosition(partialTick).add(0.0F, MODEL_Y_OFFSET / MODEL_UNIT_SCALE * scale, 0.0F);
-        float effectAge = renderSpawnEffect ? ageTicks % Math.max(1, min(32, entity.getGrowthTicks())) : 0.0F;
-        float effectSize = Math.max(0.1F, entity.getFireballSize());
-
-        if (model.hasFrames()) {
-            poseStack.pushPose();
-            poseStack.translate(0.0F, MODEL_Y_OFFSET / MODEL_UNIT_SCALE * scale, 0.0F);
-            poseStack.scale(scale, scale, scale);
-
-            RenderAnimation.State renderAnimation = RenderAnimation.evaluate(ageTicks, java.util.List.of());
-            RenderAnimation.applyPose(poseStack, renderAnimation);
-            model.renderFrame(animation().frame(ageTicks), ageTicks, poseStack.last(), bufferSource,
-                    FULL_BRIGHT, FALLBACK_TEXTURE, renderAnimation);
-
-            poseStack.popPose();
-            flush(bufferSource);
-            if (renderSpawnEffect) {
-                FireballSpawnEffect.INSTANCE.render(poseStack, bufferSource, effectCenter,
-                        effectAge, effectSize, entity.getGrowthTicks());
-            }
-            spawnFlameParticles(entity);
+        if (!entity.isAlive()) {
+            cleanup(entity);
             return;
         }
 
-        poseStack.pushPose();
-        scale = Math.max(0.1F, entity.getFireballSize());
-        poseStack.scale(scale, scale, scale);
-        super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
-        poseStack.popPose();
-        flush(bufferSource);
-        if (renderSpawnEffect) {
-            FireballSpawnEffect.INSTANCE.render(poseStack, bufferSource, effectCenter,
-                    effectAge, effectSize, entity.getGrowthTicks());
+        float size = max(0.1F, entity.getFireballSize());
+        boolean growing = !entity.isFullyGrown();
+
+        // ── body: EntityEffect with fire_ball.fx ──
+        EntityEffect body = bodyEffects.get(entity);
+        if (body == null) {
+            body = new EntityEffect(entity, FIRE_BALL_FX)
+                    .setSize(size)
+                    .setOffset(size * MODEL_Y_OFFSET, size, size * MODEL_Y_OFFSET);
+            body.start();
+            bodyEffects.put(entity, body);
         }
+        else if (growing)  {
+            body.setSize(size).setOffset(size * MODEL_Y_OFFSET, size, size * MODEL_Y_OFFSET);
+            body.tick();
+        }
+
+        // ── spawn vortex: VortexOrbitEffect during growth ──
+        VortexOrbitEffect vortex = vortexEffects.get(entity);
+        float vortexSize = 3f;
+        if (vortex == null && growing) {
+            float targetSize = Math.max(0.1F, entity.getTargetFireballSize());
+            vortex = new VortexOrbitEffect(SURROUNDING_FIRE_FX, entity.level(),
+                    entity::position, 30, 3f, 4f, 60, UP_AXIS, targetSize, 20)
+                    .setOffset(0, targetSize * MODEL_Y_OFFSET, 0)
+                    .setSize(vortexSize)
+                    .setSpeed((float) (max(1, 1/max(0.5, entity.getTargetFireballSize() - 1))))
+                    .setAlive(entity::isAlive);
+            vortex.start();
+            vortexEffects.put(entity, vortex);
+        }
+        if(vortex != null && !growing){
+            vortex.setRate(0f);
+        }
+        if (vortex != null) {
+            //vortex.setSize((float) (vortexSize * (max(0, 0.9 - entity.getFireballSize() / entity.getTargetFireballSize()))));
+            vortex.tick();
+        }
+
+        // ── flame trail particles ──
         spawnFlameParticles(entity);
     }
 
-    private ObjFrameModel model() {
-        if (model == null) {
-            model = ObjFrameModel.load(MODEL_PATH);
-        }
-        return model;
+    @Override
+    public ResourceLocation getTextureLocation(FireballEntity entity) {
+        return null;
     }
 
-    private FrameAnimation animation() {
-        if (animation == null) {
-            animation = createAnimation(model().frameCount());
-        }
-        return animation;
-    }
-
-    private static FrameAnimation createAnimation(int frameCount) {
-        return FrameAnimation.loop(frameCount, 1.0F);
-    }
-
-    private static void flush(MultiBufferSource bufferSource) {
-        if (bufferSource instanceof MultiBufferSource.BufferSource buffer) {
-            buffer.endBatch();
-        }
+    private void cleanup(FireballEntity entity) {
+        EntityEffect body = bodyEffects.remove(entity);
+        if (body != null) body.stop();
+        VortexOrbitEffect vortex = vortexEffects.remove(entity);
+        if (vortex != null) vortex.kill();
     }
 
     private void spawnFlameParticles(FireballEntity entity) {

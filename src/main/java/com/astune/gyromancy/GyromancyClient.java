@@ -7,9 +7,11 @@ import com.astune.gyromancy.client.effect.ClientRayEffects;
 import com.astune.gyromancy.client.effect.FlipbookEffect;
 import com.astune.gyromancy.client.effect.VortexOrbitEffect;
 import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -46,25 +48,34 @@ public class GyromancyClient {
                             )
                     )
                     .then(Commands.literal("vortex")
-                            .executes(ctx -> {
-                                if (testVortex != null) {
-                                    testVortex.kill();
-                                    testVortex = null;
-                                    ctx.getSource().sendSuccess(
-                                            () -> Component.literal("Vortex effect: OFF"), false);
+                            .then(Commands.argument("effect", StringArgumentType.word())
+                                .executes(ctx -> {
+                                    String effect = StringArgumentType.getString(ctx, "effect");
+                                    if (testVortex != null) {
+                                        testVortex.kill();
+                                        testVortex = null;
+                                        if (effect.equals("Disable")){
+                                            ctx.getSource().sendSuccess(
+                                                    () -> Component.literal("Vortex effect: OFF"), false);
+                                            return 1;
+                                        }
+                                    }
+                                    if(!effect.isEmpty()){
+                                        var player = Minecraft.getInstance().player;
+                                        if (player == null) return 0;
+                                        testVortex = new VortexOrbitEffect(
+                                                ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, effect),
+                                                player.level(), player::position,
+                                                30, 3f, 4f, 60,
+                                                new net.minecraft.world.phys.Vec3(0, 1, 0), 2f, 20);
+                                        testVortex.start();
+                                        ctx.getSource().sendSuccess(
+                                                () -> Component.literal("Vortex effect: ON (30 particles)"), false);
+                                        return 1;
+                                    }
                                     return 1;
-                                }
-                                var player = Minecraft.getInstance().player;
-                                if (player == null) return 0;
-                                testVortex = new VortexOrbitEffect(
-                                        player.level(), player::position,
-                                        30, 4f, 60,
-                                        new net.minecraft.world.phys.Vec3(0, 1, 0), 2f);
-                                testVortex.emit();
-                                ctx.getSource().sendSuccess(
-                                        () -> Component.literal("Vortex effect: ON (30 particles)"), false);
-                                return 1;
-                            })
+                                })
+                            )
                     );
             event.getDispatcher().register(node);
             Gyromancy.LOGGER.info("[Gyromancy] Client /gyromancy debug registered");
@@ -79,6 +90,11 @@ public class GyromancyClient {
 
         NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(
                 FlipbookEffect::onRenderLevelStage);
+
+        // ── Vortex effect tick (game-time guard inside) ──
+        NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(e -> {
+            if (testVortex != null) testVortex.tick();
+        });
 
         Gyromancy.LOGGER.info("[Gyromancy] Client handlers wired on NeoForge.EVENT_BUS");
     }
