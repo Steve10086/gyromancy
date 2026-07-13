@@ -27,6 +27,8 @@ import org.jetbrains.annotations.NotNull;
 public class FireballEntity extends Entity {
     private static final EntityDataAccessor<Float> DATA_TARGET_SIZE =
             SynchedEntityData.defineId(FireballEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_CURRENT_SIZE =
+            SynchedEntityData.defineId(FireballEntity.class, EntityDataSerializers.FLOAT);
     private static final int DEFAULT_LIFETIME = 500;
     private static final float SPAWN_SIZE = 0.1F;
     private static final int GROWTH_RATE = 2;
@@ -35,7 +37,6 @@ public class FireballEntity extends Entity {
     private Vec3 acceleration = Vec3.ZERO;
     private Vec3 pendingVelocity = Vec3.ZERO;
     private Vec3 pendingAcceleration = Vec3.ZERO;
-    private float currentSize = SPAWN_SIZE;
     private boolean launched;
     private boolean oldSpawned;
 
@@ -58,6 +59,7 @@ public class FireballEntity extends Entity {
     @Override
     protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
         builder.define(DATA_TARGET_SIZE, SPAWN_SIZE);
+        builder.define(DATA_CURRENT_SIZE, SPAWN_SIZE);
     }
 
     @Override
@@ -139,7 +141,7 @@ public class FireballEntity extends Entity {
     }
 
     public float getFireballSize() {
-        return currentSize;
+        return entityData.get(DATA_CURRENT_SIZE);
     }
 
     public float getTargetFireballSize() {
@@ -147,7 +149,7 @@ public class FireballEntity extends Entity {
     }
 
     public boolean isFullyGrown() {
-        return currentSize >= getTargetFireballSize();
+        return getFireballSize() >= getTargetFireballSize();
     }
 
     public int getGrowthTicks() {
@@ -157,15 +159,16 @@ public class FireballEntity extends Entity {
     public void setFireballSize(float size) {
         float targetSize = Math.max(SPAWN_SIZE, size);
         entityData.set(DATA_TARGET_SIZE, targetSize);
-        currentSize = Math.min(currentSize, targetSize);
+        entityData.set(DATA_CURRENT_SIZE, Math.min(entityData.get(DATA_CURRENT_SIZE), targetSize));
         refreshDimensions();
     }
 
     private void growIntoTargetSize() {
+        float cur = getFireballSize();
         float targetSize = getTargetFireballSize();
-        if (currentSize >= targetSize) return;
+        if (cur >= targetSize) return;
 
-        currentSize = Math.min(targetSize, currentSize + (targetSize - SPAWN_SIZE) * GROWTH_RATE / 100);
+        entityData.set(DATA_CURRENT_SIZE, Math.min(targetSize, cur + (targetSize - SPAWN_SIZE) * GROWTH_RATE / 100));
         refreshDimensions();
     }
 
@@ -173,7 +176,9 @@ public class FireballEntity extends Entity {
     public void onSyncedDataUpdated(@NotNull EntityDataAccessor<?> key) {
         super.onSyncedDataUpdated(key);
         if (DATA_TARGET_SIZE.equals(key)) {
-            currentSize = Math.min(currentSize, getTargetFireballSize());
+            entityData.set(DATA_CURRENT_SIZE, Math.min(getFireballSize(), getTargetFireballSize()));
+            refreshDimensions();
+        } else if (DATA_CURRENT_SIZE.equals(key)) {
             refreshDimensions();
         }
     }
@@ -187,7 +192,7 @@ public class FireballEntity extends Entity {
     @Override
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
         if (tag.contains("Size")) setFireballSize(tag.getFloat("Size"));
-        if (tag.contains("CurrentSize")) currentSize = tag.getFloat("CurrentSize");
+        if (tag.contains("CurrentSize")) entityData.set(DATA_CURRENT_SIZE, tag.getFloat("CurrentSize"));
         if (tag.contains("ExplosionPower")) explosionPower = tag.getFloat("ExplosionPower");
         if (tag.contains("Lifetime")) lifetime = tag.getInt("Lifetime");
         if (tag.contains("AccelX")) {
@@ -205,7 +210,7 @@ public class FireballEntity extends Entity {
     @Override
     protected void addAdditionalSaveData(@NotNull CompoundTag tag) {
         tag.putFloat("Size", getTargetFireballSize());
-        tag.putFloat("CurrentSize", currentSize);
+        tag.putFloat("CurrentSize", getFireballSize());
         tag.putFloat("ExplosionPower", explosionPower);
         tag.putInt("Lifetime", lifetime);
         tag.putDouble("AccelX", acceleration.x);

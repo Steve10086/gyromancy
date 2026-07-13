@@ -42,11 +42,11 @@ public class OldFireballRenderer extends EntityRenderer<OldFireballEntity> {
         if (body == null) {
             body = new EntityEffect(entity, FIRE_BALL_FX)
                     .setSize(size)
-                    .setOffset(size * MODEL_Y_OFFSET, size, size * MODEL_Y_OFFSET);
+                    .setOffset(0, size, 0);
             body.start();
             bodyEffects.put(entity, body);
         } else {
-            //body.setSize(size).setOffset(size * MODEL_Y_OFFSET, size, size * MODEL_Y_OFFSET);
+            body.setSize(size).setOffset(0, size, 0);
             body.tick();
         }
     }

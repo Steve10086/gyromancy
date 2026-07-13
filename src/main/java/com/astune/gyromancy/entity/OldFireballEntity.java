@@ -25,9 +25,11 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 record SmeltTask(ItemStack drop, int totalTime, int elapsed, ItemStack result) {}
 record BlockTasks(int elapsed, List<SmeltTask> tasks) {}
@@ -35,6 +37,12 @@ record BlockTasks(int elapsed, List<SmeltTask> tasks) {}
 public class OldFireballEntity extends Entity {
     private static final EntityDataAccessor<Float> DATA_SIZE =
             SynchedEntityData.defineId(OldFireballEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_CURRENT_SIZE =
+            SynchedEntityData.defineId(OldFireballEntity.class, EntityDataSerializers.FLOAT);
+    private static final float SPAWN_SIZE = 0.1F;
+    private static final float MIN_SIZE = 0.1F;
+    private static final float MERGE_RATE = 0.1F;
+    private static final int GROWTH_RATE = 2;
 
     private final Map<ItemEntity, Integer> itemProgress = new IdentityHashMap<>();
     private final Map<BlockPos, BlockTasks> blockProgress = new HashMap<>();
@@ -50,6 +58,7 @@ public class OldFireballEntity extends Entity {
         this(ModEntities.OLD_FIREBALL.get(), level);
         this.velocity = velocity;
         this.acceleration = acceleration;
+        entityData.set(DATA_CURRENT_SIZE, size);
         entityData.set(DATA_SIZE, size);
         setPos(pos);
         refreshDimensions();
@@ -58,12 +67,14 @@ public class OldFireballEntity extends Entity {
     @Override
     public void tick() {
         super.tick();
+        growIntoTargetSize();
         velocity = velocity.add(acceleration);
         setPos(position().add(velocity));
         if (level().isClientSide) return;
 
-        double r = getFireballSize() / 2.0;
-        var box = getBoundingBox();
+        float target = getTargetSize();
+        double r = target / 2.0;
+        AABB box = getBoundingBox();
 
         // 2. Burn living entities inside
         for (LivingEntity e : level().getEntitiesOfClass(LivingEntity.class, box, e -> e.isAlive() && inSphere(e.position(), r)))
@@ -80,6 +91,51 @@ public class OldFireballEntity extends Entity {
                 .filter(p -> !blockProgress.containsKey(p) && inSphere(p.getCenter(), r))
                 .forEach(this::initBlockTasks);
         new HashMap<>(blockProgress).forEach((p, bt) -> smeltBlock(p, bt));
+
+        // 5. Merge with overlapping OldFireballEntity
+        merge(target, r, box);
+    }
+
+    private void merge(float target, double r, AABB box) {
+        Set<OldFireballEntity> reducedThisTick = new HashSet<>();
+
+        for (OldFireballEntity other : level().getEntitiesOfClass(OldFireballEntity.class, box,
+                e -> e != this && e.isAlive() && inSphere(e.position(), r))) {
+            float otherTarget = other.getTargetSize();
+            if (target < otherTarget || reducedThisTick.contains(other)) continue;
+
+            // Decrease smaller entity's size
+            float newOtherTarget = Math.max(0, otherTarget - MERGE_RATE);
+            other.setTargetSize(newOtherTarget);
+
+            // Transfer volume to larger entity
+            double myR = target / 2.0;
+            double otherR = otherTarget / 2.0;
+            double newOtherR = newOtherTarget / 2.0;
+            double volLost = (4.0 / 3.0) * Math.PI * (otherR * otherR * otherR - newOtherR * newOtherR * newOtherR);
+            double newMyR = Math.cbrt(myR * myR * myR + volLost * 3.0 / (4.0 * Math.PI));
+            setTargetSize((float)(newMyR * 2.0));
+
+            reducedThisTick.add(other);
+
+            if (newOtherTarget < MIN_SIZE) other.discard();
+        }
+
+        for (FireballEntity other : level().getEntitiesOfClass(FireballEntity.class, box,
+                e -> e.isAlive() && inSphere(e.position(), r))) {
+            float otherTarget = other.getFireballSize();
+            if (target < otherTarget || reducedThisTick.contains(other)) continue;
+
+            // discard unstable fireball
+            other.discard();
+
+            // Transfer volume to larger entity
+            double myR = target / 2.0;
+            double otherR = otherTarget / 2.0;
+            double volLost = (4.0 / 3.0) * Math.PI * (otherR * otherR * otherR);
+            double newMyR = Math.cbrt(myR * myR * myR + volLost * 3.0 / (4.0 * Math.PI));
+            setTargetSize((float)(newMyR * 2.0));
+        }
     }
 
     private void initBlockTasks(BlockPos pos) {
@@ -144,21 +200,25 @@ public class OldFireballEntity extends Entity {
 
     @Override
     protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
-        builder.define(DATA_SIZE, 0.0F);
+        builder.define(DATA_SIZE, SPAWN_SIZE);
+        builder.define(DATA_CURRENT_SIZE, SPAWN_SIZE);
     }
 
     @Override
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
-        if (tag.contains("Size")) entityData.set(DATA_SIZE, tag.getFloat("Size"));
+        if (tag.contains("Size")) setTargetSize(tag.getFloat("Size"));
+        if (tag.contains("CurrentSize")) entityData.set(DATA_CURRENT_SIZE, tag.getFloat("CurrentSize"));
         if (tag.contains("VelX"))
             velocity = new Vec3(tag.getDouble("VelX"), tag.getDouble("VelY"), tag.getDouble("VelZ"));
         if (tag.contains("AccelX"))
             acceleration = new Vec3(tag.getDouble("AccelX"), tag.getDouble("AccelY"), tag.getDouble("AccelZ"));
+        refreshDimensions();
     }
 
     @Override
     protected void addAdditionalSaveData(@NotNull CompoundTag tag) {
-        tag.putFloat("Size", getFireballSize());
+        tag.putFloat("Size", getTargetSize());
+        tag.putFloat("CurrentSize", entityData.get(DATA_CURRENT_SIZE));
         tag.putDouble("VelX", velocity.x);
         tag.putDouble("VelY", velocity.y);
         tag.putDouble("VelZ", velocity.z);
@@ -168,17 +228,38 @@ public class OldFireballEntity extends Entity {
     }
 
     private boolean inSphere(Vec3 target, double radius) {
-        return position().distanceToSqr(target.add(0, radius/2, 0)) <= radius * radius;
+        return position().distanceToSqr(target.add(0, -radius/2, 0)) <= radius * radius;
     }
 
     public float getFireballSize() {
+        return entityData.get(DATA_CURRENT_SIZE);
+    }
+
+    public float getTargetSize() {
         return entityData.get(DATA_SIZE);
+    }
+
+    private void setTargetSize(float size) {
+        float targetSize = Math.max(SPAWN_SIZE, size);
+        entityData.set(DATA_SIZE, targetSize);
+        if (entityData.get(DATA_CURRENT_SIZE) > targetSize)
+            entityData.set(DATA_CURRENT_SIZE, targetSize);
+        refreshDimensions();
+    }
+
+    private void growIntoTargetSize() {
+        float cur = entityData.get(DATA_CURRENT_SIZE);
+        float target = getTargetSize();
+        if (cur >= target) return;
+        entityData.set(DATA_CURRENT_SIZE, Math.min(target, cur + (target - SPAWN_SIZE) * GROWTH_RATE / 100));
+        refreshDimensions();
     }
 
     @Override
     public void onSyncedDataUpdated(@NotNull EntityDataAccessor<?> key) {
         super.onSyncedDataUpdated(key);
-        if (DATA_SIZE.equals(key)) refreshDimensions();
+        if (DATA_SIZE.equals(key) || DATA_CURRENT_SIZE.equals(key))
+            refreshDimensions();
     }
 
     @Override
