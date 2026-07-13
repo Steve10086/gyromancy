@@ -32,6 +32,8 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
     private static final double PARTICLE_PLANE_SIZE = 0.3;
     private static final double MIN_PARTICLE_SCALE = 0.1;
     private static final double PARTICLE_SCALE_RANGE = 1;
+
+    protected static final double RENDER_SCALE = 0.5;
     private static final Vec3 UP_AXIS = new Vec3(0, 1, 0);
 
     private final Map<FireballEntity, Integer> lastParticleTick = new WeakHashMap<>();
@@ -50,7 +52,7 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
             return;
         }
 
-        float size = max(0.1F, entity.getFireballSize());
+        float size = (float) (max(0.1F, entity.getFireballSize()) * RENDER_SCALE);
         boolean growing = !entity.isFullyGrown();
 
         // ── body: EntityEffect with fire_ball.fx ──
@@ -58,12 +60,12 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
         if (body == null) {
             body = new EntityEffect(entity, FIRE_BALL_FX)
                     .setSize(size)
-                    .setOffset(size * MODEL_Y_OFFSET, size, size * MODEL_Y_OFFSET);
+                    .setOffset(0, size, 0);
             body.start();
             bodyEffects.put(entity, body);
         }
         else if (growing)  {
-            body.setSize(size).setOffset(size * MODEL_Y_OFFSET, size, size * MODEL_Y_OFFSET);
+            body.setSize(size).setOffset(0, size, 0);
             body.tick();
         }
 

@@ -2,6 +2,7 @@ package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.entity.FireballEntity;
+import com.astune.gyromancy.entity.OldFireballEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -27,4 +28,12 @@ public final class ModEntities {
                     .updateInterval(1)
                     .clientTrackingRange(64)
                     .build(Gyromancy.MODID + ":fireball"));
+
+    public static final Supplier<EntityType<OldFireballEntity>> OLD_FIREBALL =
+            ENTITIES.register("old_fireball", () -> EntityType.Builder
+                    .<OldFireballEntity>of(OldFireballEntity::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F)
+                    .updateInterval(1)
+                    .clientTrackingRange(64)
+                    .build(Gyromancy.MODID + ":old_fireball"));
 }

@@ -11,6 +11,8 @@ import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.ItemSupplier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -22,10 +24,10 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
-public class FireballEntity extends Entity implements ItemSupplier {
+public class FireballEntity extends Entity {
     private static final EntityDataAccessor<Float> DATA_TARGET_SIZE =
             SynchedEntityData.defineId(FireballEntity.class, EntityDataSerializers.FLOAT);
-    private static final int DEFAULT_LIFETIME = 1000;
+    private static final int DEFAULT_LIFETIME = 500;
     private static final float SPAWN_SIZE = 0.1F;
     private static final int GROWTH_RATE = 2;
     private float explosionPower = 1.5F;
@@ -35,6 +37,7 @@ public class FireballEntity extends Entity implements ItemSupplier {
     private Vec3 pendingAcceleration = Vec3.ZERO;
     private float currentSize = SPAWN_SIZE;
     private boolean launched;
+    private boolean oldSpawned;
 
     public FireballEntity(EntityType<FireballEntity> type, Level level) {
         super(type, level);
@@ -65,6 +68,10 @@ public class FireballEntity extends Entity implements ItemSupplier {
             discard();
             return;
         }
+        if (!level().isClientSide && tickCount > lifetime * 0.9 && !oldSpawned) {
+            level().addFreshEntity(new OldFireballEntity(level(), position(), getDeltaMovement(), acceleration, getTargetFireballSize()));
+            oldSpawned = true;
+        }
         if (!isFullyGrown()) {
             setDeltaMovement(Vec3.ZERO);
             return;
@@ -86,7 +93,17 @@ public class FireballEntity extends Entity implements ItemSupplier {
             return;
         }
 
+        burnEntitiesInPath(velocity);
         setDeltaMovement(velocity.add(acceleration));
+    }
+
+    private void burnEntitiesInPath(Vec3 velocity) {
+        var searchBox = getBoundingBox().expandTowards(velocity).inflate(0.3);
+        level().getEntitiesOfClass(Entity.class, searchBox, e -> e != this).forEach(entity -> {
+            if (entity instanceof ItemEntity || entity instanceof AbstractArrow) {
+                entity.setRemainingFireTicks(200);
+            }
+        });
     }
 
     private void launchIfReady() {
@@ -201,10 +218,5 @@ public class FireballEntity extends Entity implements ItemSupplier {
         tag.putDouble("PendingAccelY", pendingAcceleration.y);
         tag.putDouble("PendingAccelZ", pendingAcceleration.z);
         tag.putBoolean("Launched", launched);
-    }
-
-    @Override
-    public @NotNull ItemStack getItem() {
-        return new ItemStack(Items.FIRE_CHARGE);
     }
 }
