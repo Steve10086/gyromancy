@@ -33,4 +33,20 @@ public record SymbolMatch(
     public boolean isConfident(float threshold) {
         return confidence >= threshold;
     }
+
+    @Override
+    public String toString() {
+        return "SymbolMatch{" +
+                "symbolId=" + symbolId +
+                ", confidence=" + confidence +
+                ", rotationDegrees=" + rotationDegrees +
+                ", mirrored=" + mirrored +
+                ", scale=" + scale +
+                ", front=" + front +
+                ", length=" + length +
+                ", width=" + width +
+                ", centerX=" + centerX +
+                ", centerY=" + centerY +
+                '}';
+    }
 }

@@ -1,16 +1,18 @@
 package com.astune.gyromancy.symbol;
 
+import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.util.GeometryUtils;
 import com.astune.gyromancy.util.GeometryPreprocessUtils;
 import com.astune.gyromancy.util.GeometryPreprocessUtils.*;
 import com.astune.gyromancy.util.TemplateLoader;
 import net.minecraft.resources.ResourceLocation;
+import org.slf4j.Logger;
 
 import java.util.*;
 
 /** Skeleton-graph-based symbol matcher using the hard/soft pipeline proven by SymbolMatcherTest. */
 public final class SkeletonMatcher {
-
+    private static final Logger LOGGER = Gyromancy.LOGGER;
     private static final SkeletonMatcher INSTANCE = new SkeletonMatcher();
 
     public static final SoftThresholds DEFAULT_THRESHOLDS = new SoftThresholds(
@@ -51,9 +53,12 @@ public final class SkeletonMatcher {
         for (var e : templates.entrySet()) {
             TemplateEntry template = e.getValue();
             SkeletonStats tpl = template.stats();
+            LOGGER.debug("[SkeletonMatcher] " + e.getKey());
             if (!passesHardLayers(tpl, target)) continue;
 
             MatchScore score = minGraphEditMatch(tpl, target);
+            LOGGER.debug(" >> " + score);
+
             if (!passesSoftThresholds(template.thresholds(), score)) continue;
             results.add(new Match(e.getKey(), (float) score.combined(), (float) score.rotationDegrees()));
         }

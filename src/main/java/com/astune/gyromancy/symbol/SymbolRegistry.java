@@ -39,11 +39,16 @@ public final class SymbolRegistry {
     public static final int EARTH_GLYPH_COLOR = 0xFF8B4513;
     public static final int WIND_GLYPH_COLOR = 0xFF88FFFF;
     public static final int STAR_GLYPH_COLOR = 0xFFFFFF88;
+    public static final int DARK_GLYPH_COLOR = 0xFF121116;
+    public static final int MANA_GLYPH_COLOR = 0xFF9d7aa7;
 
     // ═══════════════════ Configuration point — add new symbols here ═══════════════════
 
     private static final SkeletonMatcher.SoftThresholds ARROW_THRESHOLDS =
             new SkeletonMatcher.SoftThresholds(0.70, 0.75, 0.70, 0.70, 0.75);
+
+    private static final SkeletonMatcher.SoftThresholds REVERT_THRESHOLDS =
+            new SkeletonMatcher.SoftThresholds(0.70, 0.9, 0.70, 0.70, 0.55);
     private static final SkeletonMatcher.SoftThresholds CIRCLE_OUTER_THRESHOLDS =
             new SkeletonMatcher.SoftThresholds(0.95, 0.95, 0.95, 0.95, 0.95);
 
@@ -94,14 +99,15 @@ public final class SymbolRegistry {
             new SymbolDef("arrow",          0, false, SymbolRole.PARAMETER_RUNE, ARROW_THRESHOLDS),
             new SymbolDef("circle_outer",   0, false, SymbolRole.OUTER_CIRCLE, CIRCLE_OUTER_THRESHOLDS),
             new SymbolDef("earth",          4, false, SymbolRole.CENTER_SYMBOL, EARTH_GLYPH_COLOR),
-            new SymbolDef("figure_8",       0, false, SymbolRole.PARAMETER_RUNE),
+            new SymbolDef("dark",       0, false, SymbolRole.CENTER_SYMBOL, DARK_GLYPH_COLOR),
             new SymbolDef("fire",           3, false, SymbolRole.CENTER_SYMBOL,
                     SkeletonMatcher.DEFAULT_THRESHOLDS, FIRE_GLYPH_COLOR,
                     SymbolRegistry::launchFireball, NOOP_END),
-            new SymbolDef("revert",         0, false, SymbolRole.PARAMETER_RUNE),
+            new SymbolDef("revert",         0, false, SymbolRole.PARAMETER_RUNE, REVERT_THRESHOLDS),
             new SymbolDef("star",           5, true,  SymbolRole.CENTER_SYMBOL, STAR_GLYPH_COLOR),
             new SymbolDef("water",          0, false, SymbolRole.CENTER_SYMBOL, WATER_GLYPH_COLOR),
             new SymbolDef("wind",           0, true,  SymbolRole.CENTER_SYMBOL, WIND_GLYPH_COLOR),
+            new SymbolDef("mana",       0, false, SymbolRole.CENTER_SYMBOL, MANA_GLYPH_COLOR),
     };
 
     // ═══════════════════ Registration ═══════════════════

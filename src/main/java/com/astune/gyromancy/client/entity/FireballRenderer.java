@@ -33,7 +33,7 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
     private static final double MIN_PARTICLE_SCALE = 0.1;
     private static final double PARTICLE_SCALE_RANGE = 1;
 
-    protected static final double RENDER_SCALE = 0.5;
+    protected static final double RENDER_SCALE = 0.6;
     private static final Vec3 UP_AXIS = new Vec3(0, 1, 0);
 
     private final Map<FireballEntity, Integer> lastParticleTick = new WeakHashMap<>();
@@ -71,7 +71,7 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
 
         // ── spawn vortex: VortexOrbitEffect during growth ──
         VortexOrbitEffect vortex = vortexEffects.get(entity);
-        float vortexSize = 3f;
+        float vortexSize = 1f;
         if (vortex == null && growing) {
             float targetSize = Math.max(0.1F, entity.getTargetFireballSize());
             vortex = new VortexOrbitEffect(SURROUNDING_FIRE_FX, entity.level(),

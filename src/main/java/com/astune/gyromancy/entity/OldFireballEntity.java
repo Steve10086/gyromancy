@@ -2,10 +2,14 @@ package com.astune.gyromancy.entity;
 
 import com.astune.gyromancy.registry.ModEntities;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
@@ -18,7 +22,9 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.FireBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -32,7 +38,7 @@ import java.util.Map;
 import java.util.Set;
 
 record SmeltTask(ItemStack drop, int totalTime, int elapsed, ItemStack result) {}
-record BlockTasks(int elapsed, List<SmeltTask> tasks) {}
+record BlockTasks(int elapsed, List<SmeltTask> tasks, BlockState initial) {}
 
 public class OldFireballEntity extends Entity {
     private static final EntityDataAccessor<Float> DATA_SIZE =
@@ -70,6 +76,7 @@ public class OldFireballEntity extends Entity {
         growIntoTargetSize();
         velocity = velocity.add(acceleration);
         setPos(position().add(velocity));
+        spawnSmokeParticles();
         if (level().isClientSide) return;
 
         float target = getTargetSize();
@@ -86,14 +93,25 @@ public class OldFireballEntity extends Entity {
             smeltItem(e, 1f);
 
         // 4. Smelt blocks inside
-        blockProgress.keySet().removeIf(p -> !inSphere(p.getCenter(), r));
+        blockProgress.keySet().removeIf(p -> level().getBlockState(p) != blockProgress.get(p).initial());
         BlockPos.betweenClosedStream(box).map(BlockPos::immutable)
                 .filter(p -> !blockProgress.containsKey(p) && inSphere(p.getCenter(), r))
                 .forEach(this::initBlockTasks);
+        BlockPos.betweenClosedStream(box).map(BlockPos::immutable)
+                .filter(p -> level().getBlockState(p).isAir() && inSphere(p.getCenter(), r))
+                .forEach(this::tryPutFire);
         new HashMap<>(blockProgress).forEach((p, bt) -> smeltBlock(p, bt));
 
         // 5. Merge with overlapping OldFireballEntity
         merge(target, r, box);
+    }
+
+    private void tryPutFire(BlockPos pos){
+        if(random.nextDouble() < 0.001){
+            BlockState fire = BaseFireBlock.getState(level(), pos);
+            if (fire.canSurvive(level(), pos))
+                level().setBlock(pos, fire, 3);
+        }
     }
 
     private void merge(float target, double r, AABB box) {
@@ -138,6 +156,37 @@ public class OldFireballEntity extends Entity {
         }
     }
 
+    private void spawnSmokeParticles() {
+        if (!(level() instanceof ServerLevel sl)) return;
+        var players = sl.players();
+        if (players.isEmpty()) return;
+
+        // Items: 2 particles/tick at item position
+        for (ItemEntity item : itemProgress.keySet()) {
+            Vec3 p = item.position();
+            var packet = new ClientboundLevelParticlesPacket(
+                    ParticleTypes.SMOKE, true, p.x, p.y + 0.4, p.z, 0.0f, 0.0f, 0.0f, 0.0f, 2);
+            for (var player : players) player.connection.send(packet);
+        }
+
+        // Blocks: 1 particle/tick per exposed face, random position on the face
+        for (BlockPos bpos : blockProgress.keySet()) {
+            Vec3 center = Vec3.atCenterOf(bpos);
+            for (Direction dir : Direction.values()) {
+                if (!level().getBlockState(bpos.relative(dir)).isAir()) continue;
+                double px = center.x + dir.getStepX() * 0.5;
+                double py = center.y + dir.getStepY() * 0.5;
+                double pz = center.z + dir.getStepZ() * 0.5;
+                if (dir.getAxis() != Direction.Axis.X) px += (random.nextDouble() - 0.5);
+                if (dir.getAxis() != Direction.Axis.Y) py += (random.nextDouble() - 0.5);
+                if (dir.getAxis() != Direction.Axis.Z) pz += (random.nextDouble() - 0.5);
+                var packet = new ClientboundLevelParticlesPacket(
+                        ParticleTypes.SMOKE, true, px, py, pz, 0.0f, 0.0f, 0.0f, 0.0f, 1);
+                for (var player : players) player.connection.send(packet);
+            }
+        }
+    }
+
     private void initBlockTasks(BlockPos pos) {
         BlockState state = level().getBlockState(pos);
         if (state.isAir()) return;
@@ -155,7 +204,7 @@ public class OldFireballEntity extends Entity {
         out = out.copyWithCount(out.getCount() * stack.getCount());
 
         blockProgress.put(pos, new BlockTasks(0,
-                List.of(new SmeltTask(stack, recipe.getCookingTime(), 0, out))));
+                List.of(new SmeltTask(stack, recipe.getCookingTime(), 0, out)), state));
     }
 
     private void smeltItem(ItemEntity item, Float speed) {
@@ -181,7 +230,7 @@ public class OldFireballEntity extends Entity {
         int newElapsed = bt.elapsed() + 1;
         int maxTime = bt.tasks().stream().mapToInt(SmeltTask::totalTime).max().orElse(0);
         if (newElapsed < maxTime) {
-            blockProgress.put(pos, new BlockTasks(newElapsed, bt.tasks()));
+            blockProgress.put(pos, new BlockTasks(newElapsed, bt.tasks(), bt.initial()));
             return;
         }
         blockProgress.remove(pos);
@@ -228,7 +277,7 @@ public class OldFireballEntity extends Entity {
     }
 
     private boolean inSphere(Vec3 target, double radius) {
-        return position().distanceToSqr(target.add(0, -radius/2, 0)) <= radius * radius;
+        return position().add(0, radius, 0).distanceToSqr(target) <= radius * radius;
     }
 
     public float getFireballSize() {
