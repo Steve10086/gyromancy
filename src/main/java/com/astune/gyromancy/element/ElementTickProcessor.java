@@ -1,5 +1,6 @@
 package com.astune.gyromancy.element;
 
+import com.astune.gyromancy.Config;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.network.SyncDebugElementPacket;
 import net.minecraft.core.BlockPos;
@@ -55,6 +56,8 @@ public final class ElementTickProcessor {
     }
 
     private static int process(ServerLevel level) {
+        if(!Config.ENABLE_ELEMENT_TICK.get()) return 0;
+
         int n = 0;
         if (tick % 10 == 0) {
             for (ChunkPos cp : ElementChunkEventHandler.getActiveChunkPositions(level.dimension())) {

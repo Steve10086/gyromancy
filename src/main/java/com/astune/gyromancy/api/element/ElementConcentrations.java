@@ -66,8 +66,9 @@ public record ElementConcentrations(long[] values, long[] derivatives) {
     }
 
     // ── Decay: bell‑shaped above default, 25 % recovery below ──
-    private static final long BELL_HALF = 500_000L;
-    private static final long MIN_RATE = 1, MAX_RATE = 5; // per‑mille
+    private static final long BELL_HALF = 50_000L;
+    private static final long LOG_DECAY_THRESHOLD = 100_000L;
+    private static final long MIN_RATE = 1, MAX_RATE = 50; // per‑mille
 
     static long bellDecay(long excess) {
         if (excess <= 0) return 0;
@@ -75,10 +76,12 @@ public record ElementConcentrations(long[] values, long[] derivatives) {
         if (excess <= BELL_HALF) {
             rate = MIN_RATE + (MAX_RATE - MIN_RATE) * excess / BELL_HALF;
         } else {
-            rate = MAX_RATE - (MAX_RATE - MIN_RATE) * (excess - BELL_HALF) / BELL_HALF;
-            if (rate < MIN_RATE) rate = MIN_RATE;
+            rate = MAX_RATE;
         }
-        return Math.max(1, excess * rate / 1000); // ponytail: floor→1 prevents permanent residue when excess < 1000
+        long decay = excess * rate / 1000;
+        if (excess > LOG_DECAY_THRESHOLD)
+            decay += (long) (excess - LOG_DECAY_THRESHOLD - Math.ceil(Math.log(excess - LOG_DECAY_THRESHOLD + 1)));
+        return Math.max(1, decay); // ponytail: floor→1 prevents permanent residue when excess < 1000
     }
 
     public ElementConcentrations decayAndRecover(ElementConcentrations defaults) {

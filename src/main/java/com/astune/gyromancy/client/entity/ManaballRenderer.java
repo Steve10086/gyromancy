@@ -2,6 +2,7 @@ package com.astune.gyromancy.client.entity;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.client.effect.EntityEffect;
+import com.astune.gyromancy.entity.ManaballEntity;
 import com.astune.gyromancy.entity.OldFireballEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -15,19 +16,19 @@ import java.util.WeakHashMap;
 import static com.astune.gyromancy.client.entity.FireballRenderer.RENDER_SCALE;
 import static java.lang.Math.max;
 
-public class OldFireballRenderer extends EntityRenderer<OldFireballEntity> {
+public class ManaballRenderer extends EntityRenderer<ManaballEntity> {
     private static final ResourceLocation FIRE_BALL_FX =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fire_ball_old");
     private static final float MODEL_Y_OFFSET = 0.5F;
 
-    private final Map<OldFireballEntity, EntityEffect> bodyEffects = new WeakHashMap<>();
+    private final Map<ManaballEntity, EntityEffect> bodyEffects = new WeakHashMap<>();
 
-    public OldFireballRenderer(EntityRendererProvider.Context context) {
+    public ManaballRenderer(EntityRendererProvider.Context context) {
         super(context);
     }
 
     @Override
-    public void render(OldFireballEntity entity, float entityYaw, float partialTick, PoseStack poseStack,
+    public void render(ManaballEntity entity, float entityYaw, float partialTick, PoseStack poseStack,
                        MultiBufferSource bufferSource, int packedLight) {
         if (!entity.isAlive()) {
             EntityEffect body = bodyEffects.remove(entity);
@@ -41,18 +42,18 @@ public class OldFireballRenderer extends EntityRenderer<OldFireballEntity> {
         EntityEffect body = bodyEffects.get(entity);
         if (body == null) {
             body = new EntityEffect(entity, FIRE_BALL_FX)
-                    .setSize(size)
+                    .setSize(0.1f)
                     .setOffset(0, size, 0);
             body.start();
             bodyEffects.put(entity, body);
         } else {
-            body.setSize(size).setOffset(0, size, 0);
+            body.setOffset(0, size, 0);
             body.tick();
         }
     }
 
     @Override
-    public ResourceLocation getTextureLocation(OldFireballEntity entity) {
+    public ResourceLocation getTextureLocation(ManaballEntity entity) {
         return null;
     }
 }

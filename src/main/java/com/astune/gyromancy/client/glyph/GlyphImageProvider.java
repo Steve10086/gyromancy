@@ -3,7 +3,7 @@ package com.astune.gyromancy.client.glyph;
 import com.astune.gyromancy.api.symbol.SymbolTemplate;
 import com.astune.gyromancy.registry.GyromancyRegistries;
 import com.astune.gyromancy.symbol.ManaPixelDetector;
-import com.astune.gyromancy.symbol.SymbolRegistry;
+import com.astune.gyromancy.symbol.SymbolCatalog;
 import com.astune.painter.api.CanvasFace;
 import com.astune.painter.api.IPixelMatrix;
 import com.astune.painter.api.imageProvider.CanvasImageProvider;
@@ -68,7 +68,7 @@ public final class GlyphImageProvider implements CanvasImageProvider {
     public static int glyphColor(int symbolValue) {
         int registryId = symbolValue - 1;
         SymbolTemplate template = GyromancyRegistries.SYMBOL.byId(registryId);
-        return template != null ? template.glyphColor() : SymbolRegistry.DEFAULT_GLYPH_COLOR;
+        return template != null ? template.glyphColor() : SymbolCatalog.DEFAULT_GLYPH_COLOR;
     }
 
     private static int argbToAbgr(int argb) {

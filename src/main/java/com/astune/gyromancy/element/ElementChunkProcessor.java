@@ -1,5 +1,6 @@
 package com.astune.gyromancy.element;
 
+import com.astune.gyromancy.Config;
 import com.astune.gyromancy.api.element.ElementConcentrations;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.element.event.*;
@@ -52,6 +53,11 @@ public final class ElementChunkProcessor {
         if (decred.isEmpty()) {
             accessor.gyromancy$setElementOverrides(null);
             ElementChunkEventHandler.markInactive(chunk);
+            return;
+        }
+        if (!Config.ENABLE_ELEMENT_DIFFUSION.get()) {
+            accessor.gyromancy$setElementOverrides(decred);
+            ElementChunkEventHandler.markActive(chunk);
             return;
         }
 

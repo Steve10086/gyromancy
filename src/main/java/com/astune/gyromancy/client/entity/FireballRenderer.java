@@ -3,9 +3,6 @@ package com.astune.gyromancy.client.entity;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.client.effect.EntityEffect;
 import com.astune.gyromancy.client.effect.VortexOrbitEffect;
-import com.astune.gyromancy.client.render.FrameAnimation;
-import com.astune.gyromancy.client.render.ObjFrameModel;
-import com.astune.gyromancy.client.render.RenderAnimation;
 import com.astune.gyromancy.entity.FireballEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
@@ -52,7 +49,7 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
             return;
         }
 
-        float size = (float) (max(0.1F, entity.getFireballSize()) * RENDER_SCALE);
+        float size = (float) (max(0.1F, entity.getBallSize()) * RENDER_SCALE);
         boolean growing = !entity.isFullyGrown();
 
         // ── body: EntityEffect with fire_ball.fx ──
@@ -73,12 +70,12 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
         VortexOrbitEffect vortex = vortexEffects.get(entity);
         float vortexSize = 1f;
         if (vortex == null && growing) {
-            float targetSize = Math.max(0.1F, entity.getTargetFireballSize());
+            float targetSize = Math.max(0.1F, entity.getTargetBallSize());
             vortex = new VortexOrbitEffect(SURROUNDING_FIRE_FX, entity.level(),
                     entity::position, 30, 3f, 4f, 60, UP_AXIS, targetSize, 20)
                     .setOffset(0, targetSize * MODEL_Y_OFFSET, 0)
                     .setSize(vortexSize)
-                    .setSpeed((float) (max(1, 1/max(0.5, entity.getTargetFireballSize() - 1))))
+                    .setSpeed((float) (max(1, 1/max(0.5, entity.getTargetBallSize() - 1))))
                     .setAlive(entity::isAlive);
             vortex.start();
             vortexEffects.put(entity, vortex);
@@ -116,7 +113,7 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
         Vec3 normal = velocity.normalize();
         Vec3 right = stableAxis(normal);
         Vec3 up = normal.cross(right).normalize();
-        double halfSide = entity.getFireballSize() * PARTICLE_PLANE_SIZE * 0.5;
+        double halfSide = entity.getBallSize() * PARTICLE_PLANE_SIZE * 0.5;
         int count = 2 + random.nextInt(3);
 
         for (int i = 0; i < count; i++) {
@@ -127,7 +124,7 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
                     ParticleTypes.FLAME, pos.x, pos.y, pos.z,
                     velocity.x * 0.02, velocity.y * 0.02, velocity.z * 0.02);
             if (particle != null) {
-                particle.scale((float)(entity.getFireballSize()
+                particle.scale((float)(entity.getBallSize()
                         * (MIN_PARTICLE_SCALE + random.nextDouble() * PARTICLE_SCALE_RANGE)));
             }
         }

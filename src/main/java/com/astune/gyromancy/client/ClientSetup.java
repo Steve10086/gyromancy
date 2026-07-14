@@ -2,6 +2,7 @@ package com.astune.gyromancy.client;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.client.entity.FireballRenderer;
+import com.astune.gyromancy.client.entity.ManaballRenderer;
 import com.astune.gyromancy.client.entity.OldFireballRenderer;
 import com.astune.gyromancy.client.glyph.GlyphImageProvider;
 import com.astune.gyromancy.client.glyph.GlyphRenderer;
@@ -32,5 +33,6 @@ public final class ClientSetup {
     static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.FIREBALL.get(), FireballRenderer::new);
         event.registerEntityRenderer(ModEntities.OLD_FIREBALL.get(), OldFireballRenderer::new);
+        event.registerEntityRenderer(ModEntities.MANABALL.get(), ManaballRenderer::new);
     }
 }

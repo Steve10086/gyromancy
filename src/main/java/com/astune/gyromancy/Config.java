@@ -17,9 +17,13 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 public class Config {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
-    public static final ModConfigSpec.BooleanValue LOG_DIRT_BLOCK = BUILDER
-            .comment("Whether to log the dirt block on common setup")
-            .define("logDirtBlock", true);
+    public static final ModConfigSpec.BooleanValue ENABLE_ELEMENT_TICK = BUILDER
+            .comment("Whether to enable element sparing behaviour")
+            .define("enableElementTick", true);
+
+    public static final ModConfigSpec.BooleanValue ENABLE_ELEMENT_DIFFUSION = BUILDER
+            .comment("Whether elements spread to nearby positions during element ticks")
+            .define("enableElementDiffusion", true);
 
     public static final ModConfigSpec.IntValue MAGIC_NUMBER = BUILDER
             .comment("A magic number")

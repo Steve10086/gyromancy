@@ -74,7 +74,7 @@ public class SymbolMatcherTest {
 
                 SkeletonMatcher.MatchScore score = SkeletonMatcher.minGraphEditMatch(tpl, testStats);
                 double[] scores = toDebugScores(score);
-                SkeletonMatcher.SoftThresholds thresholds = SymbolRegistry.thresholdsFor(entry.getKey());
+                SkeletonMatcher.SoftThresholds thresholds = SymbolCatalog.thresholdsFor(entry.getKey());
                 if (SkeletonMatcher.passesSoftThresholds(thresholds, score)) {
                     passed.put(entry.getKey(), scores);
                 } else {
@@ -125,8 +125,8 @@ public class SymbolMatcherTest {
         }
 
         SkeletonMatcher.SoftThresholds defaults = SkeletonMatcher.DEFAULT_THRESHOLDS;
-        SkeletonMatcher.SoftThresholds arrow = SymbolRegistry.thresholdsFor("arrow");
-        SkeletonMatcher.SoftThresholds circleOuter = SymbolRegistry.thresholdsFor("circle_outer");
+        SkeletonMatcher.SoftThresholds arrow = SymbolCatalog.thresholdsFor("arrow");
+        SkeletonMatcher.SoftThresholds circleOuter = SymbolCatalog.thresholdsFor("circle_outer");
         sb.append(String.format("%nDefault soft thresholds: segment>=%.2f  length>=%.2f  turn>=%.2f  angle>=%.2f  edit>=%.2f%n",
                 defaults.segment(), defaults.length(), defaults.turning(),
                 defaults.endpointAngle(), defaults.edit()));
@@ -191,7 +191,7 @@ public class SymbolMatcherTest {
     }
 
     private static String failedSoftMetrics(String label, double[] s) {
-        SkeletonMatcher.SoftThresholds t = SymbolRegistry.thresholdsFor(label);
+        SkeletonMatcher.SoftThresholds t = SymbolCatalog.thresholdsFor(label);
         List<String> failed = new ArrayList<>();
         if (s[1] < t.segment()) failed.add("segment");
         if (s[2] < t.length()) failed.add("length");

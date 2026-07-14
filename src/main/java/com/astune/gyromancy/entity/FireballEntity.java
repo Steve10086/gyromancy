@@ -1,21 +1,14 @@
 package com.astune.gyromancy.entity;
 
+import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import com.astune.gyromancy.registry.ModEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.network.syncher.EntityDataSerializers;
-import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.AbstractArrow;
-import net.minecraft.world.entity.projectile.ItemSupplier;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseFireBlock;
@@ -24,14 +17,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
-public class FireballEntity extends Entity {
-    private static final EntityDataAccessor<Float> DATA_TARGET_SIZE =
-            SynchedEntityData.defineId(FireballEntity.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<Float> DATA_CURRENT_SIZE =
-            SynchedEntityData.defineId(FireballEntity.class, EntityDataSerializers.FLOAT);
+public class FireballEntity extends MagicBallEntity {
     private static final int DEFAULT_LIFETIME = 500;
-    private static final float SPAWN_SIZE = 0.1F;
-    private static final int GROWTH_RATE = 2;
     private float explosionPower = 1.5F;
     private int lifetime = DEFAULT_LIFETIME;
     private Vec3 acceleration = Vec3.ZERO;
@@ -42,24 +29,17 @@ public class FireballEntity extends Entity {
 
     public FireballEntity(EntityType<FireballEntity> type, Level level) {
         super(type, level);
-        this.noPhysics = true;
     }
 
     public FireballEntity(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
         this(ModEntities.FIREBALL.get(), level);
-        setFireballSize(size);
+        setBallSize(size);
         this.explosionPower = Math.max(1.0F, size);
         this.pendingVelocity = velocity;
         this.pendingAcceleration = acceleration;
         this.acceleration = Vec3.ZERO;
         setPos(pos);
         setDeltaMovement(Vec3.ZERO);
-    }
-
-    @Override
-    protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
-        builder.define(DATA_TARGET_SIZE, SPAWN_SIZE);
-        builder.define(DATA_CURRENT_SIZE, SPAWN_SIZE);
     }
 
     @Override
@@ -71,7 +51,7 @@ public class FireballEntity extends Entity {
             return;
         }
         if (!level().isClientSide && tickCount > lifetime * 0.9 && !oldSpawned) {
-            level().addFreshEntity(new OldFireballEntity(level(), position(), getDeltaMovement(), acceleration, getTargetFireballSize()));
+            level().addFreshEntity(new OldFireballEntity(level(), position(), getDeltaMovement(), acceleration, getTargetBallSize()));
             oldSpawned = true;
         }
         if (!isFullyGrown()) {
@@ -140,59 +120,9 @@ public class FireballEntity extends Entity {
         }
     }
 
-    public float getFireballSize() {
-        return entityData.get(DATA_CURRENT_SIZE);
-    }
-
-    public float getTargetFireballSize() {
-        return entityData.get(DATA_TARGET_SIZE);
-    }
-
-    public boolean isFullyGrown() {
-        return getFireballSize() >= getTargetFireballSize();
-    }
-
-    public int getGrowthTicks() {
-        return getTargetFireballSize() <= SPAWN_SIZE ? 0 : (int)Math.ceil(100.0F / GROWTH_RATE);
-    }
-
-    public void setFireballSize(float size) {
-        float targetSize = Math.max(SPAWN_SIZE, size);
-        entityData.set(DATA_TARGET_SIZE, targetSize);
-        entityData.set(DATA_CURRENT_SIZE, Math.min(entityData.get(DATA_CURRENT_SIZE), targetSize));
-        refreshDimensions();
-    }
-
-    private void growIntoTargetSize() {
-        float cur = getFireballSize();
-        float targetSize = getTargetFireballSize();
-        if (cur >= targetSize) return;
-
-        entityData.set(DATA_CURRENT_SIZE, Math.min(targetSize, cur + (targetSize - SPAWN_SIZE) * GROWTH_RATE / 100));
-        refreshDimensions();
-    }
-
-    @Override
-    public void onSyncedDataUpdated(@NotNull EntityDataAccessor<?> key) {
-        super.onSyncedDataUpdated(key);
-        if (DATA_TARGET_SIZE.equals(key)) {
-            entityData.set(DATA_CURRENT_SIZE, Math.min(getFireballSize(), getTargetFireballSize()));
-            refreshDimensions();
-        } else if (DATA_CURRENT_SIZE.equals(key)) {
-            refreshDimensions();
-        }
-    }
-
-    @Override
-    public @NotNull EntityDimensions getDimensions(@NotNull Pose pose) {
-        float size = getFireballSize();
-        return EntityDimensions.scalable(size, size);
-    }
-
     @Override
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
-        if (tag.contains("Size")) setFireballSize(tag.getFloat("Size"));
-        if (tag.contains("CurrentSize")) entityData.set(DATA_CURRENT_SIZE, tag.getFloat("CurrentSize"));
+        super.readAdditionalSaveData(tag);
         if (tag.contains("ExplosionPower")) explosionPower = tag.getFloat("ExplosionPower");
         if (tag.contains("Lifetime")) lifetime = tag.getInt("Lifetime");
         if (tag.contains("AccelX")) {
@@ -209,8 +139,7 @@ public class FireballEntity extends Entity {
 
     @Override
     protected void addAdditionalSaveData(@NotNull CompoundTag tag) {
-        tag.putFloat("Size", getTargetFireballSize());
-        tag.putFloat("CurrentSize", getFireballSize());
+        super.addAdditionalSaveData(tag);
         tag.putFloat("ExplosionPower", explosionPower);
         tag.putInt("Lifetime", lifetime);
         tag.putDouble("AccelX", acceleration.x);

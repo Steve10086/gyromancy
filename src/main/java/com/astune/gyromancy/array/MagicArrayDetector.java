@@ -9,6 +9,7 @@ import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.registry.ModAttachments;
+import com.astune.gyromancy.registry.ModSymbols;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
 import com.astune.gyromancy.symbol.FloodFillExtractor;
 import com.astune.gyromancy.symbol.FloodFillScheduler;
@@ -16,8 +17,8 @@ import com.astune.gyromancy.symbol.GlyphChunkStorage;
 import com.astune.gyromancy.symbol.GlyphMarker;
 import com.astune.gyromancy.symbol.InteriorValidator;
 import com.astune.gyromancy.symbol.ManaPixelDetector;
+import com.astune.gyromancy.symbol.SymbolCatalog;
 import com.astune.gyromancy.symbol.SymbolRecognizer;
-import com.astune.gyromancy.symbol.SymbolRegistry;
 import com.astune.gyromancy.network.SyncArrayPacket;
 import com.astune.gyromancy.network.SyncGlyphPacket;
 import com.astune.painter.api.CanvasData;
@@ -189,7 +190,7 @@ public final class MagicArrayDetector {
             ArrayObject arr = mgr.getArrayForGlyph(glyph.glyphUuid());
             if (arr != null && tornDownArrays.add(arr.arrayId())) {
                 List<ParameterRune> runeParams = toRuneParams(arr.runeGlyphs());
-                SymbolRegistry.EndEffect end = SymbolRegistry.getEndEffect(arr.centerGlyph().symbolId());
+                SymbolCatalog.EndEffect end = SymbolCatalog.getEndEffect(arr.centerGlyph().symbolId());
                 end.execute(level, arr.circleGlyph().worldPos(), runeParams, arr.scratchData());
                 Gyromancy.LOGGER.info("[MagicArrayDetector] Array deactivated: center={}",
                         arr.centerGlyph().symbolId());
@@ -327,7 +328,7 @@ public final class MagicArrayDetector {
         //    return;
         //}
 
-        int symbolLayerValue = SymbolRegistry.symbolLayerValueFor(best.symbolId());
+        int symbolLayerValue = ModSymbols.symbolLayerValueFor(best.symbolId());
         if (symbolLayerValue <= 0) {
             Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} REJECTED: missing symbol registry id",
                     best.symbolId());
@@ -387,7 +388,7 @@ public final class MagicArrayDetector {
         }
 
         // Store circle as a PositionedGlyph for invalidation binding
-        int circleSymbolLayer = SymbolRegistry.symbolLayerValueFor(best.symbolId());
+        int circleSymbolLayer = ModSymbols.symbolLayerValueFor(best.symbolId());
         int circleId = mgr.nextGlyphId();
         GlyphMarker.markConsumed(glyph, circleId, circleSymbolLayer, level);
         syncAffectedCanvases(glyph, level);
@@ -412,7 +413,7 @@ public final class MagicArrayDetector {
                 UUID.randomUUID(), circleGlyph, centerGlyph, runes, scratchData);
         mgr.registerArrayObj(arr);
 
-        SymbolRegistry.CenterEffect effect = SymbolRegistry.getCenterEffect(centerGlyph.symbolId());
+        SymbolCatalog.CenterEffect effect = SymbolCatalog.getCenterEffect(centerGlyph.symbolId());
         scratchData = effect.execute(level, glyph.pixels().iterator().next().pos(), circleGlyph, centerGlyph, runes);
         mgr.setArrayScratchData(arr.arrayId(), scratchData);
 
@@ -487,7 +488,7 @@ public final class MagicArrayDetector {
         }
         if (parts.isEmpty()) return null;
         return new SyncArrayPacket.ArrayData(arr.arrayId(),
-                SymbolRegistry.glyphColorFor(arr.centerGlyph().symbolId()), parts);
+                SymbolCatalog.glyphColorFor(arr.centerGlyph().symbolId()), parts);
     }
 
     private static SyncArrayPacket.BlockData blockData(ServerLevel level, BlockFace key, List<PixelPos> pixels) {

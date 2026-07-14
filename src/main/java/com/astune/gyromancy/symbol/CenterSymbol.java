@@ -1,0 +1,50 @@
+package com.astune.gyromancy.symbol;
+
+import com.astune.gyromancy.api.symbol.PixelPos;
+import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.api.symbol.SymbolRole;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
+
+/** Base for center symbols — the function-defining core of a magic array.
+ *  Subclasses may override {@link #centerEffect()} and/or {@link #endEffect()}
+ *  to provide activation and teardown behavior. */
+public abstract class CenterSymbol extends Symbol {
+    protected CenterSymbol(String name, int featurePoints, boolean allowRotation, int glyphColor) {
+        super(name, featurePoints, allowRotation, glyphColor);
+    }
+
+    @Override
+    public SymbolRole role() { return SymbolRole.CENTER_SYMBOL; }
+
+    /** Activation effect when the array forms. Null means no-op. */
+    public SymbolCatalog.CenterEffect centerEffect() { return null; }
+
+    /** Teardown effect when the array breaks. Null means no-op. */
+    public SymbolCatalog.EndEffect endEffect() { return null; }
+
+    public static boolean isFacingDown(PositionedGlyph glyph) {
+        return glyph.pixels().stream().findAny().map(PixelPos::face).orElse(Direction.UP) == Direction.DOWN;
+    }
+
+    public static Vec3 glyphCenter(PositionedGlyph glyph) {
+        double a = (glyph.minWorldX() + glyph.maxWorldX()) * 0.5;
+        double b = (glyph.minWorldY() + glyph.maxWorldY()) * 0.5;
+        PixelPos sample = glyph.pixels().stream().findAny().orElse(null);
+        if (sample == null) return Vec3.atCenterOf(glyph.worldPos());
+
+        Direction face = sample.face();
+        Vec3 normal = Vec3.atLowerCornerOf(face.getNormal());
+        Vec3 plane = Vec3.atCenterOf(sample.pos()).add(normal.scale(0.5));
+        return switch (face) {
+            case NORTH, SOUTH -> new Vec3(a, b, plane.z);
+            case EAST, WEST -> new Vec3(plane.x, b, a);
+            case UP, DOWN -> new Vec3(a, plane.y, b);
+        };
+    }
+
+    public static Vec3 faceNormal(PositionedGlyph glyph) {
+        Direction face = glyph.pixels().stream().findAny().map(PixelPos::face).orElse(Direction.UP);
+        return Vec3.atLowerCornerOf(face.getNormal());
+    }
+}
