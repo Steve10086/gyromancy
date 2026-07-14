@@ -11,6 +11,8 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
+import static java.lang.Math.max;
+
 public class ManaballEntity extends MagicBallEntity {
     private static final float DISCARD_SIZE = 0.1f;
     private float manaExpendFactor = 1f;
@@ -46,7 +48,7 @@ public class ManaballEntity extends MagicBallEntity {
         }
 
         float target = getTargetSize();
-        AABB inflatedBox = getBoundingBox().inflate(target / 2);
+        AABB inflatedBox = getBoundingBox().inflate(target);
         AABB box = getBoundingBox();
         double r = target / 2.0;
 
@@ -56,19 +58,22 @@ public class ManaballEntity extends MagicBallEntity {
         setDeltaMovement(velocity.add(acceleration));
 
         BlockPos.betweenClosedStream(inflatedBox).map(BlockPos::immutable)
-                .filter(p -> !inSphere(p.getCenter(), r) && inSphere(p.getCenter(), 2 * r))
+                .filter(p -> !inSphere(p.getCenter(), r) && inSphere(p.getCenter(), 1.5 * r))
                 .forEach(this::absorbMana);
 
         if (mana == 0) return;
 
-        manaPerBlock = mana / BlockPos.betweenClosedStream(box).map(BlockPos::immutable)
+        manaPerBlock = mana / max(1, BlockPos.betweenClosedStream(box).map(BlockPos::immutable)
                 .filter(p -> inSphere(p.getCenter(), r))
-                .count();
+                .count());
 
         BlockPos.betweenClosedStream(box).map(BlockPos::immutable)
                 .filter(p -> inSphere(p.getCenter(), r))
                 .forEach(this::releaseMana);
 
+        if (mana > 0){
+            releaseMana(BlockPos.containing(position()));
+        }
         mana = 0;
     }
 
@@ -89,6 +94,7 @@ public class ManaballEntity extends MagicBallEntity {
         var current = ElementStorageManager.INSTANCE.get(level(), pos);
         long mana = (long) ((current.get(ElementType.MANA) + manaPerBlock) * manaExpendFactor);
         ElementStorageManager.INSTANCE.set(level(), pos, current.withValue(ElementType.MANA, mana));
+        this.mana -= manaPerBlock;
     }
 
     private void launchIfReady() {

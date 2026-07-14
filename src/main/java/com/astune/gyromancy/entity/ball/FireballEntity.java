@@ -19,6 +19,11 @@ import org.jetbrains.annotations.NotNull;
 
 public class FireballEntity extends MagicBallEntity {
     private static final int DEFAULT_LIFETIME = 500;
+    private static final double FIRE_VOLUME_LOSS = 0.1;
+    private static final double FIRE_EQUILIBRIUM = 1000.0;
+    private static final double FIRE_PER_VOLUME = 1000.0;
+    private static final double FIRE_CONVERSION_COST = 100.0;
+    private static final double MANA_TO_VOLUME = 0.001;
     private float explosionPower = 1.5F;
     private int lifetime = DEFAULT_LIFETIME;
     private Vec3 acceleration = Vec3.ZERO;
@@ -46,6 +51,8 @@ public class FireballEntity extends MagicBallEntity {
     public void tick() {
         super.tick();
         growIntoTargetSize();
+        exchangeWithElements(FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, FIRE_PER_VOLUME,
+                FIRE_CONVERSION_COST, MANA_TO_VOLUME);
         if (tickCount > lifetime) {
             discard();
             return;
@@ -56,7 +63,7 @@ public class FireballEntity extends MagicBallEntity {
             level().addFreshEntity(oldFireball);
             oldSpawned = true;
         }
-        if (!isFullyGrown()) {
+        if (!launched && !isFullyGrown()) {
             setDeltaMovement(Vec3.ZERO);
             return;
         }

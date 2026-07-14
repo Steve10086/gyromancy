@@ -25,6 +25,10 @@ public abstract class CenterSymbol extends Symbol {
         super(name, featurePoints, allowRotation, glyphColor);
     }
 
+    protected CenterSymbol(String name, int featurePoints, boolean allowRotation, int glyphColor, SkeletonMatcher.SoftThresholds thresholds) {
+        super(name, featurePoints, allowRotation, thresholds, glyphColor);
+    }
+
     @Override
     public SymbolRole role() { return SymbolRole.CENTER_SYMBOL; }
 

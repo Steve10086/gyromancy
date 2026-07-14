@@ -13,8 +13,12 @@ import java.util.Map;
 
 /** Mana center symbol. */
 public final class ManaSymbol extends CenterSymbol {
+    private static final SkeletonMatcher.SoftThresholds THRESHOLDS =
+            new SkeletonMatcher.SoftThresholds(0.80, 0.25, 0.70, 0.9, 0.75);
+
     public static final ManaSymbol INSTANCE = new ManaSymbol();
-    private ManaSymbol() { super("mana", 0, false, 0xFF9d7aa7); }
+
+    private ManaSymbol() { super("mana", 0, false, 0xFF9d7aa7, THRESHOLDS); }
 
     @Override
     public SymbolCatalog.CenterEffect centerEffect() { return ManaSymbol::launchManaBall; }

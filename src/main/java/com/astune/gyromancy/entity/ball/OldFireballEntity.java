@@ -36,6 +36,11 @@ record BlockTasks(int elapsed, List<SmeltTask> tasks, BlockState initial) {}
 public class OldFireballEntity extends MagicBallEntity {
     private static final float MIN_SIZE = 0.1F;
     private static final float MERGE_RATE = 0.1F;
+    private static final double FIRE_VOLUME_LOSS = 0.1;
+    private static final double FIRE_EQUILIBRIUM = 1000.0;
+    private static final double FIRE_PER_VOLUME = 1000.0;
+    private static final double FIRE_CONVERSION_COST = 10.0;
+    private static final double MANA_TO_VOLUME = 0.01;
 
     private final Map<ItemEntity, Integer> itemProgress = new IdentityHashMap<>();
     private final Map<BlockPos, BlockTasks> blockProgress = new HashMap<>();
@@ -58,6 +63,8 @@ public class OldFireballEntity extends MagicBallEntity {
     public void tick() {
         super.tick();
         growIntoTargetSize();
+        exchangeWithElements(FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, FIRE_PER_VOLUME,
+                FIRE_CONVERSION_COST, MANA_TO_VOLUME);
         velocity = velocity.add(acceleration);
         setPos(position().add(velocity));
         spawnSmokeParticles();

@@ -1,7 +1,10 @@
 package com.astune.gyromancy.entity.ball;
 
 import com.astune.gyromancy.api.array.ArrayObject;
+import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.element.ElementStorageManager;
 import com.astune.gyromancy.registry.ModAttachments;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -12,9 +15,12 @@ import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 public abstract class MagicBallEntity extends Entity {
@@ -89,6 +95,50 @@ public abstract class MagicBallEntity extends Entity {
                 .setArrayScratchValue(boundArrayId, scratchKey, ArrayObject.EntityRef.of(entity));
     }
 
+    protected void exchangeWithElements(double fireVolumeLoss, double fireEquilibrium,
+                                        double firePerVolume, double fireConversionCost,
+                                        double manaToVolume) {
+        if (level().isClientSide) return;
+
+        float size = getTargetSize();
+        List<BlockPos> positions = containedPositions(size);
+        if (positions.isEmpty()) return;
+
+        double volume = volume(size);
+        double averageFire = positions.stream()
+                .mapToLong(pos -> ElementStorageManager.INSTANCE.get(level(), pos).get(ElementType.FIRE))
+                .average()
+                .orElse(0.0);
+
+        if (averageFire < fireEquilibrium * volume) {
+            double lost = Math.min(fireVolumeLoss, volume - volume(SPAWN_SIZE));
+            if (lost > 0.0) {
+                volume -= lost;
+                long firePerBlock = Math.round(Math.max(0.0, firePerVolume * lost - fireConversionCost) / positions.size());
+                if (firePerBlock > 0) {
+                    for (BlockPos pos : positions) {
+                        var current = ElementStorageManager.INSTANCE.get(level(), pos);
+                        ElementStorageManager.INSTANCE.set(level(), pos,
+                                current.withValue(ElementType.FIRE, current.get(ElementType.FIRE) + firePerBlock));
+                    }
+                }
+            }
+        }
+
+        long mana = 0;
+        for (BlockPos pos : positions) {
+            var current = ElementStorageManager.INSTANCE.get(level(), pos);
+            long absorbed = current.get(ElementType.MANA);
+            if (absorbed == 0) continue;
+            mana += absorbed;
+            ElementStorageManager.INSTANCE.set(level(), pos, current.withValue(ElementType.MANA, 0));
+        }
+
+        Vec3 velocity = getDeltaMovement();
+        setTargetSize((float) sizeForVolume(volume + mana * manaToVolume));
+        setDeltaMovement(velocity);
+    }
+
     @Override
     public void onSyncedDataUpdated(@NotNull EntityDataAccessor<?> key) {
         super.onSyncedDataUpdated(key);
@@ -122,5 +172,27 @@ public abstract class MagicBallEntity extends Entity {
 
     protected boolean inSphere(Vec3 target, double radius) {
         return position().add(0, radius, 0).distanceToSqr(target) <= radius * radius;
+    }
+
+    private List<BlockPos> containedPositions(float size) {
+        double r = size / 2.0;
+        Vec3 center = position().add(0.0, r, 0.0);
+        AABB box = new AABB(center.x - r, center.y - r, center.z - r,
+                center.x + r, center.y + r, center.z + r);
+        List<BlockPos> positions = new ArrayList<>();
+        BlockPos.betweenClosedStream(box)
+                .map(BlockPos::immutable)
+                .filter(pos -> center.distanceToSqr(pos.getCenter()) <= r * r)
+                .forEach(positions::add);
+        return positions;
+    }
+
+    private static double volume(float size) {
+        double r = size / 2.0;
+        return 4.0 / 3.0 * Math.PI * r * r * r;
+    }
+
+    private static double sizeForVolume(double volume) {
+        return Math.cbrt(Math.max(volume, volume(SPAWN_SIZE)) * 3.0 / (4.0 * Math.PI)) * 2.0;
     }
 }
