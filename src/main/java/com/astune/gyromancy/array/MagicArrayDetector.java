@@ -8,6 +8,7 @@ import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolRole;
+import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.registry.ModSymbols;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
@@ -415,7 +416,9 @@ public final class MagicArrayDetector {
 
         SymbolCatalog.CenterEffect effect = SymbolCatalog.getCenterEffect(centerGlyph.symbolId());
         scratchData = effect.execute(level, glyph.pixels().iterator().next().pos(), circleGlyph, centerGlyph, runes);
+        if (scratchData == null) scratchData = Map.of();
         mgr.setArrayScratchData(arr.arrayId(), scratchData);
+        bindPersistentEntities(level, arr.arrayId(), scratchData);
 
         syncGlyphs(level);
         Gyromancy.LOGGER.info("[MagicArrayDetector] Array activated: center={}, runes={}",
@@ -428,6 +431,15 @@ public final class MagicArrayDetector {
             params.add(new ParameterRune(pg.symbolId(), pg.confidence(), ""));
         }
         return params;
+    }
+
+    private static void bindPersistentEntities(ServerLevel level, UUID arrayId, Map<String, Object> scratchData) {
+        for (Map.Entry<String, Object> entry : scratchData.entrySet()) {
+            if (!(entry.getValue() instanceof ArrayObject.EntityRef ref)) continue;
+            if (ref.resolve(level) instanceof MagicBallEntity ball) {
+                ball.bindToArray(arrayId);
+            }
+        }
     }
 
     private static void syncAffectedCanvases(ExtractedGlyph glyph, ServerLevel level) {

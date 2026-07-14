@@ -1,8 +1,7 @@
-package com.astune.gyromancy.entity;
+package com.astune.gyromancy.entity.ball;
 
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.element.ElementStorageManager;
-import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import com.astune.gyromancy.registry.ModEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;

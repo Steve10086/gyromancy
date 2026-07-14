@@ -1,9 +1,9 @@
 package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
-import com.astune.gyromancy.entity.FireballEntity;
-import com.astune.gyromancy.entity.ManaballEntity;
-import com.astune.gyromancy.entity.OldFireballEntity;
+import com.astune.gyromancy.entity.ball.FireballEntity;
+import com.astune.gyromancy.entity.ball.ManaballEntity;
+import com.astune.gyromancy.entity.ball.OldFireballEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;

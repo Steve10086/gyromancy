@@ -2,7 +2,7 @@ package com.astune.gyromancy.client.entity;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.client.effect.EntityEffect;
-import com.astune.gyromancy.entity.OldFireballEntity;
+import com.astune.gyromancy.entity.ball.OldFireballEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
@@ -35,18 +35,18 @@ public class OldFireballRenderer extends EntityRenderer<OldFireballEntity> {
             return;
         }
 
-        float size = (float) (max(0.1F, entity.getBallSize()) * RENDER_SCALE);
+        float size = max(0.1F, entity.getBallSize());
 
         // ── body: EntityEffect with fire_ball.fx ──
         EntityEffect body = bodyEffects.get(entity);
         if (body == null) {
             body = new EntityEffect(entity, FIRE_BALL_FX)
-                    .setSize(size)
-                    .setOffset(0, size, 0);
+                    .setSize((float) (size * RENDER_SCALE))
+                    .setOffset(0, size * MODEL_Y_OFFSET, 0);
             body.start();
             bodyEffects.put(entity, body);
         } else {
-            body.setSize(size).setOffset(0, size, 0);
+            body.setSize((float) (size * RENDER_SCALE)).setOffset(0, size * MODEL_Y_OFFSET, 0);
             body.tick();
         }
     }

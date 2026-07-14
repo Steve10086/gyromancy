@@ -1,9 +1,12 @@
 package com.astune.gyromancy.entity.ball;
 
+import com.astune.gyromancy.api.array.ArrayObject;
+import com.astune.gyromancy.registry.ModAttachments;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
@@ -12,6 +15,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.UUID;
+
 public abstract class MagicBallEntity extends Entity {
     private static final EntityDataAccessor<Float> DATA_TARGET_SIZE =
             SynchedEntityData.defineId(MagicBallEntity.class, EntityDataSerializers.FLOAT);
@@ -19,6 +24,7 @@ public abstract class MagicBallEntity extends Entity {
             SynchedEntityData.defineId(MagicBallEntity.class, EntityDataSerializers.FLOAT);
     protected static final float SPAWN_SIZE = 0.1F;
     private static final int GROWTH_RATE = 2;
+    private UUID boundArrayId;
 
     public MagicBallEntity(EntityType<? extends MagicBallEntity> type, Level level) {
         super(type, level);
@@ -71,6 +77,18 @@ public abstract class MagicBallEntity extends Entity {
         refreshDimensions();
     }
 
+    public void bindToArray(UUID arrayId) {
+        this.boundArrayId = arrayId;
+    }
+
+    protected void bindGeneratedEntity(MagicBallEntity entity, String scratchKey) {
+        if (boundArrayId == null || !(level() instanceof ServerLevel serverLevel)) return;
+
+        entity.bindToArray(boundArrayId);
+        serverLevel.getData(ModAttachments.ARRAY_MANAGER)
+                .setArrayScratchValue(boundArrayId, scratchKey, ArrayObject.EntityRef.of(entity));
+    }
+
     @Override
     public void onSyncedDataUpdated(@NotNull EntityDataAccessor<?> key) {
         super.onSyncedDataUpdated(key);
@@ -92,12 +110,14 @@ public abstract class MagicBallEntity extends Entity {
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
         if (tag.contains("Size")) setBallSize(tag.getFloat("Size"));
         if (tag.contains("CurrentSize")) entityData.set(DATA_CURRENT_SIZE, tag.getFloat("CurrentSize"));
+        if (tag.hasUUID("ArrayId")) boundArrayId = tag.getUUID("ArrayId");
     }
 
     @Override
     protected void addAdditionalSaveData(@NotNull CompoundTag tag) {
         tag.putFloat("Size", getTargetBallSize());
         tag.putFloat("CurrentSize", getBallSize());
+        if (boundArrayId != null) tag.putUUID("ArrayId", boundArrayId);
     }
 
     protected boolean inSphere(Vec3 target, double radius) {

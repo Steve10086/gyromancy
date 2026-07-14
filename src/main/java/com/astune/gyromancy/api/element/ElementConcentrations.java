@@ -34,25 +34,6 @@ public record ElementConcentrations(long[] values, long[] derivatives) {
         return new ElementConcentrations(nv, derivatives);
     }
 
-    /**
-     * 3D diffusion: average of self + up to 26 neighbors (3×3×3 grid).
-     * Null entries = non-overridden neighbors, use biome default.
-     */
-    public ElementConcentrations diffuse(ElementConcentrations[] neighbors, ElementConcentrations biomeDefaults) {
-        long[] newValues = new long[SIZE];
-        long count = 1; // self
-        for (int i = 0; i < SIZE; i++) newValues[i] = values[i];
-
-        for (ElementConcentrations n : neighbors) {
-            long[] src = (n != null) ? n.values : biomeDefaults.values;
-            for (int i = 0; i < SIZE; i++) newValues[i] += src[i];
-            count++;
-        }
-
-        for (int i = 0; i < SIZE; i++) newValues[i] = clamp(newValues[i] / count);
-        return new ElementConcentrations(newValues, derivatives);
-    }
-
     // ── Single‑tick step: decay → share excess/27 with 26 neighbors ──
 
     /** Per‑cell share sent to each of the 27 cells (self + 26 neighbors). */

@@ -3,7 +3,7 @@ package com.astune.gyromancy.client.entity;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.client.effect.EntityEffect;
 import com.astune.gyromancy.client.effect.VortexOrbitEffect;
-import com.astune.gyromancy.entity.FireballEntity;
+import com.astune.gyromancy.entity.ball.FireballEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.Particle;
@@ -49,20 +49,20 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
             return;
         }
 
-        float size = (float) (max(0.1F, entity.getBallSize()) * RENDER_SCALE);
+        float size = max(0.1F, entity.getBallSize());
         boolean growing = !entity.isFullyGrown();
 
         // ── body: EntityEffect with fire_ball.fx ──
         EntityEffect body = bodyEffects.get(entity);
         if (body == null) {
             body = new EntityEffect(entity, FIRE_BALL_FX)
-                    .setSize(size)
-                    .setOffset(0, size, 0);
+                    .setSize((float) (size * RENDER_SCALE))
+                    .setOffset(0, size * MODEL_Y_OFFSET, 0);
             body.start();
             bodyEffects.put(entity, body);
         }
         else if (growing)  {
-            body.setSize(size).setOffset(0, size, 0);
+            body.setSize((float) (size * RENDER_SCALE)).setOffset(0, size * MODEL_Y_OFFSET, 0);
             body.tick();
         }
 

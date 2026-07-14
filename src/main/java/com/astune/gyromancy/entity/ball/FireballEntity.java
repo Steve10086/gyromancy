@@ -1,7 +1,7 @@
-package com.astune.gyromancy.entity;
+package com.astune.gyromancy.entity.ball;
 
-import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import com.astune.gyromancy.registry.ModEntities;
+import com.astune.gyromancy.symbol.CenterSymbol;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.Entity;
@@ -51,7 +51,9 @@ public class FireballEntity extends MagicBallEntity {
             return;
         }
         if (!level().isClientSide && tickCount > lifetime * 0.9 && !oldSpawned) {
-            level().addFreshEntity(new OldFireballEntity(level(), position(), getDeltaMovement(), acceleration, getTargetBallSize()));
+            OldFireballEntity oldFireball = new OldFireballEntity(level(), position(), getDeltaMovement(), acceleration, getTargetBallSize());
+            bindGeneratedEntity(oldFireball, CenterSymbol.OLD_FIREBALL_KEY);
+            level().addFreshEntity(oldFireball);
             oldSpawned = true;
         }
         if (!isFullyGrown()) {

@@ -3,6 +3,7 @@ package com.astune.gyromancy.api.array;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
+import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -13,6 +14,8 @@ import java.util.*;
  * Stored as an Attachment on {@code Level} via {@code ModAttachments.ARRAY_MANAGER}.
  */
 public class MagicArrayManager {
+    public static final Codec<MagicArrayManager> CODEC = ArrayObject.CODEC.listOf()
+            .xmap(MagicArrayManager::fromPersistentArrays, mgr -> List.copyOf(mgr.activeArrays.values()));
 
     private final Map<UUID, MagicArrayState> arrays = new HashMap<>();
     private final Map<BlockPos, UUID> positionIndex = new HashMap<>();
@@ -25,6 +28,17 @@ public class MagicArrayManager {
     private final Map<UUID, UUID> glyphToArray = new HashMap<>(); // glyphUuid → arrayId
 
     public MagicArrayManager() {}
+
+    private static MagicArrayManager fromPersistentArrays(List<ArrayObject> arrays) {
+        MagicArrayManager mgr = new MagicArrayManager();
+        for (ArrayObject arr : arrays) {
+            mgr.registerArrayObj(arr);
+            for (PositionedGlyph glyph : arr.allBoundGlyphs()) {
+                mgr.registerGlyph(glyph);
+            }
+        }
+        return mgr;
+    }
 
     // ═══════════════════ arrays ═══════════════════
 
@@ -159,5 +173,14 @@ public class MagicArrayManager {
                     existing.arrayId(), existing.circleGlyph(), existing.centerGlyph(),
                     existing.runeGlyphs(), data));
         }
+    }
+
+    public void setArrayScratchValue(UUID arrayId, String key, Object value) {
+        ArrayObject existing = activeArrays.get(arrayId);
+        if (existing == null) return;
+
+        Map<String, Object> data = new HashMap<>(existing.scratchData());
+        data.put(key, value);
+        setArrayScratchData(arrayId, data);
     }
 }

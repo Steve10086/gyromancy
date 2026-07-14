@@ -1,15 +1,26 @@
 package com.astune.gyromancy.symbol;
 
+import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 /** Base for center symbols — the function-defining core of a magic array.
  *  Subclasses may override {@link #centerEffect()} and/or {@link #endEffect()}
  *  to provide activation and teardown behavior. */
 public abstract class CenterSymbol extends Symbol {
+    public static final String FIREBALL_KEY = "fireball";
+    public static final String OLD_FIREBALL_KEY = "old_fireball";
+    public static final String MANABALL_KEY = "manaball";
+
     protected CenterSymbol(String name, int featurePoints, boolean allowRotation, int glyphColor) {
         super(name, featurePoints, allowRotation, glyphColor);
     }
@@ -46,5 +57,33 @@ public abstract class CenterSymbol extends Symbol {
     public static Vec3 faceNormal(PositionedGlyph glyph) {
         Direction face = glyph.pixels().stream().findAny().map(PixelPos::face).orElse(Direction.UP);
         return Vec3.atLowerCornerOf(face.getNormal());
+    }
+
+    public static UUID boundEntityUuid(Map<String, Object> scratchData, String key) {
+        Object value = scratchData.get(key);
+        if (value instanceof ArrayObject.EntityRef ref) return ref.uuid();
+        if (value instanceof UUID uuid) return uuid;
+        if (value instanceof String string) {
+            try {
+                return UUID.fromString(string);
+            } catch (IllegalArgumentException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    public static Optional<Entity> boundEntity(ServerLevel level, Map<String, Object> scratchData, String key) {
+        Object value = scratchData.get(key);
+        if (value instanceof ArrayObject.EntityRef ref) return Optional.ofNullable(ref.resolve(level));
+
+        UUID uuid = boundEntityUuid(scratchData, key);
+        return uuid == null ? Optional.empty() : Optional.ofNullable(level.getEntity(uuid));
+    }
+
+    protected static void discardBoundEntities(ServerLevel level, Map<String, Object> scratchData, String... keys) {
+        for (String key : keys) {
+            boundEntity(level, scratchData, key).ifPresent(Entity::discard);
+        }
     }
 }

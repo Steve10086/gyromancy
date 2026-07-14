@@ -54,6 +54,7 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<MagicArrayManager>>
             ARRAY_MANAGER = ATTACHMENTS.register("array_manager",
             () -> AttachmentType.builder(MagicArrayManager::new)
+                    .serialize(MagicArrayManager.CODEC)
                     .build()
     );
 }

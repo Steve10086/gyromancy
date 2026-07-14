@@ -1,6 +1,5 @@
-package com.astune.gyromancy.entity;
+package com.astune.gyromancy.entity.ball;
 
-import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import com.astune.gyromancy.registry.ModEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
