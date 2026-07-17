@@ -45,7 +45,7 @@ public final class FireSymbol extends CenterSymbol {
         lift *= isFacingDown(circleGlyph) ? -1.0 : 1.0;
         Vec3 initialVelocity = velocity.add(0.0, lift, 0.0);
         Vec3 acceleration = runes.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
-        Vec3 spawnPos = glyphCenter(centerGlyph).add(faceNormal(centerGlyph).scale(size * 2.0));
+        Vec3 spawnPos = glyphCenter(level, centerGlyph).add(faceNormal(centerGlyph).scale(size * 2.0));
         FireballEntity fireball = new FireballEntity(level, spawnPos, initialVelocity, acceleration, size);
         level.addFreshEntity(fireball);
         return Map.of(FIREBALL_KEY, ArrayObject.EntityRef.of(fireball));

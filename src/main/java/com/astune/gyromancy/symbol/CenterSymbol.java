@@ -58,6 +58,12 @@ public abstract class CenterSymbol extends Symbol {
         };
     }
 
+    public static Vec3 glyphCenter(ServerLevel level, PositionedGlyph glyph) {
+        return FloodFillExtractor.worldCenter(level, glyph.pixels(),
+                        glyph.minWorldX(), glyph.maxWorldX(), glyph.minWorldY(), glyph.maxWorldY())
+                .orElseGet(() -> glyphCenter(glyph));
+    }
+
     public static Vec3 faceNormal(PositionedGlyph glyph) {
         Direction face = glyph.pixels().stream().findAny().map(PixelPos::face).orElse(Direction.UP);
         return Vec3.atLowerCornerOf(face.getNormal());

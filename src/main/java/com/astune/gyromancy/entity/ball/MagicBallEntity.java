@@ -31,6 +31,7 @@ public abstract class MagicBallEntity extends Entity {
     protected static final float SPAWN_SIZE = 0.1F;
     private static final int GROWTH_RATE = 2;
     private UUID boundArrayId;
+    private double averageElementLevel;
 
     public MagicBallEntity(EntityType<? extends MagicBallEntity> type, Level level) {
         super(type, level);
@@ -70,16 +71,18 @@ public abstract class MagicBallEntity extends Entity {
     protected void setTargetSize(float size) {
         float targetSize = Math.max(SPAWN_SIZE, size);
         entityData.set(DATA_TARGET_SIZE, targetSize);
-        entityData.set(DATA_CURRENT_SIZE, Math.min(entityData.get(DATA_CURRENT_SIZE), targetSize));
         refreshDimensions();
     }
 
     protected void growIntoTargetSize() {
         float cur = getBallSize();
         float targetSize = getTargetBallSize();
-        if (cur >= targetSize) return;
+        if (cur == targetSize) return;
 
-        entityData.set(DATA_CURRENT_SIZE, Math.min(targetSize, cur + (targetSize - SPAWN_SIZE) * GROWTH_RATE / 100));
+        float step = Math.max(0.001F, (Math.max(cur, targetSize) - SPAWN_SIZE) * GROWTH_RATE / 100);
+        entityData.set(DATA_CURRENT_SIZE, cur < targetSize
+                ? Math.min(targetSize, cur + step)
+                : Math.max(targetSize, cur - step));
         refreshDimensions();
     }
 
@@ -95,14 +98,19 @@ public abstract class MagicBallEntity extends Entity {
                 .setArrayScratchValue(boundArrayId, scratchKey, ArrayObject.EntityRef.of(entity));
     }
 
-    protected void exchangeWithElements(double fireVolumeLoss, double fireEquilibrium,
-                                        double firePerVolume, double fireConversionCost,
-                                        double manaToVolume) {
-        if (level().isClientSide) return;
+    protected double getAverageElementLevel() {
+        return averageElementLevel;
+    }
+
+    protected long exchangeWithElements(double fireVolumeLoss, double fireEquilibrium,
+                                        double maxVolumeFireLevel, double firePerVolume,
+                                        double fireConversionCost, double manaToVolume,
+                                        long storedMana) {
+        if (level().isClientSide) return storedMana;
 
         float size = getTargetSize();
         List<BlockPos> positions = containedPositions(size);
-        if (positions.isEmpty()) return;
+        if (positions.isEmpty()) return storedMana;
 
         double volume = volume(size);
         double averageFire = positions.stream()
@@ -110,40 +118,63 @@ public abstract class MagicBallEntity extends Entity {
                 .average()
                 .orElse(0.0);
 
+        double naturalFire = 0.0;
         if (averageFire < fireEquilibrium * volume) {
-            double lost = Math.min(fireVolumeLoss, volume - volume(SPAWN_SIZE));
+            double lost = Math.min(volume * 0.005 + fireVolumeLoss, volume - volume(SPAWN_SIZE));
             if (lost > 0.0) {
                 volume -= lost;
-                long firePerBlock = Math.round(Math.max(0.0, firePerVolume * lost - fireConversionCost) / positions.size());
-                if (firePerBlock > 0) {
-                    for (BlockPos pos : positions) {
-                        var current = ElementStorageManager.INSTANCE.get(level(), pos);
-                        ElementStorageManager.INSTANCE.set(level(), pos,
-                                current.withValue(ElementType.FIRE, current.get(ElementType.FIRE) + firePerBlock));
-                    }
-                }
+                naturalFire = Math.max(0.0, firePerVolume * lost - fireConversionCost);
             }
         }
 
-        long mana = 0;
-        for (BlockPos pos : positions) {
-            var current = ElementStorageManager.INSTANCE.get(level(), pos);
-            long absorbed = current.get(ElementType.MANA);
-            if (absorbed == 0) continue;
-            mana += absorbed;
-            ElementStorageManager.INSTANCE.set(level(), pos, current.withValue(ElementType.MANA, 0));
+        double maxManaVolumeGain = volume * 0.05 + fireVolumeLoss;
+        long manaBudget = manaToVolume <= 0.0 ? 0 : (long)Math.ceil(maxManaVolumeGain / manaToVolume);
+        if (maxVolumeFireLevel > 0.0 && manaToVolume > 0.0) {
+            double maxVolumeByFire = averageFire / maxVolumeFireLevel;
+            double allowedVolumeGain = Math.max(0.0, maxVolumeByFire - volume);
+            manaBudget = Math.min(manaBudget, (long)Math.floor(allowedVolumeGain / manaToVolume));
+        }
+        storedMana = Math.min(storedMana, manaBudget);
+        storedMana += drainManaForGrowth(positions, Math.max(0L, manaBudget - storedMana));
+        long directMana = drainMana(positions);
+
+        long firePerBlock = (long)Math.floor((naturalFire + directMana) / positions.size());
+        averageElementLevel = averageFire + firePerBlock;
+        if (firePerBlock > 0) {
+            for (BlockPos pos : positions) {
+                var current = ElementStorageManager.INSTANCE.get(level(), pos);
+                ElementStorageManager.INSTANCE.set(level(), pos,
+                        current.withValue(ElementType.FIRE, current.get(ElementType.FIRE) + firePerBlock));
+            }
         }
 
+        long manaToBurn = Math.min(storedMana, manaBudget);
+        storedMana -= manaToBurn;
+
         Vec3 velocity = getDeltaMovement();
-        setTargetSize((float) sizeForVolume(volume + mana * manaToVolume));
+        setTargetSize((float) sizeForVolume(volume + manaToBurn * manaToVolume));
         setDeltaMovement(velocity);
+        return storedMana;
+    }
+
+    private long drainManaForGrowth(List<BlockPos> positions, long needed) {
+        long drained = 0L;
+        for (BlockPos pos : positions) {
+            if (drained >= needed) break;
+            var current = ElementStorageManager.INSTANCE.get(level(), pos);
+            long currentMana = current.get(ElementType.MANA);
+            long absorbed = Math.min(currentMana, needed - drained);
+            if (absorbed == 0) continue;
+            drained += absorbed;
+            ElementStorageManager.INSTANCE.set(level(), pos, current.withValue(ElementType.MANA, currentMana - absorbed));
+        }
+        return drained;
     }
 
     @Override
     public void onSyncedDataUpdated(@NotNull EntityDataAccessor<?> key) {
         super.onSyncedDataUpdated(key);
         if (DATA_TARGET_SIZE.equals(key)) {
-            entityData.set(DATA_CURRENT_SIZE, Math.min(getBallSize(), getTargetBallSize()));
             refreshDimensions();
         } else if (DATA_CURRENT_SIZE.equals(key)) {
             refreshDimensions();
@@ -184,7 +215,20 @@ public abstract class MagicBallEntity extends Entity {
                 .map(BlockPos::immutable)
                 .filter(pos -> center.distanceToSqr(pos.getCenter()) <= r * r)
                 .forEach(positions::add);
+        if (positions.isEmpty()) positions.add(BlockPos.containing(center));
         return positions;
+    }
+
+    private long drainMana(List<BlockPos> positions) {
+        long drained = 0L;
+        for (BlockPos pos : positions) {
+            var current = ElementStorageManager.INSTANCE.get(level(), pos);
+            long mana = current.get(ElementType.MANA);
+            if (mana == 0L) continue;
+            drained += mana;
+            ElementStorageManager.INSTANCE.set(level(), pos, current.withValue(ElementType.MANA, 0L));
+        }
+        return drained;
     }
 
     private static double volume(float size) {

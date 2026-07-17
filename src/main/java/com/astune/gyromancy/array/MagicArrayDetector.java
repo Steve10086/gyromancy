@@ -539,6 +539,9 @@ public final class MagicArrayDetector {
                     glyph.confidence(),
                     sample.pos(),
                     sample.face(),
+                    FloodFillExtractor.worldCenter(level, glyph.pixels(),
+                                    glyph.minWorldX(), glyph.maxWorldX(), glyph.minWorldY(), glyph.maxWorldY())
+                            .orElseGet(() -> Vec3.atCenterOf(glyph.worldPos())),
                     glyph.front(),
                     glyph.length(),
                     glyph.width(),

@@ -31,6 +31,7 @@ public record SyncGlyphPacket(List<GlyphData> glyphs) implements CustomPacketPay
                 float confidence = buf.readFloat();
                 BlockPos samplePos = BlockPos.STREAM_CODEC.decode(buf);
                 Direction face = Direction.values()[buf.readUnsignedByte() % Direction.values().length];
+                Vec3 center = new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble());
                 Vec3 front = new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble());
                 double length = buf.readDouble();
                 double width = buf.readDouble();
@@ -39,7 +40,7 @@ public record SyncGlyphPacket(List<GlyphData> glyphs) implements CustomPacketPay
                 double minWorldY = buf.readDouble();
                 double maxWorldY = buf.readDouble();
                 glyphs.add(new GlyphData(glyphId, symbolId, confidence, samplePos, face,
-                        front, length, width, minWorldX, maxWorldX, minWorldY, maxWorldY));
+                        center, front, length, width, minWorldX, maxWorldX, minWorldY, maxWorldY));
             }
             return new SyncGlyphPacket(glyphs);
         }
@@ -53,6 +54,9 @@ public record SyncGlyphPacket(List<GlyphData> glyphs) implements CustomPacketPay
                 buf.writeFloat(glyph.confidence());
                 BlockPos.STREAM_CODEC.encode(buf, glyph.samplePos());
                 buf.writeByte(glyph.face().ordinal());
+                buf.writeDouble(glyph.center().x);
+                buf.writeDouble(glyph.center().y);
+                buf.writeDouble(glyph.center().z);
                 buf.writeDouble(glyph.front().x);
                 buf.writeDouble(glyph.front().y);
                 buf.writeDouble(glyph.front().z);
@@ -81,6 +85,7 @@ public record SyncGlyphPacket(List<GlyphData> glyphs) implements CustomPacketPay
             float confidence,
             BlockPos samplePos,
             Direction face,
+            Vec3 center,
             Vec3 front,
             double length,
             double width,

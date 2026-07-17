@@ -35,6 +35,10 @@ public final class ElementDebugRenderer {
     private static final long ALPHA_REFERENCE = 6000L;
     private static final float MAX_ALPHA = 0.5f;
     private static final double LABEL_FACE_OFFSET = 0.03;
+    private static final double ELEMENT_LABEL_Y_OFFSET = 1.15;
+    private static final float ELEMENT_LABEL_SCALE = 0.014f;
+    private static final int ELEMENT_ABOVE_COLOR = 0xFFFFFFFF;
+    private static final int ELEMENT_BELOW_COLOR = 0xFFFF4040;
     private static final double GLYPH_ARROW_MIN = 0.25;
     private static final double GLYPH_ARROW_MAX = 1.0;
 
@@ -124,7 +128,66 @@ public final class ElementDebugRenderer {
         poseStack.popPose();
         bufferSource.endBatch();
 
+        renderElementLabels(mc, poseStack, bufferSource, camera, center, minY, maxY);
         renderGlyphLabels(mc, poseStack, bufferSource, camera);
+    }
+
+    private static void renderElementLabels(Minecraft mc, PoseStack poseStack,
+                                            MultiBufferSource.BufferSource bufferSource,
+                                            Camera camera, BlockPos center,
+                                            int minY, int maxY) {
+        Font font = mc.font;
+        Vec3 camPos = camera.getPosition();
+
+        for (BlockPos pos : BlockPos.betweenClosed(
+                center.getX() - RADIUS, minY, center.getZ() - RADIUS,
+                center.getX() + RADIUS, maxY, center.getZ() + RADIUS)) {
+            ElementConcentrations conc = debugData.get(pos);
+            if (conc == null) continue;
+
+            ElementConcentrations def = ElementBiomeProvider.getDefault(mc.level.getBiome(pos).value());
+            if (!hasElementDelta(conc, def)) continue;
+
+            long dominantValue = conc.values()[findDominantElement(conc, def)];
+            float alpha = Math.clamp((float) dominantValue / (float) ALPHA_REFERENCE, 0f, 1f) * MAX_ALPHA;
+            if (alpha < 0.02f) continue;
+
+            poseStack.pushPose();
+            poseStack.translate(
+                    pos.getX() + 0.5 - camPos.x,
+                    pos.getY() + ELEMENT_LABEL_Y_OFFSET - camPos.y,
+                    pos.getZ() + 0.5 - camPos.z);
+            poseStack.mulPose(camera.rotation());
+            poseStack.scale(ELEMENT_LABEL_SCALE, -ELEMENT_LABEL_SCALE, ELEMENT_LABEL_SCALE);
+
+            Matrix4f matrix = poseStack.last().pose();
+            int row = 0;
+            for (int i = 0; i < ElementType.COUNT; i++) {
+                long value = conc.values()[i];
+                long defaultValue = def.values()[i];
+                if (value == defaultValue) continue;
+
+                String text = elementValueText(i, value);
+                float x = -font.width(text) / 2.0f;
+                int color = value > defaultValue ? ELEMENT_ABOVE_COLOR : ELEMENT_BELOW_COLOR;
+                font.drawInBatch(text, x, row++ * font.lineHeight, color, false, matrix, bufferSource,
+                        Font.DisplayMode.SEE_THROUGH, 0x80000000, 0x00F000F0);
+            }
+            poseStack.popPose();
+        }
+
+        bufferSource.endBatch();
+    }
+
+    private static boolean hasElementDelta(ElementConcentrations conc, ElementConcentrations def) {
+        for (int i = 0; i < ElementType.COUNT; i++) {
+            if (conc.values()[i] != def.values()[i]) return true;
+        }
+        return false;
+    }
+
+    private static String elementValueText(int index, long value) {
+        return ElementType.values()[index].name().substring(0, 3) + '=' + value;
     }
 
     private static void renderGlyphLabels(Minecraft mc, PoseStack poseStack,
@@ -210,21 +273,8 @@ public final class ElementDebugRenderer {
     }
 
     private static Vec3 glyphLabelPosition(GlyphData glyph) {
-        double a = (glyph.minWorldX() + glyph.maxWorldX()) * 0.5;
-        double b = (glyph.minWorldY() + glyph.maxWorldY()) * 0.5;
-        BlockPos sample = glyph.samplePos();
-        Direction face = glyph.face();
-
-        // ponytail: offset outward from face surface
-        Vec3 normal = Vec3.atLowerCornerOf(face.getNormal());
-        Vec3 faceSurface = Vec3.atCenterOf(sample).add(normal.scale(0.5));
-        Vec3 plane = faceSurface.add(normal.scale(LABEL_FACE_OFFSET));
-
-        return switch (face) {
-            case NORTH, SOUTH -> new Vec3(a, b, plane.z);
-            case EAST, WEST -> new Vec3(plane.x, b, a);
-            case UP, DOWN -> new Vec3(a, plane.y, b);
-        };
+        Vec3 normal = Vec3.atLowerCornerOf(glyph.face().getNormal());
+        return glyph.center().add(normal.scale(LABEL_FACE_OFFSET));
     }
 
     private static int findDominantElement(ElementConcentrations conc, ElementConcentrations biomeDefault) {

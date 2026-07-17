@@ -17,7 +17,7 @@ import javax.annotation.Nullable;
  *
  * <pre>
  *     var fx = new EntityEffect(entity, ResourceLocation.parse("gyromancy:srounding_fire"))
- *         .setSize(2f).setAlpha(0.8f).setOffset(0, 1, 0);
+ *         .setSize(2f).setAlpha(0.8f).setColor(0xFFFF6600).setOffset(0, 1, 0);
  *     fx.start();
  *     // ... each tick:
  *     fx.tick();
@@ -72,6 +72,7 @@ public class EntityEffect {
     // ── setters ──
     public EntityEffect setSize(float size) { properties.setSize(size); return this; }
     public EntityEffect setAlpha(float alpha) { properties.setAlpha(alpha); return this; }
+    public EntityEffect setColor(int argb) { properties.setColor(argb); return this; }
 
     public EntityEffect setOffset(Vec3 offset) {
         return setOffset(offset.x, offset.y, offset.z);

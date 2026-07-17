@@ -48,7 +48,7 @@ public final class ElementChunkEventHandler {
         if (!(chunk.getLevel() instanceof ServerLevel sl)) return;
         activeChunks.computeIfAbsent(sl.dimension(), k -> ConcurrentHashMap.newKeySet())
                 .add(chunk.getPos());
-        Gyromancy.LOGGER.debug("[Gyromancy] Marked chunk active: {}", chunk.getPos());
+        //Gyromancy.LOGGER.debug("[Gyromancy] Marked chunk active: {}", chunk.getPos());
     }
 
     public static void markInactive(LevelChunk chunk) {

@@ -19,11 +19,14 @@ import org.jetbrains.annotations.NotNull;
 
 public class FireballEntity extends MagicBallEntity {
     private static final int DEFAULT_LIFETIME = 500;
+    private static final double MAX_SIZE = 4.5;
+    private static final int ELEMENT_EXCHANGE_INTERVAL = 10;
     private static final double FIRE_VOLUME_LOSS = 0.1;
-    private static final double FIRE_EQUILIBRIUM = 1000.0;
+    private static final double FIRE_EQUILIBRIUM = 100.0;
+    private static final double MAX_VOLUME_FIRE_LEVEL = 2000.0;
     private static final double FIRE_PER_VOLUME = 1000.0;
     private static final double FIRE_CONVERSION_COST = 100.0;
-    private static final double MANA_TO_VOLUME = 0.001;
+    private static final double MANA_TO_VOLUME = 0.01;
     private float explosionPower = 1.5F;
     private int lifetime = DEFAULT_LIFETIME;
     private Vec3 acceleration = Vec3.ZERO;
@@ -31,6 +34,7 @@ public class FireballEntity extends MagicBallEntity {
     private Vec3 pendingAcceleration = Vec3.ZERO;
     private boolean launched;
     private boolean oldSpawned;
+    private long storedMana;
 
     public FireballEntity(EntityType<FireballEntity> type, Level level) {
         super(type, level);
@@ -51,14 +55,20 @@ public class FireballEntity extends MagicBallEntity {
     public void tick() {
         super.tick();
         growIntoTargetSize();
-        exchangeWithElements(FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, FIRE_PER_VOLUME,
-                FIRE_CONVERSION_COST, MANA_TO_VOLUME);
+        if (isFullyGrown() && tickCount % ELEMENT_EXCHANGE_INTERVAL == 0) {
+            storedMana = exchangeWithElements(FIRE_VOLUME_LOSS * ELEMENT_EXCHANGE_INTERVAL,
+                    FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL, FIRE_PER_VOLUME,
+                    FIRE_CONVERSION_COST * ELEMENT_EXCHANGE_INTERVAL,
+                    MANA_TO_VOLUME, storedMana);
+        }
         if (tickCount > lifetime) {
             discard();
             return;
         }
         if (!level().isClientSide && tickCount > lifetime * 0.9 && !oldSpawned) {
             OldFireballEntity oldFireball = new OldFireballEntity(level(), position(), getDeltaMovement(), acceleration, getTargetBallSize());
+            oldFireball.setStoredMana(storedMana);
+            storedMana = 0;
             bindGeneratedEntity(oldFireball, CenterSymbol.OLD_FIREBALL_KEY);
             level().addFreshEntity(oldFireball);
             oldSpawned = true;
@@ -79,7 +89,7 @@ public class FireballEntity extends MagicBallEntity {
         }
 
         setPos(end);
-        if (blockHit.getType() != HitResult.Type.MISS || hitLivingEntity(velocity)) {
+        if (getBallSize() > MAX_SIZE || blockHit.getType() != HitResult.Type.MISS || hitLivingEntity(velocity)) {
             explode();
             return;
         }
@@ -143,6 +153,7 @@ public class FireballEntity extends MagicBallEntity {
         if (tag.contains("PendingAccelX")) {
             pendingAcceleration = new Vec3(tag.getDouble("PendingAccelX"), tag.getDouble("PendingAccelY"), tag.getDouble("PendingAccelZ"));
         }
+        if (tag.contains("StoredMana")) storedMana = tag.getLong("StoredMana");
         launched = tag.getBoolean("Launched");
     }
 
@@ -160,6 +171,7 @@ public class FireballEntity extends MagicBallEntity {
         tag.putDouble("PendingAccelX", pendingAcceleration.x);
         tag.putDouble("PendingAccelY", pendingAcceleration.y);
         tag.putDouble("PendingAccelZ", pendingAcceleration.z);
+        tag.putLong("StoredMana", storedMana);
         tag.putBoolean("Launched", launched);
     }
 }

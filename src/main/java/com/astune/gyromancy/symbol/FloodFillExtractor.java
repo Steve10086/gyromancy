@@ -140,6 +140,29 @@ public final class FloodFillExtractor {
         };
     }
 
+    public static Optional<Vec3> worldCenter(ServerLevel level, Collection<PixelPos> pixels,
+                                             double minWorldX, double maxWorldX,
+                                             double minWorldY, double maxWorldY) {
+        PixelPos sample = pixels.stream().findAny().orElse(null);
+        if (sample == null || level == null) return Optional.empty();
+
+        CanvasFace face = getFaceAt(level, sample.pos(), sample.face());
+        if (face == null) return Optional.empty();
+
+        double a = (minWorldX + maxWorldX) * 0.5;
+        double b = (minWorldY + maxWorldY) * 0.5;
+        Vec3 sampleWorld = worldFromPixel(sample.pos(), face, sample.x(), sample.y());
+        return Optional.of(unflatten(face.primaryFace(), sampleWorld, a, b));
+    }
+
+    static Vec3 unflatten(Direction face, Vec3 sampleWorld, double a, double b) {
+        return switch (face) {
+            case NORTH, SOUTH -> new Vec3(a, b, sampleWorld.z);
+            case EAST, WEST -> new Vec3(sampleWorld.x, b, a);
+            case UP, DOWN -> new Vec3(a, sampleWorld.y, b);
+        };
+    }
+
     // Public API
 
     /** Map of all active states (passed from FloodFillScheduler) for origin-based merging */
@@ -312,26 +335,35 @@ public final class FloodFillExtractor {
             ServerLevel level, PixelPos curr, CanvasFace face, int nx, int ny) {
 
         Vec3 worldNeighbor = worldFromPixel(curr.pos(), face, nx, ny);
+        BlockPos adjPos = adjacentBlockForEdge(curr.pos(), face.primaryFace(), worldNeighbor);
+        if (adjPos.equals(curr.pos())) return Collections.emptyList();
 
         Set<PixelPos> results = new LinkedHashSet<>();
-        BlockPos base = curr.pos();
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    BlockPos adjPos = base.offset(dx, dy, dz);
-                    if (adjPos.equals(base)) continue;
-
-                    for (CanvasFace adjFace : getFacesAt(level, adjPos)) {
-                        PixelPos mapped = pixelFromWorld(worldNeighbor, adjPos, adjFace);
-                        if (mapped != null
-                                && ManaPixelDetector.isManaPixel(adjFace, mapped.x(), mapped.y())) {
-                            results.add(mapped);
-                        }
-                    }
-                }
+        for (CanvasFace adjFace : getFacesAt(level, adjPos, face.primaryFace())) {
+            PixelPos mapped = pixelFromWorld(worldNeighbor, adjPos, adjFace);
+            if (mapped != null
+                    && ManaPixelDetector.isManaPixel(adjFace, mapped.x(), mapped.y())) {
+                results.add(mapped);
             }
         }
         return new ArrayList<>(results);
+    }
+
+    static BlockPos adjacentBlockForEdge(BlockPos base, Direction face, Vec3 worldNeighbor) {
+        return switch (face) {
+            case NORTH, SOUTH -> new BlockPos(
+                    (int) Math.floor(worldNeighbor.x),
+                    (int) Math.floor(worldNeighbor.y),
+                    base.getZ());
+            case EAST, WEST -> new BlockPos(
+                    base.getX(),
+                    (int) Math.floor(worldNeighbor.y),
+                    (int) Math.floor(worldNeighbor.z));
+            case UP, DOWN -> new BlockPos(
+                    (int) Math.floor(worldNeighbor.x),
+                    base.getY(),
+                    (int) Math.floor(worldNeighbor.z));
+        };
     }
 
     // Normalization

@@ -15,6 +15,7 @@ import static java.lang.Math.max;
 
 public class ManaballEntity extends MagicBallEntity {
     private static final float DISCARD_SIZE = 0.1f;
+    private static final int ELEMENT_EXCHANGE_INTERVAL = 10;
     private float manaExpendFactor = 1f;
     private Vec3 acceleration = Vec3.ZERO;
     private Vec3 pendingVelocity = Vec3.ZERO;
@@ -33,7 +34,7 @@ public class ManaballEntity extends MagicBallEntity {
         this.pendingVelocity = velocity;
         this.pendingAcceleration = acceleration;
         this.acceleration = Vec3.ZERO;
-        manaExpendFactor *= size;
+        manaExpendFactor *= 2 * size;
         setPos(pos);
         setDeltaMovement(Vec3.ZERO);
     }
@@ -56,6 +57,8 @@ public class ManaballEntity extends MagicBallEntity {
 
         Vec3 velocity = getDeltaMovement();
         setDeltaMovement(velocity.add(acceleration));
+
+        if (tickCount % ELEMENT_EXCHANGE_INTERVAL != 0) return;
 
         BlockPos.betweenClosedStream(inflatedBox).map(BlockPos::immutable)
                 .filter(p -> !inSphere(p.getCenter(), r) && inSphere(p.getCenter(), 1.5 * r))
@@ -116,6 +119,7 @@ public class ManaballEntity extends MagicBallEntity {
         if (tag.contains("PendingAccelX")) {
             pendingAcceleration = new Vec3(tag.getDouble("PendingAccelX"), tag.getDouble("PendingAccelY"), tag.getDouble("PendingAccelZ"));
         }
+        if (tag.contains("ManaExpendFactor")) manaExpendFactor = tag.getFloat("ManaExpendFactor");
         if (tag.contains("Mana")) mana = tag.getFloat("Mana");
         launched = tag.getBoolean("Launched");
     }
@@ -132,6 +136,7 @@ public class ManaballEntity extends MagicBallEntity {
         tag.putDouble("PendingAccelX", pendingAcceleration.x);
         tag.putDouble("PendingAccelY", pendingAcceleration.y);
         tag.putDouble("PendingAccelZ", pendingAcceleration.z);
+        tag.putFloat("ManaExpendFactor", manaExpendFactor);
         tag.putFloat("Mana", mana);
         tag.putBoolean("Launched", launched);
     }
