@@ -23,6 +23,20 @@ class BrewingRoutePlannerTest {
     }
 
     @Test
+    void returnsCompleteIngredientRoute() {
+        var route = BrewingRoutePlanner.findIngredientRoute("water", List.of("spider_eye", "nether_wart"), 4,
+                (ingredient, potion) -> switch (potion + "+" + ingredient) {
+                    case "water+spider_eye" -> "mundane";
+                    case "water+nether_wart" -> "awkward";
+                    case "awkward+spider_eye" -> "poison";
+                    default -> "";
+                }, state -> !state.isEmpty(), String::equals, "poison"::equals);
+
+        assertTrue(route.isPresent());
+        assertEquals(List.of(1, 0), route.get());
+    }
+
+    @Test
     void doesNotUseOneItemInTwoRecipeSteps() {
         var first = BrewingRoutePlanner.findFirstIngredient("water", List.of("reagent"), 4,
                 (ingredient, potion) -> switch (potion) {

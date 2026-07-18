@@ -157,15 +157,13 @@ public class WaterBallEntity extends MagicBallEntity {
             if (!inSphere(item.position(), radius)) continue;
             trackedItems.add(item.getUUID());
             item.setNoGravity(true);
-            // TODO: allowing item orbiting the ball at 2/3 radius trace, in additional with angle shifting.
-            Vec3 offset = item.position().subtract(center);
-            Vec3 tangent = new Vec3(-offset.z, 0.0, offset.x);
-            if (tangent.lengthSqr() < 1e-8) tangent = new Vec3(1.0, 0.0, 0.0);
-            item.setDeltaMovement(tangent.normalize().scale(0.08).add(offset.scale(-0.04)));
+            double angle = tickCount * 0.08 + item.getUUID().getLeastSignificantBits() * 0.0001;
+            double orbitRadius = radius * 2.0 / 3.0;
+            Vec3 target = center.add(Math.cos(angle) * orbitRadius, 0.0, Math.sin(angle) * orbitRadius);
+            item.setDeltaMovement(target.subtract(item.position()).scale(0.2));
         }
     }
 
-    //TODO: consume all material needed for brewing (water -> poison / water -> healing) instead of single step each time. This should be registered as recipes
     private void tickBrewing() {
         if (!(level() instanceof ServerLevel server)) return;
         if (brewTask == null) {
@@ -173,23 +171,26 @@ public class WaterBallEntity extends MagicBallEntity {
             return;
         }
 
-        Entity entity = server.getEntity(brewTask.ingredientId());
-        if (!(entity instanceof ItemEntity ingredientEntity) || !ingredientEntity.isAlive()) {
-            int missingTicks = brewTask.missingTicks() + 1;
-            brewTask = missingTicks > MISSING_ITEM_GRACE_TICKS ? null : brewTask.withMissingTicks(missingTicks);
-            return;
-        }
-
         double radius = getTargetSize() / 2.0;
-        ItemStack ingredient = ingredientEntity.getItem();
-        if (!inSphere(ingredientEntity.position(), radius)
-                || ingredient.isEmpty()
-                || !ItemStack.isSameItemSameComponents(ingredient, brewTask.expectedIngredient())) {
-            brewTask = null;
-            return;
+        List<ItemEntity> ingredientEntities = new ArrayList<>();
+        for (int i = 0; i < brewTask.ingredientIds().size(); i++) {
+            Entity entity = server.getEntity(brewTask.ingredientIds().get(i));
+            if (!(entity instanceof ItemEntity item) || !item.isAlive()) {
+                int missingTicks = brewTask.missingTicks() + 1;
+                brewTask = missingTicks > MISSING_ITEM_GRACE_TICKS ? null : brewTask.withMissingTicks(missingTicks);
+                return;
+            }
+            ItemStack expected = brewTask.expectedIngredients().get(i);
+            if (!inSphere(item.position(), radius)
+                    || item.getItem().isEmpty()
+                    || !ItemStack.isSameItemSameComponents(item.getItem(), expected)) {
+                brewTask = null;
+                return;
+            }
+            ingredientEntities.add(item);
         }
 
-        ItemStack currentOutput = brewOutput(ingredient, potionState);
+        ItemStack currentOutput = brewRouteOutput(brewTask.expectedIngredients(), potionState);
         if (!ItemStack.isSameItemSameComponents(currentOutput, brewTask.result())) {
             brewTask = null;
             return;
@@ -201,14 +202,15 @@ public class WaterBallEntity extends MagicBallEntity {
             return;
         }
 
-        completeBrewing(ingredientEntity, currentOutput);
+        completeBrewing(ingredientEntities, currentOutput);
         brewTask = null;
     }
 
     private void tryStartBrewing() {
         List<BrewIngredient> ingredients = currentIngredients();
-        findBrewStep(potionState, ingredients, this::brewOutput).ifPresent(step ->
-                brewTask = new BrewTask(step.ingredientId(), step.expectedIngredient(), step.result(), BREWING_TIME, 0));
+        findBrewRoute(potionState, ingredients, this::brewOutput).ifPresent(route ->
+                brewTask = new BrewTask(route.ingredientIds(), route.expectedIngredients(), route.result(),
+                        BREWING_TIME * route.expectedIngredients().size(), 0));
     }
 
     private void consumeDirectPotion() {
@@ -228,6 +230,7 @@ public class WaterBallEntity extends MagicBallEntity {
                 .ifPresent(item -> {
                     setPotionState(item.getItem().copyWithCount(1));
                     consumeIngredient(item);
+                    brewTask = null;
                 });
     }
 
@@ -261,19 +264,35 @@ public class WaterBallEntity extends MagicBallEntity {
         return isAllowedPotion(output) ? output.copyWithCount(1) : ItemStack.EMPTY;
     }
 
-    static Optional<BrewStep> findBrewStep(ItemStack currentPotion,
-                                           List<BrewIngredient> ingredients,
-                                           BiFunction<ItemStack, ItemStack, ItemStack> mixer) {
-        var first = BrewingRoutePlanner.findFirstIngredient(currentPotion.copyWithCount(1), ingredients,
+    private ItemStack brewRouteOutput(List<ItemStack> ingredients, ItemStack inputPotion) {
+        ItemStack output = inputPotion.copyWithCount(1);
+        for (ItemStack ingredient : ingredients) {
+            output = brewOutput(ingredient, output);
+            if (output.isEmpty()) return ItemStack.EMPTY;
+        }
+        return output.copyWithCount(1);
+    }
+
+    static Optional<BrewRoute> findBrewRoute(ItemStack currentPotion,
+                                             List<BrewIngredient> ingredients,
+                                             BiFunction<ItemStack, ItemStack, ItemStack> mixer) {
+        var route = BrewingRoutePlanner.findIngredientRoute(currentPotion.copyWithCount(1), ingredients,
                 MAX_BREWING_ROUTE_LENGTH,
                 (ingredient, potion) -> mixer.apply(ingredient.stack(), potion),
                 WaterBallEntity::isAllowedPotion,
                 ItemStack::isSameItemSameComponents,
                 WaterBallEntity::hasPotionEffect);
-        if (first.isEmpty()) return Optional.empty();
-        BrewIngredient ingredient = ingredients.get(first.getAsInt());
-        ItemStack output = mixer.apply(ingredient.stack(), currentPotion);
-        return Optional.of(new BrewStep(ingredient.id(), ingredient.stack().copyWithCount(1), output.copyWithCount(1)));
+        if (route.isEmpty()) return Optional.empty();
+        ItemStack output = currentPotion.copyWithCount(1);
+        List<UUID> ids = new ArrayList<>();
+        List<ItemStack> expected = new ArrayList<>();
+        for (int index : route.get()) {
+            BrewIngredient ingredient = ingredients.get(index);
+            output = mixer.apply(ingredient.stack(), output);
+            ids.add(ingredient.id());
+            expected.add(ingredient.stack().copyWithCount(1));
+        }
+        return Optional.of(new BrewRoute(List.copyOf(ids), List.copyOf(expected), output.copyWithCount(1)));
     }
 
     private static boolean isAllowedPotion(ItemStack stack) {
@@ -291,9 +310,9 @@ public class WaterBallEntity extends MagicBallEntity {
         return contents != null && contents.hasEffects();
     }
 
-    private void completeBrewing(ItemEntity ingredientEntity, ItemStack result) {
+    private void completeBrewing(List<ItemEntity> ingredientEntities, ItemStack result) {
         setPotionState(result.copyWithCount(1));
-        consumeIngredient(ingredientEntity);
+        ingredientEntities.forEach(this::consumeIngredient);
         applyPotionEffects();
     }
 
@@ -303,7 +322,7 @@ public class WaterBallEntity extends MagicBallEntity {
 
         double radius = getTargetSize() / 2.0;
         for (LivingEntity entity : level().getEntitiesOfClass(LivingEntity.class, getBoundingBox(), LivingEntity::isAlive)) {
-            if (!inSphere(entity.position(), radius)) continue;
+            if (!entityInSphere(entity, radius)) continue;
             oldEffects.forEach(entity::removeEffect);
         }
     }
@@ -328,13 +347,17 @@ public class WaterBallEntity extends MagicBallEntity {
         if (effects.isEmpty()) return;
         double radius = getTargetSize() / 2.0;
         for (LivingEntity entity : level().getEntitiesOfClass(LivingEntity.class, getBoundingBox(), LivingEntity::isAlive)) {
-            if (!inSphere(entity.position(), radius)) continue;
+            if (!entityInSphere(entity, radius)) continue;
             for (Holder<MobEffect> effect : effects) {
                 int amplifier = effectAmplifier();
                 if (effect.value().isInstantenous()) effect.value().applyInstantenousEffect(this, this, entity, amplifier, 1.0);
                 else entity.addEffect(new MobEffectInstance(effect, 40, amplifier));
             }
         }
+    }
+
+    private boolean entityInSphere(Entity entity, double radius) {
+        return inSphere(entity.getBoundingBox().getCenter(), radius);
     }
 
     private int effectAmplifier() {
@@ -409,21 +432,29 @@ public class WaterBallEntity extends MagicBallEntity {
     }
 
     record BrewIngredient(UUID id, ItemStack stack) {}
-    record BrewStep(UUID ingredientId, ItemStack expectedIngredient, ItemStack result) {}
-    private record BrewTask(UUID ingredientId, ItemStack expectedIngredient, ItemStack result,
+    record BrewRoute(List<UUID> ingredientIds, List<ItemStack> expectedIngredients, ItemStack result) {}
+    private record BrewTask(List<UUID> ingredientIds, List<ItemStack> expectedIngredients, ItemStack result,
                             int remainingTicks, int missingTicks) {
         BrewTask withProgress(int remainingTicks) {
-            return new BrewTask(ingredientId, expectedIngredient, result, remainingTicks, 0);
+            return new BrewTask(ingredientIds, expectedIngredients, result, remainingTicks, 0);
         }
 
         BrewTask withMissingTicks(int missingTicks) {
-            return new BrewTask(ingredientId, expectedIngredient, result, remainingTicks, missingTicks);
+            return new BrewTask(ingredientIds, expectedIngredients, result, remainingTicks, missingTicks);
         }
 
         CompoundTag save(net.minecraft.core.HolderLookup.Provider registries) {
             CompoundTag tag = new CompoundTag();
-            tag.putUUID("IngredientId", ingredientId);
-            tag.put("ExpectedIngredient", expectedIngredient.save(registries));
+            ListTag ids = new ListTag();
+            ingredientIds.forEach(uuid -> {
+                CompoundTag entry = new CompoundTag();
+                entry.putUUID("Uuid", uuid);
+                ids.add(entry);
+            });
+            tag.put("IngredientIds", ids);
+            ListTag expected = new ListTag();
+            expectedIngredients.forEach(stack -> expected.add(stack.save(registries)));
+            tag.put("ExpectedIngredients", expected);
             tag.put("Result", result.save(registries));
             tag.putInt("RemainingTicks", remainingTicks);
             tag.putInt("MissingTicks", missingTicks);
@@ -431,11 +462,22 @@ public class WaterBallEntity extends MagicBallEntity {
         }
 
         static Optional<BrewTask> load(CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
-            if (!tag.hasUUID("IngredientId")) return Optional.empty();
-            Optional<ItemStack> expected = ItemStack.parse(registries, tag.getCompound("ExpectedIngredient"));
             Optional<ItemStack> result = ItemStack.parse(registries, tag.getCompound("Result"));
-            if (expected.isEmpty() || result.isEmpty()) return Optional.empty();
-            return Optional.of(new BrewTask(tag.getUUID("IngredientId"), expected.get(), result.get(),
+            if (result.isEmpty()) return Optional.empty();
+            List<UUID> ids = new ArrayList<>();
+            for (Tag value : tag.getList("IngredientIds", Tag.TAG_COMPOUND)) {
+                CompoundTag entry = (CompoundTag)value;
+                if (!entry.hasUUID("Uuid")) return Optional.empty();
+                ids.add(entry.getUUID("Uuid"));
+            }
+            List<ItemStack> expected = new ArrayList<>();
+            for (Tag value : tag.getList("ExpectedIngredients", Tag.TAG_COMPOUND)) {
+                Optional<ItemStack> stack = ItemStack.parse(registries, (CompoundTag)value);
+                if (stack.isEmpty()) return Optional.empty();
+                expected.add(stack.get());
+            }
+            if (ids.isEmpty() || ids.size() != expected.size()) return Optional.empty();
+            return Optional.of(new BrewTask(List.copyOf(ids), List.copyOf(expected), result.get(),
                     tag.getInt("RemainingTicks"), tag.getInt("MissingTicks")));
         }
     }
