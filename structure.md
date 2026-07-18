@@ -20,7 +20,7 @@
 |---------|-------------|
 | **Magic Array** | A drawn magical circle on a multi-block canvas face, consisting of an outer circle + center symbol + parameter runes |
 | **Glyph / Symbol** | A recognized drawn pattern on canvas (arrow, circle, figure-8, star, fire, water, earth, wind, revert) |
-| **Element Concentrations** | 9-element energy values (WIND, FIRE, WOOD, EARTH, LIGHT, DARK, SPACE, TIME, MANA) per block position, with diffusion & decay |
+| **Element Concentrations** | 9-element energy values (WIND, FIRE, WATER, EARTH, LIGHT, DARK, SPACE, TIME, MANA) per block position, with diffusion & decay |
 | **Mana Pixels** | Individual colored pixels drawn on canvas faces that form symbols — detected via the `gyromancy:mana` effect layer |
 
 ---
@@ -195,7 +195,7 @@ client.ElementDebugRenderer
 
 ##### `ElementType.java` (enum)
 **Role:** The 9 elemental types.  
-**Values:** `WIND`, `FIRE`, `WOOD`, `EARTH`, `LIGHT`, `DARK`, `SPACE`, `TIME`, `MANA`  
+**Values:** `WIND`, `FIRE`, `WATER`, `EARTH`, `LIGHT`, `DARK`, `SPACE`, `TIME`, `MANA`  
 **Methods:** `byIndex(int)` → enum constant; `COUNT = 9`
 
 ##### `IElementStorage.java` (interface)

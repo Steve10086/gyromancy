@@ -4,6 +4,9 @@ import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.entity.ball.FireballEntity;
 import com.astune.gyromancy.entity.ball.ManaballEntity;
 import com.astune.gyromancy.entity.ball.OldFireballEntity;
+import com.astune.gyromancy.entity.ball.WaterBallEntity;
+import com.astune.gyromancy.entity.ball.IceBallEntity;
+import com.astune.gyromancy.entity.ball.DryBallEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -45,4 +48,17 @@ public final class ModEntities {
                     .updateInterval(1)
                     .clientTrackingRange(64)
                     .build(Gyromancy.MODID + ":manaball"));
+
+    public static final Supplier<EntityType<WaterBallEntity>> WATER_BALL = registerBall("water_ball", WaterBallEntity::new);
+    public static final Supplier<EntityType<IceBallEntity>> ICE_BALL = registerBall("ice_ball", IceBallEntity::new);
+    public static final Supplier<EntityType<DryBallEntity>> DRY_BALL = registerBall("dry_ball", DryBallEntity::new);
+
+    private static <T extends com.astune.gyromancy.entity.ball.MagicBallEntity> Supplier<EntityType<T>> registerBall(
+            String name, EntityType.EntityFactory<T> factory) {
+        return ENTITIES.register(name, () -> EntityType.Builder.of(factory, MobCategory.MISC)
+                .sized(0.5F, 0.5F)
+                .updateInterval(1)
+                .clientTrackingRange(64)
+                .build(Gyromancy.MODID + ":" + name));
+    }
 }

@@ -10,6 +10,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,6 +21,9 @@ public abstract class CenterSymbol extends Symbol {
     public static final String FIREBALL_KEY = "fireball";
     public static final String OLD_FIREBALL_KEY = "old_fireball";
     public static final String MANABALL_KEY = "manaball";
+    public static final String WATERBALL_KEY = "waterball";
+    public static final String ICEBALL_KEY = "iceball";
+    public static final String DRYBALL_KEY = "dryball";
 
     protected CenterSymbol(String name, int featurePoints, boolean allowRotation, int glyphColor) {
         super(name, featurePoints, allowRotation, glyphColor);
@@ -68,6 +72,28 @@ public abstract class CenterSymbol extends Symbol {
         Direction face = glyph.pixels().stream().findAny().map(PixelPos::face).orElse(Direction.UP);
         return Vec3.atLowerCornerOf(face.getNormal());
     }
+
+    protected static LaunchData launchData(ServerLevel level, PositionedGlyph circleGlyph,
+                                           PositionedGlyph centerGlyph, List<PositionedGlyph> arrows) {
+        Vec3 velocity = Vec3.ZERO;
+        double arrowSizeSum = 0.0;
+        for (PositionedGlyph arrow : arrows) {
+            arrowSizeSum += arrow.length();
+            if (arrow.front().lengthSqr() >= 1e-8) {
+                velocity = velocity.add(arrow.front().normalize().scale(arrow.length()));
+            }
+        }
+
+        double area = Math.max(0.0, circleGlyph.length() * circleGlyph.width());
+        float size = (float)Math.max(0.1F, Math.sqrt(area) * 0.5);
+        double speed = velocity.length();
+        double lift = (arrowSizeSum - speed) + 0.2 * speed;
+        lift *= isFacingDown(circleGlyph) ? -1.0 : 1.0;
+        Vec3 spawnPos = glyphCenter(level, centerGlyph).add(faceNormal(centerGlyph).scale(size * 2.0));
+        return new LaunchData(spawnPos, velocity.add(0.0, lift, 0.0), size);
+    }
+
+    protected record LaunchData(Vec3 position, Vec3 velocity, float size) {}
 
     public static UUID boundEntityUuid(Map<String, Object> scratchData, String key) {
         Object value = scratchData.get(key);

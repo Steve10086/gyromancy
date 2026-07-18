@@ -3,7 +3,8 @@
   "package": "com.astune.gyromancy.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "LevelChunkMixin"
+    "LevelChunkMixin",
+    "LevelChunkSectionAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -1,8 +1,8 @@
 package com.astune.gyromancy.api.element;
 
 /**
- * Represents the nine elemental types plus Mana in the Gyromancy elemental system.
- * Each coordinate in the world has latent concentration values for all ten types,
+ * Represents the eight elemental types plus Mana in the Gyromancy elemental system.
+ * Each coordinate in the world has latent concentration values for all nine types,
  * which vary by biome and can be modified by magical arrays.
  */
 public enum ElementType {
@@ -10,8 +10,8 @@ public enum ElementType {
     WIND("wind"),
     /** Fire element — associated with destruction, heat, and volcanic biomes */
     FIRE("fire"),
-    /** Wood element — associated with growth, life, and forest biomes */
-    WOOD("wood"),
+    /** Water element - associated with fluids, poison, and wet biomes */
+    WATER("water"),
     /** Earth element — associated with stability, protection, and underground biomes */
     EARTH("earth"),
     /** Light element — associated with purification, healing, and high-altitude biomes */

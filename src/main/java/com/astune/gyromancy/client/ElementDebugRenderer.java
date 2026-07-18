@@ -47,7 +47,7 @@ public final class ElementDebugRenderer {
     private static final Map<Integer, GlyphData> glyphData = new ConcurrentHashMap<>();
 
     private static final int[] ELEMENT_COLORS = {
-            0xFF_7EC8E3, 0xFF_FF6B35, 0xFF_4CAF50, 0xFF_8D6E63,
+            0xFF_7EC8E3, 0xFF_FF6B35, 0xFF_4F9DFF, 0xFF_8D6E63,
             0xFF_FFF176, 0xFF_7B1FA2, 0xFF_42A5F5, 0xFF_EC407A,
             0xFF_26C6DA
     };

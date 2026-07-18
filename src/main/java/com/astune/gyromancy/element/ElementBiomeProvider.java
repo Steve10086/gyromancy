@@ -33,7 +33,7 @@ public final class ElementBiomeProvider {
 
         values[ElementType.WIND.ordinal()]  = scale(0.2f + (1f - temp) * 0.3f);
         values[ElementType.FIRE.ordinal()]  = scale(temp * 0.8f);
-        values[ElementType.WOOD.ordinal()]  = scale(downfall * 0.9f + 0.05f);
+        values[ElementType.WATER.ordinal()] = scale(downfall * 0.8f + 0.05f);
         values[ElementType.EARTH.ordinal()] = scale(isUnderground ? 0.6f : 0.4f);
         values[ElementType.LIGHT.ordinal()] = scale(isUnderground ? 0.05f : temp * 0.6f + 0.1f);
         values[ElementType.DARK.ordinal()]  = scale(isUnderground ? 0.75f : 0.6f - temp * 0.5f);

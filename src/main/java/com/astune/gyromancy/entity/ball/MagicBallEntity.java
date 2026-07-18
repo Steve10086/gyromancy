@@ -106,6 +106,14 @@ public abstract class MagicBallEntity extends Entity {
                                         double maxVolumeFireLevel, double firePerVolume,
                                         double fireConversionCost, double manaToVolume,
                                         long storedMana) {
+        return exchangeWithElements(ElementType.FIRE, fireVolumeLoss, fireEquilibrium, maxVolumeFireLevel,
+                firePerVolume, fireConversionCost, manaToVolume, storedMana);
+    }
+
+    protected long exchangeWithElements(ElementType element, double fireVolumeLoss, double fireEquilibrium,
+                                        double maxVolumeFireLevel, double firePerVolume,
+                                        double fireConversionCost, double manaToVolume,
+                                        long storedMana) {
         if (level().isClientSide) return storedMana;
 
         float size = getTargetSize();
@@ -114,7 +122,7 @@ public abstract class MagicBallEntity extends Entity {
 
         double volume = volume(size);
         double averageFire = positions.stream()
-                .mapToLong(pos -> ElementStorageManager.INSTANCE.get(level(), pos).get(ElementType.FIRE))
+                .mapToLong(pos -> ElementStorageManager.INSTANCE.get(level(), pos).get(element))
                 .average()
                 .orElse(0.0);
 
@@ -144,7 +152,7 @@ public abstract class MagicBallEntity extends Entity {
             for (BlockPos pos : positions) {
                 var current = ElementStorageManager.INSTANCE.get(level(), pos);
                 ElementStorageManager.INSTANCE.set(level(), pos,
-                        current.withValue(ElementType.FIRE, current.get(ElementType.FIRE) + firePerBlock));
+                        current.withValue(element, current.get(element) + firePerBlock));
             }
         }
 
@@ -205,7 +213,7 @@ public abstract class MagicBallEntity extends Entity {
         return position().add(0, radius, 0).distanceToSqr(target) <= radius * radius;
     }
 
-    private List<BlockPos> containedPositions(float size) {
+    protected List<BlockPos> containedPositions(float size) {
         double r = size / 2.0;
         Vec3 center = position().add(0.0, r, 0.0);
         AABB box = new AABB(center.x - r, center.y - r, center.z - r,
@@ -217,6 +225,31 @@ public abstract class MagicBallEntity extends Entity {
                 .forEach(positions::add);
         if (positions.isEmpty()) positions.add(BlockPos.containing(center));
         return positions;
+    }
+
+    protected void moveWithResistance(double factor, double constant) {
+        Vec3 velocity = getDeltaMovement();
+        setPos(position().add(velocity));
+        double speed = velocity.length();
+        if (speed == 0.0) return;
+
+        double loss = Math.max(0.0, factor * speed - constant);
+        setDeltaMovement(velocity.scale(Math.max(0.0, speed - loss) / speed));
+    }
+
+    protected long consumeElement(List<BlockPos> positions, ElementType type, long amount) {
+        long consumed = 0L;
+        for (BlockPos pos : positions) {
+            if (consumed >= amount) break;
+            var current = ElementStorageManager.INSTANCE.get(level(), pos);
+            long available = Math.max(0L, current.get(type));
+            long taken = Math.min(available, amount - consumed);
+            if (taken == 0L) continue;
+            consumed += taken;
+            ElementStorageManager.INSTANCE.set(level(), pos,
+                    current.withValue(type, current.get(type) - taken));
+        }
+        return consumed;
     }
 
     private long drainMana(List<BlockPos> positions) {

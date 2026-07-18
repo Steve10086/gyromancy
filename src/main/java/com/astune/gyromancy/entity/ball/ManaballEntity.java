@@ -16,6 +16,8 @@ import static java.lang.Math.max;
 public class ManaballEntity extends MagicBallEntity {
     private static final float DISCARD_SIZE = 0.1f;
     private static final int ELEMENT_EXCHANGE_INTERVAL = 10;
+    private static final double RESISTANCE_FACTOR = 0.08;
+    private static final double RESISTANCE_CONSTANT = 0.002;
     private float manaExpendFactor = 1f;
     private Vec3 acceleration = Vec3.ZERO;
     private Vec3 pendingVelocity = Vec3.ZERO;
@@ -55,8 +57,8 @@ public class ManaballEntity extends MagicBallEntity {
 
         launchIfReady();
 
-        Vec3 velocity = getDeltaMovement();
-        setDeltaMovement(velocity.add(acceleration));
+        setDeltaMovement(getDeltaMovement().add(acceleration));
+        moveWithResistance(RESISTANCE_FACTOR, RESISTANCE_CONSTANT);
 
         if (tickCount % ELEMENT_EXCHANGE_INTERVAL != 0) return;
 
@@ -101,7 +103,7 @@ public class ManaballEntity extends MagicBallEntity {
     }
 
     private void launchIfReady() {
-        if (launched) return;
+        if (launched || !isFullyGrown()) return;
         launched = true;
         acceleration = pendingAcceleration;
         setDeltaMovement(pendingVelocity);

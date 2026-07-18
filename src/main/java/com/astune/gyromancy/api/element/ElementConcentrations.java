@@ -15,6 +15,8 @@ public record ElementConcentrations(long[] values, long[] derivatives) {
     public static final long MIN_VALUE = -Integer.MAX_VALUE;
 
     public ElementConcentrations {
+        values = Arrays.copyOf(values, SIZE);
+        derivatives = Arrays.copyOf(derivatives, SIZE);
         for (int i = 0; i < SIZE; i++) values[i] = clamp(values[i]);
     }
 

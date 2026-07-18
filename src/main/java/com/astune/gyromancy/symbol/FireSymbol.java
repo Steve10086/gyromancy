@@ -4,6 +4,7 @@ import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.symbol.ParameterRune;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.entity.ball.FireballEntity;
+import com.astune.gyromancy.entity.ball.IceBallEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
@@ -28,25 +29,22 @@ public final class FireSymbol extends CenterSymbol {
                                                       PositionedGlyph circleGlyph,
                                                       PositionedGlyph centerGlyph,
                                                       List<PositionedGlyph> runes) {
-        if (runes.stream().anyMatch(rune -> !"arrow".equals(rune.symbolId().getPath()))) return Map.of();
+        if (runes.stream().anyMatch(rune -> !"arrow".equals(rune.symbolId().getPath())
+                && !"revert".equals(rune.symbolId().getPath()))) return Map.of();
+        long revertCount = runes.stream().filter(rune -> "revert".equals(rune.symbolId().getPath())).count();
+        if (revertCount > 1) return Map.of();
 
-        Vec3 velocity = Vec3.ZERO;
-        double arrowSizeSum = 0.0;
-        for (PositionedGlyph rune : runes) {
-            arrowSizeSum += rune.length();
-            if (rune.front().lengthSqr() < 1e-8) continue;
-            velocity = velocity.add(rune.front().normalize().scale(rune.length()));
+        List<PositionedGlyph> arrows = runes.stream()
+                .filter(rune -> "arrow".equals(rune.symbolId().getPath())).toList();
+        LaunchData launch = launchData(level, circleGlyph, centerGlyph, arrows);
+        if (revertCount == 1) {
+            IceBallEntity iceball = new IceBallEntity(level, launch.position(), launch.velocity(), launch.size());
+            level.addFreshEntity(iceball);
+            return Map.of(ICEBALL_KEY, ArrayObject.EntityRef.of(iceball));
         }
 
-        double area = Math.max(0.0, circleGlyph.length() * circleGlyph.width());
-        float size = (float) Math.max(0.1, Math.sqrt(area) * 0.5);
-        double speed = velocity.length();
-        double lift = (arrowSizeSum - speed) + 0.2 * speed;
-        lift *= isFacingDown(circleGlyph) ? -1.0 : 1.0;
-        Vec3 initialVelocity = velocity.add(0.0, lift, 0.0);
-        Vec3 acceleration = runes.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
-        Vec3 spawnPos = glyphCenter(level, centerGlyph).add(faceNormal(centerGlyph).scale(size * 2.0));
-        FireballEntity fireball = new FireballEntity(level, spawnPos, initialVelocity, acceleration, size);
+        Vec3 acceleration = arrows.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
+        FireballEntity fireball = new FireballEntity(level, launch.position(), launch.velocity(), acceleration, launch.size());
         level.addFreshEntity(fireball);
         return Map.of(FIREBALL_KEY, ArrayObject.EntityRef.of(fireball));
     }
@@ -54,6 +52,6 @@ public final class FireSymbol extends CenterSymbol {
     private static void discardFireballs(ServerLevel level, BlockPos arrayPos,
                                          List<ParameterRune> runes,
                                          Map<String, Object> scratchData) {
-        discardBoundEntities(level, scratchData, FIREBALL_KEY, OLD_FIREBALL_KEY);
+        discardBoundEntities(level, scratchData, FIREBALL_KEY, OLD_FIREBALL_KEY, ICEBALL_KEY);
     }
 }
