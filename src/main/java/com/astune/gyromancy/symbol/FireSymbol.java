@@ -38,13 +38,15 @@ public final class FireSymbol extends CenterSymbol {
                 .filter(rune -> "arrow".equals(rune.symbolId().getPath())).toList();
         LaunchData launch = launchData(level, circleGlyph, centerGlyph, arrows);
         if (revertCount == 1) {
-            IceBallEntity iceball = new IceBallEntity(level, launch.position(), launch.velocity(), launch.size());
+            IceBallEntity iceball = new IceBallEntity(level, launch.position(), launch.velocity(),
+                    launch.arrowSizeSum(), launch.liftDirection(), launch.size());
             level.addFreshEntity(iceball);
             return Map.of(ICEBALL_KEY, ArrayObject.EntityRef.of(iceball));
         }
 
         Vec3 acceleration = arrows.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
-        FireballEntity fireball = new FireballEntity(level, launch.position(), launch.velocity(), acceleration, launch.size());
+        FireballEntity fireball = new FireballEntity(level, launch.position(), launch.velocity(),
+                launch.arrowSizeSum(), launch.liftDirection(), acceleration, launch.size());
         level.addFreshEntity(fireball);
         return Map.of(FIREBALL_KEY, ArrayObject.EntityRef.of(fireball));
     }

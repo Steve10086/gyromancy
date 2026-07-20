@@ -19,9 +19,9 @@ public class DryBallEntity extends ResistantBallEntity {
         super(type, level);
     }
 
-    public DryBallEntity(Level level, Vec3 pos, Vec3 velocity, float size) {
+    public DryBallEntity(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum, double liftDirection, float size) {
         this(ModEntities.DRY_BALL.get(), level);
-        configure(pos, velocity, size);
+        configure(pos, velocity, arrowSizeSum, liftDirection, size);
     }
 
     @Override
@@ -39,18 +39,6 @@ public class DryBallEntity extends ResistantBallEntity {
                 level().setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
             }
         }
-        reduceWaterElement(positions);
-    }
-
-    private void reduceWaterElement(List<BlockPos> positions) {
-        for (BlockPos pos : positions) {
-            var current = ElementStorageManager.INSTANCE.get(level(), pos);
-            long mana = Math.max(0L, current.get(ElementType.MANA));
-            long water = Math.max(0L, current.get(ElementType.WATER));
-            long removedWater = Math.min(water, mana / 2L);
-            ElementStorageManager.INSTANCE.set(level(), pos, current
-                    .withValue(ElementType.WATER, water - removedWater)
-                    .withValue(ElementType.MANA, mana - removedWater * 2L));
-        }
+        reduceElementWithMana(ElementType.WATER, 2L);
     }
 }

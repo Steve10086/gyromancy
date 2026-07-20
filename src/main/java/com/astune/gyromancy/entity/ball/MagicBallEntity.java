@@ -165,6 +165,12 @@ public abstract class MagicBallEntity extends Entity {
         return storedMana;
     }
 
+    protected Vec3 launchVelocity(Vec3 velocity, double arrowSizeSum, double liftDirection) {
+        double speed = velocity.length();
+        double lift = ((arrowSizeSum - speed) + 0.2 * speed) * liftDirection;
+        return velocity.add(0.0, lift, 0.0);
+    }
+
     private long drainManaForGrowth(List<BlockPos> positions, long needed) {
         long drained = 0L;
         for (BlockPos pos : positions) {
@@ -250,6 +256,24 @@ public abstract class MagicBallEntity extends Entity {
                     current.withValue(type, current.get(type) - taken));
         }
         return consumed;
+    }
+
+    protected void reduceElementWithMana(ElementType type, long manaCost) {
+        reduceElementWithMana(containedPositions(getTargetSize()), type, manaCost);
+    }
+
+    private void reduceElementWithMana(List<BlockPos> positions, ElementType type, long manaCost) {
+        if (manaCost <= 0L) return;
+        for (BlockPos pos : positions) {
+            var current = ElementStorageManager.INSTANCE.get(level(), pos);
+            long mana = Math.max(0L, current.get(ElementType.MANA));
+            long element = Math.max(0L, current.get(type));
+            long removed = Math.min(element, mana / manaCost);
+            if (removed == 0L) continue;
+            ElementStorageManager.INSTANCE.set(level(), pos, current
+                    .withValue(type, element - removed)
+                    .withValue(ElementType.MANA, mana - removed * manaCost));
+        }
     }
 
     private long drainMana(List<BlockPos> positions) {

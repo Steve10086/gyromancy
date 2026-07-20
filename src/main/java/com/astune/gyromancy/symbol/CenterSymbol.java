@@ -86,14 +86,12 @@ public abstract class CenterSymbol extends Symbol {
 
         double area = Math.max(0.0, circleGlyph.length() * circleGlyph.width());
         float size = (float)Math.max(0.1F, Math.sqrt(area) * 0.5);
-        double speed = velocity.length();
-        double lift = (arrowSizeSum - speed) + 0.2 * speed;
-        lift *= isFacingDown(circleGlyph) ? -1.0 : 1.0;
+        double liftDirection = isFacingDown(circleGlyph) ? -1.0 : 1.0;
         Vec3 spawnPos = glyphCenter(level, centerGlyph).add(faceNormal(centerGlyph).scale(size * 2.0));
-        return new LaunchData(spawnPos, velocity.add(0.0, lift, 0.0), size);
+        return new LaunchData(spawnPos, velocity, arrowSizeSum, liftDirection, size);
     }
 
-    protected record LaunchData(Vec3 position, Vec3 velocity, float size) {}
+    protected record LaunchData(Vec3 position, Vec3 velocity, double arrowSizeSum, double liftDirection, float size) {}
 
     public static UUID boundEntityUuid(Map<String, Object> scratchData, String key) {
         Object value = scratchData.get(key);

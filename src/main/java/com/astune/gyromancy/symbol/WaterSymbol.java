@@ -36,13 +36,15 @@ public final class WaterSymbol extends CenterSymbol {
                 .filter(rune -> "arrow".equals(rune.symbolId().getPath())).toList();
         LaunchData launch = launchData(level, circleGlyph, centerGlyph, arrows);
         if (revertCount == 1) {
-            DryBallEntity dryball = new DryBallEntity(level, launch.position(), launch.velocity(), launch.size());
+            DryBallEntity dryball = new DryBallEntity(level, launch.position(), launch.velocity(),
+                    launch.arrowSizeSum(), launch.liftDirection(), launch.size());
             level.addFreshEntity(dryball);
             return Map.of(DRYBALL_KEY, ArrayObject.EntityRef.of(dryball));
         }
 
         Vec3 acceleration = arrows.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
-        WaterBallEntity waterball = new WaterBallEntity(level, launch.position(), launch.velocity(), acceleration, launch.size());
+        WaterBallEntity waterball = new WaterBallEntity(level, launch.position(), launch.velocity(),
+                launch.arrowSizeSum(), launch.liftDirection(), acceleration, launch.size());
         level.addFreshEntity(waterball);
         return Map.of(WATERBALL_KEY, ArrayObject.EntityRef.of(waterball));
     }

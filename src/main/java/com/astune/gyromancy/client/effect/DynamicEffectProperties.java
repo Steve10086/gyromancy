@@ -43,12 +43,7 @@ final class DynamicEffectProperties {
         }
         if (size > 0) {
             runtime.root.updateScale(new Vector3f(size, size, size));
-            for (var object : runtime.getObjects().values()) {
-                if (object instanceof ParticleEmitter emitter) {
-                    emitter.getParticles().values().forEach(queue -> queue.forEach(this::applyTrailSize));
-                    emitter.waitToAdded.forEach(this::applyTrailSize);
-                }
-            }
+
         }
     }
 

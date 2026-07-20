@@ -16,11 +16,11 @@ public abstract class ResistantBallEntity extends MagicBallEntity {
         super(type, level);
     }
 
-    protected void configure(Vec3 pos, Vec3 velocity, float size) {
+    protected void configure(Vec3 pos, Vec3 velocity, double arrowSizeSum, double liftDirection, float size) {
         setBallSize(size);
         setPos(pos);
-        pendingVelocity = velocity;
-        setDeltaMovement(Vec3.ZERO);
+        pendingVelocity = launchVelocity(velocity, arrowSizeSum, liftDirection);
+        setDeltaMovement(pendingVelocity);
     }
 
     @Override
@@ -29,7 +29,6 @@ public abstract class ResistantBallEntity extends MagicBallEntity {
         growIntoTargetSize();
         if (!launched && isFullyGrown()) {
             launched = true;
-            setDeltaMovement(pendingVelocity);
         }
         if (launched) moveWithResistance(RESISTANCE_FACTOR, RESISTANCE_CONSTANT);
     }

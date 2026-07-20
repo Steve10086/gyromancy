@@ -30,10 +30,11 @@ public class ManaballEntity extends MagicBallEntity {
         super(type, level);
     }
 
-    public ManaballEntity(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
+    public ManaballEntity(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
+                          double liftDirection, Vec3 acceleration, float size) {
         this(ModEntities.MANABALL.get(), level);
         setBallSize(size);
-        this.pendingVelocity = velocity;
+        this.pendingVelocity = launchVelocity(velocity, arrowSizeSum, liftDirection);
         this.pendingAcceleration = acceleration;
         this.acceleration = Vec3.ZERO;
         manaExpendFactor *= 2 * size;

@@ -40,13 +40,17 @@ public class ElementBallRenderer<T extends MagicBallEntity> extends EntityRender
             effect = new EntityEffect(entity, effectId)
                     .setSize((float)(size * RENDER_SCALE))
                     .setOffset(0, size * MODEL_Y_OFFSET, 0)
-                    .setColor(color);
+                    .setColor(color(entity));
             effect.start();
             effects.put(entity, effect);
         } else {
-            effect.setSize((float)(size * RENDER_SCALE)).setOffset(0, size * MODEL_Y_OFFSET, 0);
+            effect.setSize((float)(size * RENDER_SCALE)).setOffset(0, size * MODEL_Y_OFFSET, 0).setColor(color(entity));
             effect.tick();
         }
+    }
+
+    protected int color(T entity) {
+        return color;
     }
 
     @Override

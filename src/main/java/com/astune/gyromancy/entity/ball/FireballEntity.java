@@ -40,11 +40,12 @@ public class FireballEntity extends MagicBallEntity {
         super(type, level);
     }
 
-    public FireballEntity(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
+    public FireballEntity(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
+                          double liftDirection, Vec3 acceleration, float size) {
         this(ModEntities.FIREBALL.get(), level);
         setBallSize(size);
         this.explosionPower = Math.max(1.0F, size);
-        this.pendingVelocity = velocity;
+        this.pendingVelocity = launchVelocity(velocity, arrowSizeSum, liftDirection);
         this.pendingAcceleration = acceleration;
         this.acceleration = Vec3.ZERO;
         setPos(pos);

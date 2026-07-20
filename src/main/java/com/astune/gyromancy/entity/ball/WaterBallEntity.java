@@ -8,6 +8,9 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -38,6 +41,8 @@ import java.util.UUID;
 import java.util.function.BiFunction;
 
 public class WaterBallEntity extends MagicBallEntity {
+    private static final EntityDataAccessor<ItemStack> DATA_POTION_STATE =
+            SynchedEntityData.defineId(WaterBallEntity.class, EntityDataSerializers.ITEM_STACK);
     private static final int EFFECT_INTERVAL = 10;
     private static final double FIRE_VOLUME_LOSS = 0.1;
     private static final double FIRE_EQUILIBRIUM = 1000.0;
@@ -48,11 +53,12 @@ public class WaterBallEntity extends MagicBallEntity {
     private static final int BREWING_TIME = PotionBrewing.BREWING_TIME_SECONDS * 20;
     private static final int MAX_BREWING_ROUTE_LENGTH = 4;
     private static final int MISSING_ITEM_GRACE_TICKS = 20;
+    private static final double BURST_PUSH_STRENGTH = 1.2;
     private final Set<UUID> trackedItems = new HashSet<>();
     private Vec3 acceleration = Vec3.ZERO;
     private Vec3 pendingVelocity = Vec3.ZERO;
     private Vec3 pendingAcceleration = Vec3.ZERO;
-    private ItemStack potionState = PotionContents.createItemStack(Items.POTION, Potions.WATER);
+    private ItemStack potionState = defaultPotionState();
     private BrewTask brewTask;
     private boolean launched;
     private long storedMana;
@@ -61,17 +67,28 @@ public class WaterBallEntity extends MagicBallEntity {
         super(type, level);
     }
 
-    public WaterBallEntity(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
+    public WaterBallEntity(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
+                           double liftDirection, Vec3 acceleration, float size) {
         this(ModEntities.WATER_BALL.get(), level);
         setBallSize(size);
         setPos(pos);
-        pendingVelocity = velocity;
+        pendingVelocity = launchVelocity(velocity, arrowSizeSum, liftDirection);
         pendingAcceleration = acceleration;
         setDeltaMovement(Vec3.ZERO);
     }
 
     public ItemStack getPotionState() {
-        return potionState.copy();
+        return entityData.get(DATA_POTION_STATE).copy();
+    }
+
+    @Override
+    protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(DATA_POTION_STATE, defaultPotionState());
+    }
+
+    private static ItemStack defaultPotionState() {
+        return PotionContents.createItemStack(Items.POTION, Potions.WATER);
     }
 
     public List<ItemStack> getCollectedItems() {
@@ -133,10 +150,24 @@ public class WaterBallEntity extends MagicBallEntity {
 
     private void burst() {
         if (!level().isClientSide) {
+            pushFrontEntities();
             fillWithFlowingWater(containedPositions(getTargetSize() * 2));
         }
         releaseItems();
         discard();
+    }
+
+    private void pushFrontEntities() {
+        Vec3 direction = getDeltaMovement();
+        if (direction.lengthSqr() < 1.0E-8) return;
+        direction = direction.normalize();
+        double radius = getTargetSize() / 2.0;
+        Vec3 front = position().add(0.0, radius, 0.0).add(direction.scale(radius));
+        double range = Math.max(1.0, radius);
+        for (Entity entity : level().getEntities(this, getBoundingBox().inflate(range).expandTowards(direction.scale(range)))) {
+            if (!entity.isAlive() || entity instanceof ItemEntity || front.distanceToSqr(entity.getBoundingBox().getCenter()) > range * range) continue;
+            entity.push(direction.x * BURST_PUSH_STRENGTH, direction.y * BURST_PUSH_STRENGTH, direction.z * BURST_PUSH_STRENGTH);
+        }
     }
 
     private void fillWithFlowingWater(List<BlockPos> positions) {
@@ -319,6 +350,7 @@ public class WaterBallEntity extends MagicBallEntity {
     private void setPotionState(ItemStack result) {
         List<Holder<MobEffect>> oldEffects = potionEffects(potionState);
         potionState = result.copyWithCount(1);
+        entityData.set(DATA_POTION_STATE, potionState.copy());
 
         double radius = getTargetSize() / 2.0;
         for (LivingEntity entity : level().getEntitiesOfClass(LivingEntity.class, getBoundingBox(), LivingEntity::isAlive)) {
@@ -396,6 +428,7 @@ public class WaterBallEntity extends MagicBallEntity {
         if (tag.contains("StoredMana")) storedMana = tag.getLong("StoredMana");
         if (tag.contains("PotionState", Tag.TAG_COMPOUND)) {
             potionState = ItemStack.parse(registryAccess(), tag.getCompound("PotionState")).orElse(potionState);
+            entityData.set(DATA_POTION_STATE, potionState.copy());
         }
         for (Tag value : tag.getList("TrackedItems", Tag.TAG_COMPOUND)) {
             CompoundTag entry = (CompoundTag)value;
