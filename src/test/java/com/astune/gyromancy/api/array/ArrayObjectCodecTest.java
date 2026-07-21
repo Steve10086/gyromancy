@@ -26,7 +26,7 @@ class ArrayObjectCodecTest {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph center = glyph("fire", SymbolRole.CENTER_SYMBOL, 2);
         PositionedGlyph rune = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
-        ArrayObject array = new ArrayObject(arrayId, circle, center, List.of(rune),
+        ArrayObject array = new ArrayObject(arrayId, circle, List.of(circle, center, rune),
                 Map.of(CenterSymbol.FIREBALL_KEY, new ArrayObject.EntityRef(entityId,
                         ResourceLocation.fromNamespaceAndPath("gyromancy", "fireball"))));
 
@@ -34,9 +34,8 @@ class ArrayObjectCodecTest {
         var decoded = ArrayObject.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 
         assertEquals(arrayId, decoded.arrayId());
-        assertEquals(circle, decoded.circleGlyph());
-        assertEquals(center, decoded.centerGlyph());
-        assertEquals(List.of(rune), decoded.runeGlyphs());
+        assertEquals(circle, decoded.rootCircleGlyph());
+        assertEquals(List.of(circle, center, rune), decoded.boundGlyphs());
         assertEquals(array.scratchData(), decoded.scratchData());
     }
 

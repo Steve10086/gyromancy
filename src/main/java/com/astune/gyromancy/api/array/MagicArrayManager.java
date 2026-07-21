@@ -2,7 +2,8 @@ package com.astune.gyromancy.api.array;
 
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
-import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
+import com.astune.gyromancy.array.compile.ArrayEffectDefinition;
+import com.astune.gyromancy.array.compile.ArrayEffectRegistry;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -21,13 +22,23 @@ public class MagicArrayManager {
     private final Map<BlockPos, UUID> positionIndex = new HashMap<>();
     private final Map<UUID, PositionedGlyph> glyphIndex = new LinkedHashMap<>();
     private final Map<Integer, UUID> glyphIdIndex = new HashMap<>();
+    private final Map<UUID, UUID> parentCircleByGlyph = new HashMap<>();
+    private final Map<UUID, List<PositionedGlyph>> directChildrenByCircle = new HashMap<>();
+    private final List<ArrayEffectDefinition> effectDefinitions;
     private int nextGlyphId = 1;
 
     // ── phrase5 array-object tracking ──
     private final Map<UUID, ArrayObject> activeArrays = new HashMap<>();
     private final Map<UUID, UUID> glyphToArray = new HashMap<>(); // glyphUuid → arrayId
 
-    public MagicArrayManager() {}
+    public MagicArrayManager() {
+        this(ArrayEffectRegistry.effects());
+    }
+
+    public MagicArrayManager(List<ArrayEffectDefinition> effectDefinitions) {
+        ArrayEffectRegistry.assertNoOverlappingSymbols(effectDefinitions);
+        this.effectDefinitions = List.copyOf(effectDefinitions);
+    }
 
     private static MagicArrayManager fromPersistentArrays(List<ArrayObject> arrays) {
         MagicArrayManager mgr = new MagicArrayManager();
@@ -97,6 +108,7 @@ public class MagicArrayManager {
     public void registerGlyph(PositionedGlyph glyph) {
         glyphIndex.put(glyph.glyphUuid(), glyph);
         glyphIdIndex.put(glyph.glyphId(), glyph.glyphUuid());
+        if (glyph.role() == SymbolRole.OUTER_CIRCLE) claimUnparentedChildren(glyph);
     }
 
     public PositionedGlyph restoreGlyph(PositionedGlyph stored) {
@@ -122,12 +134,15 @@ public class MagicArrayManager {
 
     public PositionedGlyph unregisterGlyph(int id) {
         UUID uuid = glyphIdIndex.remove(id);
-        return uuid == null ? null : glyphIndex.remove(uuid);
+        PositionedGlyph removed = uuid == null ? null : glyphIndex.remove(uuid);
+        if (removed != null) detachGlyph(removed);
+        return removed;
     }
 
     public PositionedGlyph unregisterGlyph(UUID uuid) {
         PositionedGlyph glyph = glyphIndex.remove(uuid);
         if (glyph != null) glyphIdIndex.remove(glyph.glyphId());
+        if (glyph != null) detachGlyph(glyph);
         return glyph;
     }
 
@@ -137,6 +152,87 @@ public class MagicArrayManager {
 
     public Map<UUID, PositionedGlyph> getGlyphIndex() {
         return glyphIndex;
+    }
+
+    public List<ArrayEffectDefinition> effectDefinitions() {
+        return effectDefinitions;
+    }
+
+    public PositionedGlyph parentCircle(PositionedGlyph glyph) {
+        UUID parent = parentCircleByGlyph.get(glyph.glyphUuid());
+        return parent == null ? null : glyphIndex.get(parent);
+    }
+
+    public List<PositionedGlyph> directChildren(PositionedGlyph circle) {
+        return directChildrenByCircle.getOrDefault(circle.glyphUuid(), List.of());
+    }
+
+    public List<PositionedGlyph> ancestorCircles(PositionedGlyph glyph) {
+        List<PositionedGlyph> ancestors = new ArrayList<>();
+        PositionedGlyph current = glyph;
+        while ((current = parentCircle(current)) != null) {
+            ancestors.add(current);
+        }
+        return ancestors;
+    }
+
+    private void claimUnparentedChildren(PositionedGlyph circle) {
+        for (PositionedGlyph glyph : glyphIndex.values()) {
+            if (glyph.glyphUuid().equals(circle.glyphUuid())) continue;
+            if (parentCircleByGlyph.containsKey(glyph.glyphUuid())) continue;
+            if (sameSurface(circle, glyph) && containsNode(circle, glyph)) assignParent(glyph, circle);
+        }
+    }
+
+    private void assignParent(PositionedGlyph glyph, PositionedGlyph parent) {
+        parentCircleByGlyph.put(glyph.glyphUuid(), parent.glyphUuid());
+        directChildrenByCircle.computeIfAbsent(parent.glyphUuid(), ignored -> new ArrayList<>()).add(glyph);
+        directChildrenByCircle.get(parent.glyphUuid()).sort(Comparator.comparingInt(PositionedGlyph::glyphId));
+    }
+
+    private void detachGlyph(PositionedGlyph glyph) {
+        UUID parent = parentCircleByGlyph.remove(glyph.glyphUuid());
+        if (parent != null) {
+            List<PositionedGlyph> siblings = directChildrenByCircle.get(parent);
+            if (siblings != null) siblings.removeIf(child -> child.glyphUuid().equals(glyph.glyphUuid()));
+        }
+        if (glyph.role() == SymbolRole.OUTER_CIRCLE) {
+            List<PositionedGlyph> children = directChildrenByCircle.remove(glyph.glyphUuid());
+            if (children != null) {
+                for (PositionedGlyph child : children) parentCircleByGlyph.remove(child.glyphUuid());
+            }
+        }
+    }
+
+    private static boolean containsCenter(PositionedGlyph circle, PositionedGlyph glyph) {
+        double x = (glyph.minWorldX() + glyph.maxWorldX()) * 0.5;
+        double y = (glyph.minWorldY() + glyph.maxWorldY()) * 0.5;
+        return x >= circle.minWorldX() && x <= circle.maxWorldX()
+                && y >= circle.minWorldY() && y <= circle.maxWorldY();
+    }
+
+    private static boolean containsNode(PositionedGlyph circle, PositionedGlyph glyph) {
+        if (glyph.role() != SymbolRole.OUTER_CIRCLE) return containsCenter(circle, glyph);
+        return glyph.minWorldX() >= circle.minWorldX() && glyph.maxWorldX() <= circle.maxWorldX()
+                && glyph.minWorldY() >= circle.minWorldY() && glyph.maxWorldY() <= circle.maxWorldY();
+    }
+
+    private static boolean sameSurface(PositionedGlyph a, PositionedGlyph b) {
+        if (a.pixels().isEmpty() || b.pixels().isEmpty()) return true;
+        var ap = a.pixels().iterator().next();
+        var bp = b.pixels().iterator().next();
+        return ap.face() == bp.face() && Double.compare(surfaceCoordinate(ap), surfaceCoordinate(bp)) == 0;
+    }
+
+    private static double surfaceCoordinate(com.astune.gyromancy.api.symbol.PixelPos pixel) {
+        return switch (pixel.face()) {
+            case NORTH -> pixel.pos().getZ();
+            case SOUTH -> pixel.pos().getZ() + 1.0;
+            case WEST -> pixel.pos().getX();
+            case EAST -> pixel.pos().getX() + 1.0;
+            case DOWN -> pixel.pos().getY();
+            case UP -> pixel.pos().getY() + 1.0;
+        };
     }
 
     // ═══════════════════ phrase5 array objects ═══════════════════
@@ -170,8 +266,7 @@ public class MagicArrayManager {
         ArrayObject existing = activeArrays.get(arrayId);
         if (existing != null) {
             activeArrays.put(arrayId, new ArrayObject(
-                    existing.arrayId(), existing.circleGlyph(), existing.centerGlyph(),
-                    existing.runeGlyphs(), data));
+                    existing.arrayId(), existing.rootCircleGlyph(), existing.boundGlyphs(), data));
         }
     }
 

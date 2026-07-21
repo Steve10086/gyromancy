@@ -890,4 +890,12 @@ Client-side:
 
 ---
 
+## 9. Next Architecture Work
+
+| Document | Purpose |
+|----------|---------|
+| `array-script.md` | Next-phase magic-array compiler architecture: spatial AST, script IR, runtime shells, reusable operations, and projectile/entity rule decomposition. |
+
+---
+
 *Generated 2026-06-28*

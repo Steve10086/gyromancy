@@ -1,6 +1,7 @@
 package com.astune.gyromancy.command;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.array.compile.ArrayCompileDebug;
 import com.astune.gyromancy.api.element.ElementConcentrations;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.SymbolTemplate;
@@ -12,6 +13,7 @@ import com.astune.gyromancy.network.SyncDebugElementPacket;
 import com.astune.gyromancy.registry.GyromancyRegistries;
 import com.astune.gyromancy.symbol.SkeletonMatcher;
 import com.astune.gyromancy.util.TemplateLoader;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -70,6 +72,12 @@ public final class DebugCommands {
                                 .executes(DebugCommands::executeDebugFireball)
                         )
                 )
+                .then(Commands.literal("debug_array_compile")
+                        .requires(src -> src.hasPermission(2))
+                        .then(Commands.argument("state", BoolArgumentType.bool())
+                                .executes(DebugCommands::executeDebugArrayCompile)
+                        )
+                )
                 .then(Commands.literal("test")
                         .then(Commands.literal("match")
                                 .executes(DebugCommands::executeTestMatch)
@@ -124,6 +132,14 @@ public final class DebugCommands {
         fireball.setDebug(true);
         source.getLevel().addFreshEntity(fireball);
         source.sendSuccess(() -> Component.literal("[Gyromancy] Spawned old fireball at " + pos), true);
+        return 1;
+    }
+
+    private static int executeDebugArrayCompile(CommandContext<CommandSourceStack> ctx) {
+        boolean state = BoolArgumentType.getBool(ctx, "state");
+        ArrayCompileDebug.setEnabled(state);
+        ctx.getSource().sendSuccess(() -> Component.literal(
+                "[Gyromancy] Array compile debug: " + (state ? "ON" : "OFF")), true);
         return 1;
     }
 

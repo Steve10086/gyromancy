@@ -3,7 +3,14 @@ package com.astune.gyromancy.array;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.array.MagicArrayManager;
-import com.astune.gyromancy.api.symbol.ParameterRune;
+import com.astune.gyromancy.array.compile.ArrayAstBuilder;
+import com.astune.gyromancy.array.compile.ArrayCompileDebug;
+import com.astune.gyromancy.array.compile.ArrayNodeCompiler;
+import com.astune.gyromancy.array.compile.CompileResult;
+import com.astune.gyromancy.array.compile.CompiledArray;
+import com.astune.gyromancy.array.compile.GroupNode;
+import com.astune.gyromancy.array.runtime.ArrayRuntimes;
+import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
@@ -16,9 +23,7 @@ import com.astune.gyromancy.symbol.FloodFillExtractor;
 import com.astune.gyromancy.symbol.FloodFillScheduler;
 import com.astune.gyromancy.symbol.GlyphChunkStorage;
 import com.astune.gyromancy.symbol.GlyphMarker;
-import com.astune.gyromancy.symbol.InteriorValidator;
 import com.astune.gyromancy.symbol.ManaPixelDetector;
-import com.astune.gyromancy.symbol.SymbolCatalog;
 import com.astune.gyromancy.symbol.SymbolRecognizer;
 import com.astune.gyromancy.network.SyncArrayPacket;
 import com.astune.gyromancy.network.SyncGlyphPacket;
@@ -190,11 +195,9 @@ public final class MagicArrayDetector {
             // Array teardown: if this glyph is bound to an active array, destroy it
             ArrayObject arr = mgr.getArrayForGlyph(glyph.glyphUuid());
             if (arr != null && tornDownArrays.add(arr.arrayId())) {
-                List<ParameterRune> runeParams = toRuneParams(arr.runeGlyphs());
-                SymbolCatalog.EndEffect end = SymbolCatalog.getEndEffect(arr.centerGlyph().symbolId());
-                end.execute(level, arr.circleGlyph().worldPos(), runeParams, arr.scratchData());
-                Gyromancy.LOGGER.info("[MagicArrayDetector] Array deactivated: center={}",
-                        arr.centerGlyph().symbolId());
+                ArrayRuntimes.deactivate(level, arr);
+                Gyromancy.LOGGER.info("[MagicArrayDetector] Array deactivated: root={}",
+                        arr.rootCircleGlyph().symbolId());
                 mgr.unregisterArrayObj(arr.arrayId());
             }
 
@@ -353,6 +356,7 @@ public final class MagicArrayDetector {
 
         mgr.registerGlyph(pg);
         GlyphChunkStorage.store(level, pg);
+        tryCompileAffected(level, pg);
         syncGlyphs(level);
 
         Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} ACCEPTED - glyph #{} stored",
@@ -360,35 +364,7 @@ public final class MagicArrayDetector {
     }
 
     private static void handleCircleMatch(ServerLevel level, ExtractedGlyph glyph, SymbolMatch best) {
-        //if (InteriorValidator.hasRawManaInside(glyph, level)) {
-        //    Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle REJECTED: raw mana inside");
-        //    return;
-        //}
-
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
-        List<PositionedGlyph> innerGlyphs = InteriorValidator.findGlyphsInside(
-                glyph, level, mgr.getGlyphIndex());
-
-        if (innerGlyphs.isEmpty()) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle found, no inner glyphs yet - waiting");
-            return;
-        }
-
-        // Stage 1: structural validation — exactly 1 center symbol, 0+ runes
-        List<PositionedGlyph> centers = new ArrayList<>();
-        List<PositionedGlyph> runes = new ArrayList<>();
-        for (PositionedGlyph pg : innerGlyphs) {
-            if (pg.role() == SymbolRole.CENTER_SYMBOL) centers.add(pg);
-            else if (pg.role() == SymbolRole.PARAMETER_RUNE) runes.add(pg);
-        }
-
-        if (centers.size() != 1) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Array REJECTED: {} center symbol(s)",
-                    centers.size());
-            return;
-        }
-
-        // Store circle as a PositionedGlyph for invalidation binding
         int circleSymbolLayer = ModSymbols.symbolLayerValueFor(best.symbolId());
         int circleId = mgr.nextGlyphId();
         GlyphMarker.markConsumed(glyph, circleId, circleSymbolLayer, level);
@@ -404,33 +380,54 @@ public final class MagicArrayDetector {
         );
         mgr.registerGlyph(circleGlyph);
         GlyphChunkStorage.store(level, circleGlyph);
-
-        PositionedGlyph centerGlyph = centers.getFirst();
-        List<ParameterRune> runeParams = toRuneParams(runes);
-
-        // Stage 2: create array object, dispatch centerEffect
-        Map<String, Object> scratchData = Map.of();
-        ArrayObject arr = new ArrayObject(
-                UUID.randomUUID(), circleGlyph, centerGlyph, runes, scratchData);
-        mgr.registerArrayObj(arr);
-
-        SymbolCatalog.CenterEffect effect = SymbolCatalog.getCenterEffect(centerGlyph.symbolId());
-        scratchData = effect.execute(level, glyph.pixels().iterator().next().pos(), circleGlyph, centerGlyph, runes);
-        if (scratchData == null) scratchData = Map.of();
-        mgr.setArrayScratchData(arr.arrayId(), scratchData);
-        bindPersistentEntities(level, arr.arrayId(), scratchData);
-
+        tryCompileAffected(level, circleGlyph);
         syncGlyphs(level);
-        Gyromancy.LOGGER.info("[MagicArrayDetector] Array activated: center={}, runes={}",
-                centerGlyph.symbolId(), runeParams.size());
+        Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle {} stored as glyph #{}",
+                best.symbolId(), circleId);
     }
 
-    private static List<ParameterRune> toRuneParams(List<PositionedGlyph> runes) {
-        List<ParameterRune> params = new ArrayList<>(runes.size());
-        for (PositionedGlyph pg : runes) {
-            params.add(new ParameterRune(pg.symbolId(), pg.confidence(), ""));
+    private static void tryCompileAffected(ServerLevel level, PositionedGlyph glyph) {
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        if (glyph.role() == SymbolRole.OUTER_CIRCLE) {
+            tryCompileCircle(level, glyph);
+            PositionedGlyph parent = mgr.parentCircle(glyph);
+            if (parent != null) tryCompileCircle(level, parent);
+        } else {
+            PositionedGlyph parent = mgr.parentCircle(glyph);
+            if (parent != null) tryCompileCircle(level, parent);
         }
-        return params;
+    }
+
+    private static void tryCompileCircle(ServerLevel level, PositionedGlyph circleGlyph) {
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        GroupNode ast = ArrayAstBuilder.build(circleGlyph, mgr);
+        ArrayCompileDebug.printAst(level, ast);
+        CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(ast, mgr.effectDefinitions());
+        if (!(result instanceof CompileResult.Success<CompiledArray> success)) {
+            if (result instanceof CompileResult.Failure<CompiledArray> failure) {
+                Gyromancy.LOGGER.debug("[MagicArrayDetector] Compile failed for glyph #{}: {}",
+                        circleGlyph.glyphId(), failure.diagnostics());
+                ArrayCompileDebug.printFailure(level, failure);
+            }
+            return;
+        }
+
+        ArrayObject existing = mgr.getArrayForGlyph(circleGlyph.glyphUuid());
+        if (existing != null) {
+            ArrayRuntimes.deactivate(level, existing);
+            mgr.unregisterArrayObj(existing.arrayId());
+        }
+
+        CompiledArray compiled = success.value();
+        RuntimeHandle handle = ArrayRuntimes.activate(compiled, level);
+        Map<String, Object> scratchData = new HashMap<>(handle.scratchData());
+        scratchData.put("__array_color", compiled.color());
+        ArrayObject arr = new ArrayObject(UUID.randomUUID(), compiled.rootCircleGlyph(),
+                compiled.boundGlyphs(), Map.copyOf(scratchData));
+        mgr.registerArrayObj(arr);
+        bindPersistentEntities(level, arr.arrayId(), arr.scratchData());
+        Gyromancy.LOGGER.info("[MagicArrayDetector] Array activated: root={}, bound={}",
+                circleGlyph.symbolId(), compiled.boundGlyphs().size());
     }
 
     private static void bindPersistentEntities(ServerLevel level, UUID arrayId, Map<String, Object> scratchData) {
@@ -499,8 +496,8 @@ public final class MagicArrayDetector {
             if (part != null) parts.add(part);
         }
         if (parts.isEmpty()) return null;
-        return new SyncArrayPacket.ArrayData(arr.arrayId(),
-                SymbolCatalog.glyphColorFor(arr.centerGlyph().symbolId()), parts);
+        int color = arr.scratchData().get("__array_color") instanceof Integer c ? c : 0xFFFFFFFF;
+        return new SyncArrayPacket.ArrayData(arr.arrayId(), color, parts);
     }
 
     private static SyncArrayPacket.BlockData blockData(ServerLevel level, BlockFace key, List<PixelPos> pixels) {

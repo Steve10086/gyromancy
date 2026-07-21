@@ -18,14 +18,13 @@ import java.util.UUID;
 /**
  * A validated magic array bound to its constituent glyphs.
  *
- * <p>When any bound glyph (circle, center, or rune) is invalidated, the array is
- * destroyed and {@code EndEffect} fires with the scratch data from {@code CenterEffect}.
+ * <p>When any bound glyph is invalidated, the array is destroyed and its runtime
+ * gets the scratch data it produced during activation.
  */
 public record ArrayObject(
         UUID arrayId,
-        PositionedGlyph circleGlyph,
-        PositionedGlyph centerGlyph,
-        List<PositionedGlyph> runeGlyphs,
+        PositionedGlyph rootCircleGlyph,
+        List<PositionedGlyph> boundGlyphs,
         Map<String, Object> scratchData
 ) {
     private static final Codec<UUID> UUID_CODEC = Codec.STRING.xmap(UUID::fromString, UUID::toString);
@@ -34,19 +33,14 @@ public record ArrayObject(
 
     public static final Codec<ArrayObject> CODEC = RecordCodecBuilder.create(i ->
             i.group(UUID_CODEC.fieldOf("array_id").forGetter(ArrayObject::arrayId),
-                    PositionedGlyph.CODEC.fieldOf("circle_glyph").forGetter(ArrayObject::circleGlyph),
-                    PositionedGlyph.CODEC.fieldOf("center_glyph").forGetter(ArrayObject::centerGlyph),
-                    PositionedGlyph.CODEC.listOf().fieldOf("rune_glyphs").forGetter(ArrayObject::runeGlyphs),
+                    PositionedGlyph.CODEC.fieldOf("root_circle_glyph").forGetter(ArrayObject::rootCircleGlyph),
+                    PositionedGlyph.CODEC.listOf().fieldOf("bound_glyphs").forGetter(ArrayObject::boundGlyphs),
                     SCRATCH_CODEC.optionalFieldOf("scratch_data", Map.of()).forGetter(ArrayObject::scratchData))
              .apply(i, ArrayObject::new));
 
-    /** All glyphs bound to this array (circle + center + runes). */
+    /** All glyphs bound to this array. */
     public List<PositionedGlyph> allBoundGlyphs() {
-        List<PositionedGlyph> all = new ArrayList<>(1 + 1 + runeGlyphs.size());
-        all.add(circleGlyph);
-        all.add(centerGlyph);
-        all.addAll(runeGlyphs);
-        return all;
+        return boundGlyphs;
     }
 
     public record EntityRef(UUID uuid, ResourceLocation entityType) {
