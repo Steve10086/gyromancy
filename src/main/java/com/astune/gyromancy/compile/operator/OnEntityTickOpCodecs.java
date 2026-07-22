@@ -10,7 +10,8 @@ final class OnEntityTickOpCodecs {
     private static final Map<ResourceLocation, Codec<? extends OnEntityTickOp>> CODECS = Map.of(
             ExplosionOp.ID, ExplosionOp.CODEC,
             SmeltOp.ID, SmeltOp.CODEC,
-            ElementConversionOp.ID, ElementConversionOp.CODEC
+            ElementConversionOp.ID, ElementConversionOp.CODEC,
+            CarryItemsOp.ID, CarryItemsOp.CODEC
     );
 
     private OnEntityTickOpCodecs() {}

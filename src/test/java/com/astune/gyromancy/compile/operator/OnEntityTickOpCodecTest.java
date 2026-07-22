@@ -15,6 +15,7 @@ class OnEntityTickOpCodecTest {
         List<OnEntityTickOp> payload = List.of(
                 new ExplosionOp(),
                 new SmeltOp(),
+                new CarryItemsOp(),
                 new ElementConversionOp(ElementType.FIRE, "storedMana", 10,
                         0.1, 1000.0, 200.0, 1000.0, 10.0, 0.05));
 
@@ -25,7 +26,8 @@ class OnEntityTickOpCodecTest {
 
         assertInstanceOf(ExplosionOp.class, loaded.get(0));
         assertInstanceOf(SmeltOp.class, loaded.get(1));
-        ElementConversionOp conversion = assertInstanceOf(ElementConversionOp.class, loaded.get(2));
+        assertInstanceOf(CarryItemsOp.class, loaded.get(2));
+        ElementConversionOp conversion = assertInstanceOf(ElementConversionOp.class, loaded.get(3));
         assertEquals(ElementType.FIRE, conversion.element());
         assertEquals("storedMana", conversion.storedManaKey());
         assertEquals(10, conversion.interval());

@@ -1,7 +1,7 @@
 package com.astune.gyromancy.entity.ball;
 
 import com.astune.gyromancy.api.element.ElementType;
-import com.astune.gyromancy.compile.operator.ElementConversionOp;
+import com.astune.gyromancy.compile.operator.CarryItemsOp;
 import com.astune.gyromancy.compile.operator.EntityTickContext;
 import com.astune.gyromancy.compile.operator.OnEntityTickOp;
 import com.astune.gyromancy.registry.ModEntities;
@@ -37,7 +37,6 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -49,22 +48,14 @@ public class WaterBallEntity extends MagicBallEntity {
     private static final EntityDataAccessor<ItemStack> DATA_POTION_STATE =
             SynchedEntityData.defineId(WaterBallEntity.class, EntityDataSerializers.ITEM_STACK);
     private static final int EFFECT_INTERVAL = 10;
-    private static final double FIRE_VOLUME_LOSS = 0.1;
-    private static final double FIRE_EQUILIBRIUM = 1000.0;
-    private static final double MAX_VOLUME_FIRE_LEVEL = 200.0;
-    private static final double FIRE_PER_VOLUME = 1000.0;
-    private static final double FIRE_CONVERSION_COST = 10.0;
-    private static final double MANA_TO_VOLUME = 0.05;
     private static final String STORED_MANA_KEY = "storedMana";
     private static final int BREWING_TIME = PotionBrewing.BREWING_TIME_SECONDS * 20;
     private static final int MAX_BREWING_ROUTE_LENGTH = 4;
     private static final int MISSING_ITEM_GRACE_TICKS = 20;
     private static final double BURST_PUSH_STRENGTH = 1.2;
-    private final Set<UUID> trackedItems = new HashSet<>();
+    private static final String PAYLOAD_KEY = "Payload";
     private final Map<String, Object> runtimeData = new HashMap<>();
-    private final OnEntityTickOp elementConversion = new ElementConversionOp(ElementType.WATER, STORED_MANA_KEY,
-            EFFECT_INTERVAL, FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL,
-            FIRE_PER_VOLUME, FIRE_CONVERSION_COST, MANA_TO_VOLUME);
+    private List<OnEntityTickOp> payload = new ArrayList<>();
     private Vec3 acceleration = Vec3.ZERO;
     private Vec3 pendingVelocity = Vec3.ZERO;
     private Vec3 pendingAcceleration = Vec3.ZERO;
@@ -90,6 +81,10 @@ public class WaterBallEntity extends MagicBallEntity {
         return entityData.get(DATA_POTION_STATE).copy();
     }
 
+    public void setPayload(List<OnEntityTickOp> payload) {
+        this.payload = new ArrayList<>(payload);
+    }
+
     @Override
     protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
         super.defineSynchedData(builder);
@@ -103,7 +98,7 @@ public class WaterBallEntity extends MagicBallEntity {
     public List<ItemStack> getCollectedItems() {
         if (!(level() instanceof ServerLevel server)) return List.of();
         double radius = getTargetSize() / 2.0;
-        return trackedItems.stream()
+        return trackedItems().stream()
                 .map(server::getEntity)
                 .filter(ItemEntity.class::isInstance)
                 .map(ItemEntity.class::cast)
@@ -117,7 +112,6 @@ public class WaterBallEntity extends MagicBallEntity {
     public void tick() {
         super.tick();
         growIntoTargetSize();
-        elementConversion.onEntityTick(EntityTickContext.from(this, runtimeData, acceleration));
         if (!launched && isFullyGrown()) {
             launched = true;
             acceleration = pendingAcceleration;
@@ -134,7 +128,8 @@ public class WaterBallEntity extends MagicBallEntity {
             setDeltaMovement(velocity.add(acceleration));
         }
 
-        keepItemsInside();
+        EntityTickContext ctx = EntityTickContext.from(this, runtimeData, acceleration);
+        payload.forEach(op -> op.onEntityTick(ctx));
         if (level().isClientSide) return;
         consumeDirectPotion();
         tickBrewing();
@@ -177,26 +172,6 @@ public class WaterBallEntity extends MagicBallEntity {
     private void fillWithFlowingWater(List<BlockPos> positions) {
         var flowingWater = Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 1);
         positions.stream().filter(level()::isEmptyBlock).forEach(pos -> level().setBlock(pos, flowingWater, 3));
-    }
-
-    private void keepItemsInside() {
-        double radius = getTargetSize() / 2.0;
-        Vec3 center = position().add(0.0, radius, 0.0);
-        if (level() instanceof ServerLevel server) {
-            for (UUID uuid : trackedItems) {
-                Entity entity = server.getEntity(uuid);
-                if (entity instanceof ItemEntity item && !inSphere(item.position(), radius)) item.setNoGravity(false);
-            }
-        }
-        for (ItemEntity item : level().getEntitiesOfClass(ItemEntity.class, getBoundingBox().inflate(0.25), Entity::isAlive)) {
-            if (!inSphere(item.position(), radius)) continue;
-            trackedItems.add(item.getUUID());
-            item.setNoGravity(true);
-            double angle = tickCount * 0.08 + item.getUUID().getLeastSignificantBits() * 0.0001;
-            double orbitRadius = radius * 2.0 / 3.0;
-            Vec3 target = center.add(Math.cos(angle) * orbitRadius, 0.0, Math.sin(angle) * orbitRadius);
-            item.setDeltaMovement(target.subtract(item.position()).scale(0.2));
-        }
     }
 
     private void tickBrewing() {
@@ -251,7 +226,7 @@ public class WaterBallEntity extends MagicBallEntity {
     private void consumeDirectPotion() {
         if (!(level() instanceof ServerLevel server)) return;
         double radius = getTargetSize() / 2.0;
-        trackedItems.stream()
+        trackedItems().stream()
                 .sorted(Comparator.comparing(UUID::toString))
                 .map(server::getEntity)
                 .filter(ItemEntity.class::isInstance)
@@ -273,7 +248,7 @@ public class WaterBallEntity extends MagicBallEntity {
         if (!(level() instanceof ServerLevel server)) return List.of();
         double radius = getTargetSize() / 2.0;
         List<BrewIngredient> ingredients = new ArrayList<>();
-        trackedItems.stream()
+        trackedItems().stream()
                 .sorted(Comparator.comparing(UUID::toString))
                 .map(server::getEntity)
                 .filter(ItemEntity.class::isInstance)
@@ -409,11 +384,7 @@ public class WaterBallEntity extends MagicBallEntity {
     }
 
     private void releaseItems() {
-        for (UUID uuid : trackedItems) {
-            Entity entity = level() instanceof ServerLevel server ? server.getEntity(uuid) : null;
-            if (entity instanceof ItemEntity item) item.setNoGravity(false);
-        }
-        trackedItems.clear();
+        carryItemsOp().ifPresent(op -> op.releaseItems(level()));
     }
 
     @Override
@@ -430,14 +401,17 @@ public class WaterBallEntity extends MagicBallEntity {
         if (tag.contains("PendingAccelX")) pendingAcceleration = new Vec3(tag.getDouble("PendingAccelX"), tag.getDouble("PendingAccelY"), tag.getDouble("PendingAccelZ"));
         launched = tag.getBoolean("Launched");
         if (tag.contains("StoredMana")) runtimeData.put(STORED_MANA_KEY, tag.getLong("StoredMana"));
+        payload = new ArrayList<>(OnEntityTickOp.loadPayloadList(tag, PAYLOAD_KEY, List.of()));
         if (tag.contains("PotionState", Tag.TAG_COMPOUND)) {
             potionState = ItemStack.parse(registryAccess(), tag.getCompound("PotionState")).orElse(potionState);
             entityData.set(DATA_POTION_STATE, potionState.copy());
         }
-        for (Tag value : tag.getList("TrackedItems", Tag.TAG_COMPOUND)) {
-            CompoundTag entry = (CompoundTag)value;
-            if (entry.hasUUID("Uuid")) trackedItems.add(entry.getUUID("Uuid"));
-        }
+        carryItemsOp().ifPresent(op -> {
+            for (Tag value : tag.getList("TrackedItems", Tag.TAG_COMPOUND)) {
+                CompoundTag entry = (CompoundTag)value;
+                if (entry.hasUUID("Uuid")) op.trackedItems().add(entry.getUUID("Uuid"));
+            }
+        });
         if (tag.contains("BrewTask", Tag.TAG_COMPOUND)) {
             brewTask = BrewTask.load(tag.getCompound("BrewTask"), registryAccess()).orElse(null);
         }
@@ -457,15 +431,27 @@ public class WaterBallEntity extends MagicBallEntity {
         tag.putDouble("PendingAccelZ", pendingAcceleration.z);
         tag.putBoolean("Launched", launched);
         tag.putLong("StoredMana", ((Number)runtimeData.getOrDefault(STORED_MANA_KEY, 0L)).longValue());
+        tag.put(PAYLOAD_KEY, OnEntityTickOp.savePayloadList(payload));
         tag.put("PotionState", potionState.save(registryAccess()));
         ListTag tracked = new ListTag();
-        trackedItems.forEach(uuid -> {
+        trackedItems().forEach(uuid -> {
             CompoundTag entry = new CompoundTag();
             entry.putUUID("Uuid", uuid);
             tracked.add(entry);
         });
         tag.put("TrackedItems", tracked);
         if (brewTask != null) tag.put("BrewTask", brewTask.save(registryAccess()));
+    }
+
+    private Set<UUID> trackedItems() {
+        return carryItemsOp().map(CarryItemsOp::trackedItems).orElse(Set.of());
+    }
+
+    private Optional<CarryItemsOp> carryItemsOp() {
+        return payload.stream()
+                .filter(CarryItemsOp.class::isInstance)
+                .map(CarryItemsOp.class::cast)
+                .findFirst();
     }
 
     record BrewIngredient(UUID id, ItemStack stack) {}

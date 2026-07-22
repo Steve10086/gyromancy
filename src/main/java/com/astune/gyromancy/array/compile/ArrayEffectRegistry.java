@@ -25,5 +25,4 @@ public final class ArrayEffectRegistry {
     private static void register(ArrayEffectDefinition effect) {
         EFFECTS.add(effect);
     }
-
 }

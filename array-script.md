@@ -10,6 +10,62 @@ Adding a symbol should usually add one local compile contribution. Adding a
 behavior should usually add one reusable compiled-node behavior or projectile
 behavior. Only genuinely new lifecycle models should add a runtime.
 
+## Implementation Status
+
+Status markers:
+
+- `[done]` means the repository has a working first implementation.
+- `[partial]` means code exists, but the design is not complete or still has
+  known migration debt.
+- `[todo]` means not implemented yet.
+
+Current completed work:
+
+- `[done]` Added AST node types under `array/compile`: `ArrayNode`,
+  `SymbolNode`, `SequenceNode`, `GroupNode`, and `ApplyNode`.
+- `[done]` Added `ArrayAstBuilder` for building group/direct-child AST
+  structures from detector-owned glyph hierarchy.
+- `[done]` Added `CompiledArrayNode`, `EffectNode`, `ArrayScript`,
+  `CompileResult`, and `CompileDiagnostic`.
+- `[done]` Added direct circle ownership tracking in `MagicArrayManager`,
+  including parent links and direct child lists.
+- `[done]` Changed active arrays toward root-circle plus bound-glyph storage.
+- `[done]` Removed fire symbol-owned runtime behavior from `FireSymbol`; fire
+  is now registered through `FireballOp`.
+- `[done]` Added parameter rune classes and symbol registration for `fix`,
+  `split`, `cross`, `eliminate`, and `space`.
+- `[done]` Added `OnEntityTickOp`, `TriggerOp`, `ExplosionOp`, `SmeltOp`, and
+  `ElementConversionOp`.
+- `[done]` Added payload persistence through per-op `Codec`s for current
+  entity tick payload ops.
+- `[done]` Moved fire explosion and smelting behavior out of
+  `FireballEntity` into payload ops.
+- `[done]` Moved mana-to-element conversion out of entity tick context and into
+  `ElementConversionOp`.
+- `[done]` Added `MagicBallGeometry` helper for shared sphere calculations.
+- `[done]` Added `ProjectileOp` as the shared base for projectile compile ops;
+  `FireballOp` extends it.
+- `[partial]` `MagicBallEntity` owns default concentration-based size behavior,
+  and ball constructors pass target element types.
+- `[partial]` `ArrayNodeCompiler` has a match-list based path and explicit
+  diagnostics, but the match result/extra-input contract is still being
+  corrected.
+- `[partial]` `LegacyRuntimeAdapter` still exists as a migration boundary.
+  Fireball should not stay routed by legacy center-symbol or element checks.
+- `[partial]` Projectile entities still exist as concrete bodies while magic
+  behavior is being moved into payload ops.
+
+Known not completed:
+
+- `[todo]` Full runtime shell split into `INSTANT`, `FIELD`, `PROJECTILE`,
+  `TRIGGER`, and `STORAGE`.
+- `[todo]` Generic projectile runtime activation that dispatches by compiled
+  op/runtime behavior instead of legacy center-effect paths.
+- `[todo]` Child/op validation for nested compiled nodes beyond the current
+  projectile migration.
+- `[todo]` Parent/AST debug sync.
+- `[todo]` Persisted compiled-node format and versioning.
+
 ## 1. Current Problem
 
 The current array activation path is:
@@ -553,75 +609,75 @@ not by temporary feature phases.
 
 ### 11.1 Detector and hierarchy
 
-- Store every recognized circle as a glyph, even before it activates an array.
-- Parent assignment happens only when a circle is recognized as complete.
-- A completed circle claims only already-recognized internal nodes that have no
+- `[done]` Store every recognized circle as a glyph, even before it activates an array.
+- `[done]` Parent assignment happens only when a circle is recognized as complete.
+- `[done]` A completed circle claims only already-recognized internal nodes that have no
   parent.
-- A completed nested circle is one node in its parent's direct child list.
-- Keep a circle-to-direct-children index in `MagicArrayManager`.
-- When a circle is invalidated, clear the parent links of its direct children.
-- When any glyph or circle changes, retry compilation for the affected direct
+- `[done]` A completed nested circle is one node in its parent's direct child list.
+- `[done]` Keep a circle-to-direct-children index in `MagicArrayManager`.
+- `[done]` When a circle is invalidated, clear the parent links of its direct children.
+- `[partial]` When any glyph or circle changes, retry compilation for the affected direct
   parent circle. Do not recursively compile through descendants.
-- Array invalidation binds all glyphs consumed by the compiled node tree,
+- `[partial]` Array invalidation binds all glyphs consumed by the compiled node tree,
   including nested circle nodes accepted in child/op context.
-- `MagicArrayDetector` must not reject arrays for missing or multiple center
+- `[partial]` `MagicArrayDetector` must not reject arrays for missing or multiple center
   symbols. That is a compiler diagnostic.
 
 ### 11.2 AST and op compiler
 
-- Add `array/compile/ArrayNode` and node records.
-- Add `ArrayAstBuilder` that converts the detector-owned circle tree into
+- `[done]` Add `array/compile/ArrayNode` and node records.
+- `[done]` Add `ArrayAstBuilder` that converts the detector-owned circle tree into
   `GroupNode` and direct `SymbolNode` structures.
-- Add `ArrayNodeCompiler` that compiles one group into one `CompiledArrayNode`.
-- Local direct symbols choose the primary element and attributes.
-- Direct nested circles contribute child `CompiledArrayNode`s.
-- The selected node class validates accepted child node kinds, counts, and
+- `[done]` Add `ArrayNodeCompiler` that compiles one group into one `CompiledArrayNode`.
+- `[partial]` Local direct symbols choose the primary element and attributes.
+- `[done]` Direct nested circles contribute child `CompiledArrayNode`s.
+- `[partial]` The selected node class validates accepted child node kinds, counts, and
   conflicts.
-- If no primary element matches, report `missing_primary_element`. If multiple
+- `[partial]` If no primary element matches, report `missing_primary_element`. If multiple
   primary elements conflict, report `ambiguous_primary_element`.
-- Add `CompiledArrayNode`, compile diagnostics, and the runtime activation path.
-- `SymbolRole.CENTER_SYMBOL` can remain as a recognizer role, but compiler
+- `[done]` Add `CompiledArrayNode`, compile diagnostics, and the runtime activation path.
+- `[partial]` `SymbolRole.CENTER_SYMBOL` can remain as a recognizer role, but compiler
   should treat it as a primary-element candidate. Detector should not
   special-case it.
 
 ### 11.3 Active array storage and sync
 
-- Replace `ArrayObject(circleGlyph, centerGlyph, runeGlyphs, scratchData)` with
+- `[done]` Replace `ArrayObject(circleGlyph, centerGlyph, runeGlyphs, scratchData)` with
   `ArrayObject(rootCircleGlyph, boundGlyphs, scratchData)` or equivalent.
-- `SyncArrayPacket` masks should be built from compiled `boundGlyphs`, not from
+- `[partial]` `SyncArrayPacket` masks should be built from compiled `boundGlyphs`, not from
   old center/rune fields.
-- Array color/debug metadata should come from the compiled root node, not from
+- `[partial]` Array color/debug metadata should come from the compiled root node, not from
   `centerGlyph`.
-- Add parent circle identity to glyph debug sync, or add a separate AST debug
+- `[todo]` Add parent circle identity to glyph debug sync, or add a separate AST debug
   packet, so nested ownership can be inspected.
 
 ### 11.4 Runtime and entity migration
 
-- Add `LegacyRuntimeAdapter` first if needed, so AST and op compilation can
+- `[done]` Add `LegacyRuntimeAdapter` first if needed, so AST and op compilation can
   run without immediately rewriting projectile entities.
-- Keep the adapter thin: it consumes a root `CompiledArrayNode` and delegates to existing
+- `[partial]` Keep the adapter thin: it consumes a root `CompiledArrayNode` and delegates to existing
   entity constructors or extracted legacy helpers.
-- Add real `ArrayRuntime` shells after compiled node trees are stable.
-- Add projectile payload behavior objects.
-- Move projectile-specific magic rules out of `FireSymbol`, `WaterSymbol`,
+- `[todo]` Add real `ArrayRuntime` shells after compiled node trees are stable.
+- `[done]` Add projectile payload behavior objects.
+- `[partial]` Move projectile-specific magic rules out of `FireSymbol`, `WaterSymbol`,
   `ManaSymbol`, and concrete projectile entities.
-- Make runtime context own array scratch writes and entity binding.
-- Keep concrete entity classes only where body, rendering, or constructor
+- `[partial]` Make runtime context own array scratch writes and entity binding.
+- `[partial]` Keep concrete entity classes only where body, rendering, or constructor
   compatibility still requires them.
-- Remove center-symbol semantic dispatch once equivalent compiled node classes
+- `[partial]` Remove center-symbol semantic dispatch once equivalent compiled node classes
   exist.
 
 Recommended order:
 
-1. Implement glyph/circle parent ownership index.
-2. Build AST from direct-child circle trees.
-3. Compile each group into one `CompiledArrayNode` selected by primary element.
-4. Change active array binding to root circle plus consumed glyph set.
-5. Add `LegacyRuntimeAdapter` for existing projectile behavior.
-6. Add runtime context for entity binding and scratch data.
-7. Add parent/AST debug sync.
-8. Move projectile magic semantics from symbols/entities into payload behaviors.
-9. Replace legacy adapter paths with real runtime shells.
+1. `[done]` Implement glyph/circle parent ownership index.
+2. `[done]` Build AST from direct-child circle trees.
+3. `[partial]` Compile each group into one `CompiledArrayNode` selected by primary element.
+4. `[done]` Change active array binding to root circle plus consumed glyph set.
+5. `[done]` Add `LegacyRuntimeAdapter` for existing projectile behavior.
+6. `[partial]` Add runtime context for entity binding and scratch data.
+7. `[todo]` Add parent/AST debug sync.
+8. `[partial]` Move projectile magic semantics from symbols/entities into payload behaviors.
+9. `[todo]` Replace legacy adapter paths with real runtime shells.
 
 ## 12. Non-Goals
 

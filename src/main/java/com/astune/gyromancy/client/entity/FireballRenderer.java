@@ -36,6 +36,7 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
     private final Map<FireballEntity, Integer> lastParticleTick = new WeakHashMap<>();
     private final Map<FireballEntity, VortexOrbitEffect> vortexEffects = new WeakHashMap<>();
     private final Map<FireballEntity, EntityEffect> bodyEffects = new WeakHashMap<>();
+    private final Map<FireballEntity, FireballRenderColors.ColorTransition> elementColors = new WeakHashMap<>();
 
     public FireballRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -58,11 +59,16 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
             body = new EntityEffect(entity, FIRE_BALL_FX)
                     .setSize((float) (size * RENDER_SCALE))
                     .setOffset(0, size * MODEL_Y_OFFSET, 0);
+            body.setColor(FireballRenderColors.elementColor(entity, partialTick, elementColors));
             body.start();
             bodyEffects.put(entity, body);
         }
         else if (growing)  {
             body.setSize((float) (size * RENDER_SCALE)).setOffset(0, size * MODEL_Y_OFFSET, 0);
+            body.setColor(FireballRenderColors.elementColor(entity, partialTick, elementColors));
+            body.tick();
+        } else {
+            body.setColor(FireballRenderColors.elementColor(entity, partialTick, elementColors));
             body.tick();
         }
 
@@ -100,6 +106,7 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
     private void cleanup(FireballEntity entity) {
         EntityEffect body = bodyEffects.remove(entity);
         if (body != null) body.stop();
+        elementColors.remove(entity);
         VortexOrbitEffect vortex = vortexEffects.remove(entity);
         if (vortex != null) vortex.kill();
     }

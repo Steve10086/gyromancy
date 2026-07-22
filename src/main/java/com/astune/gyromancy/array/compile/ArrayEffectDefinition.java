@@ -1,6 +1,7 @@
 package com.astune.gyromancy.array.compile;
 
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.compile.operator.Operator;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
@@ -10,5 +11,5 @@ public interface ArrayEffectDefinition {
 
     List<OpInputMatcher> match();
 
-    CompileResult<CompiledArrayNode> compile(PositionedGlyph boundary, List<OpInput> inputs);
+    CompileResult<Operator> compile(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs);
 }

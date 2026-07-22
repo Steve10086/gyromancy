@@ -6,8 +6,7 @@ import net.minecraft.world.level.Level;
 import java.util.Map;
 
 /**
- * Core interface for magic array effects. Each center symbol is bound to an
- * IArrayEffect implementation via the {@code ArrayEffectRegistry}.
+ * Core interface for older magic array effects that still use MagicArrayState.
  *
  * <p>The lifecycle is:
  * <ol>

@@ -1,5 +1,7 @@
 package com.astune.gyromancy.array.compile;
 
+import com.astune.gyromancy.compile.operator.Operator;
+
 public sealed interface OpInputMatcher permits OpInputMatcher.Rune, OpInputMatcher.Op {
     boolean matches(OpInput input);
 
@@ -7,8 +9,8 @@ public sealed interface OpInputMatcher permits OpInputMatcher.Rune, OpInputMatch
         return new Rune(symbolName);
     }
 
-    static OpInputMatcher op(Class<? extends CompiledArrayNode> nodeType) {
-        return new Op(nodeType);
+    static OpInputMatcher op(Class<? extends Operator> operatorType) {
+        return new Op(operatorType);
     }
 
     record Rune(String symbolName) implements OpInputMatcher {
@@ -18,10 +20,10 @@ public sealed interface OpInputMatcher permits OpInputMatcher.Rune, OpInputMatch
         }
     }
 
-    record Op(Class<? extends CompiledArrayNode> nodeType) implements OpInputMatcher {
+    record Op(Class<? extends Operator> operatorType) implements OpInputMatcher {
         @Override
         public boolean matches(OpInput input) {
-            return input instanceof OpInput.Op op && nodeType.isInstance(op.node());
+            return input instanceof OpInput.Op op && operatorType.isInstance(op.operator());
         }
     }
 }

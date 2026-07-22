@@ -1,6 +1,7 @@
 package com.astune.gyromancy.array.compile;
 
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.compile.operator.Operator;
 
 public sealed interface OpInput permits OpInput.Rune, OpInput.Op {
     record Rune(PositionedGlyph glyph) implements OpInput {
@@ -9,5 +10,5 @@ public sealed interface OpInput permits OpInput.Rune, OpInput.Op {
         }
     }
 
-    record Op(CompiledArrayNode node) implements OpInput {}
+    record Op(Operator operator) implements OpInput {}
 }

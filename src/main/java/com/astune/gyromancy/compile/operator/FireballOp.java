@@ -4,10 +4,14 @@ import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
-import com.astune.gyromancy.array.compile.EffectNode;
+import com.astune.gyromancy.array.compile.ArrayEffectDefinition;
+import com.astune.gyromancy.array.compile.CompileResult;
+import com.astune.gyromancy.array.compile.EffectAttributes;
 import com.astune.gyromancy.array.compile.MotionAttribute;
+import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.OpInputs;
+import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.entity.ball.FireballEntity;
 import com.astune.gyromancy.symbol.CenterSymbol;
 import net.minecraft.resources.ResourceLocation;
@@ -20,14 +24,42 @@ import java.util.ArrayList;
 import java.util.Map;
 
 public final class FireballOp extends ProjectileOp {
-    public static final FireballOp DEFINITION = new FireballOp();
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fireball");
+    public static final ArrayEffectDefinition DEFINITION = new ArrayEffectDefinition() {
+        @Override
+        public ResourceLocation id() {
+            return ID;
+        }
+
+        @Override
+        public List<OpInputMatcher> match() {
+            return List.of(OpInputMatcher.rune("fire"));
+        }
+
+        @Override
+        public CompileResult<Operator> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
+                                               List<OpInput> inputs) {
+            return FireballOp.create(boundary, matchedInputs, inputs);
+        }
+    };
 
     public static final String STORED_MANA_KEY = "storedMana";
     public static final String OLD_SPAWNED_KEY = "oldSpawned";
     public static final String LIFETIME_KEY = "lifetime";
 
-    private FireballOp() {
-        super(ElementType.FIRE);
+    private FireballOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs,
+                       EffectAttributes attributes) {
+        super(ID, ElementType.FIRE, boundary, matchedInputs, inputs, attributes);
+    }
+
+    public static CompileResult<Operator> create(PositionedGlyph boundary, List<OpInput> matchedInputs,
+                                                 List<OpInput> inputs) {
+        CompileResult<EffectAttributes> attributes = compileAttributes(inputs, ElementType.FIRE);
+        if (attributes instanceof CompileResult.Failure<EffectAttributes> failure) {
+            return new CompileResult.Failure<>(failure.diagnostics());
+        }
+        EffectAttributes attrs = ((CompileResult.Success<EffectAttributes>) attributes).value();
+        return new CompileResult.Success<>(new FireballOp(boundary, matchedInputs, inputs, attrs));
     }
 
     public static FireballEntity create(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
@@ -41,9 +73,11 @@ public final class FireballOp extends ProjectileOp {
         return List.of();
     }
 
-    public static Map<String, Object> activate(ServerLevel level, PositionedGlyph circleGlyph,
-                                               PositionedGlyph centerGlyph, EffectNode node) {
-        List<MotionAttribute> motions = node.attributes().motion();
+    @Override
+    public RuntimeHandle activate(ServerLevel level) {
+        PositionedGlyph centerGlyph = primaryRune();
+        if (centerGlyph == null) return new RuntimeHandle(Map.of());
+        List<MotionAttribute> motions = attributes().motion();
         Vec3 velocity = Vec3.ZERO;
         double motionSum = 0.0;
         for (MotionAttribute motion : motions) {
@@ -53,39 +87,41 @@ public final class FireballOp extends ProjectileOp {
             }
         }
 
-        float size = (float)node.shape().scale();
-        double liftDirection = CenterSymbol.isFacingDown(circleGlyph) ? -1.0 : 1.0;
+        float size = scale();
+        double liftDirection = CenterSymbol.isFacingDown(boundary()) ? -1.0 : 1.0;
         Vec3 pos = CenterSymbol.glyphCenter(level, centerGlyph)
                 .add(CenterSymbol.faceNormal(centerGlyph).scale(size * 2.0));
         Vec3 acceleration = motions.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
         FireballEntity fireball = create(level, pos, velocity, motionSum, liftDirection, acceleration, size);
-        fireball.setPayload(payloadFor(node));
+        fireball.setPayload(payloadFor(this));
         level.addFreshEntity(fireball);
-        return Map.of(CenterSymbol.FIREBALL_KEY, ArrayObject.EntityRef.of(fireball));
+        return new RuntimeHandle(Map.of(CenterSymbol.FIREBALL_KEY, ArrayObject.EntityRef.of(fireball)));
     }
 
-    public static void deactivate(ServerLevel level, Map<String, Object> scratchData) {
+    @Override
+    public void deactivate(ServerLevel level, Map<String, Object> scratchData) {
         CenterSymbol.boundEntity(level, scratchData, CenterSymbol.FIREBALL_KEY)
                 .ifPresent(entity -> entity.discard());
     }
 
-    private static List<OnEntityTickOp> payloadFor(EffectNode node) {
+    private static List<OnEntityTickOp> payloadFor(FireballOp node) {
         List<OnEntityTickOp> payload = new ArrayList<>();
-        if (OpInputs.hasRune(node.inputs(), "fix")) {
-            payload.add(new SmeltOp());
-        } else {
-            payload.add(new ExplosionOp());
-        }
+        payload.add(new ExplosionOp());
+        if (OpInputs.hasRune(node.inputs(), "fix")) payload.add(new SmeltOp());
         return List.copyOf(payload);
     }
 
-    @Override
-    public ResourceLocation id() {
-        return ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fireball");
+    private PositionedGlyph primaryRune() {
+        for (var input : matchedInputs()) {
+            if (input instanceof OpInput.Rune rune && "fire".equals(rune.symbolName())) return rune.glyph();
+        }
+        return null;
     }
 
-    @Override
-    public List<OpInputMatcher> match() {
-        return List.of(OpInputMatcher.rune("fire"));
+    private static boolean hasMatchedRune(List<OpInput> inputs, String symbolName) {
+        for (OpInput input : inputs) {
+            if (input instanceof OpInput.Rune rune && symbolName.equals(rune.symbolName())) return true;
+        }
+        return false;
     }
 }

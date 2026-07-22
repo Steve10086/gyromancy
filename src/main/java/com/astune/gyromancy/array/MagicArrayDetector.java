@@ -398,6 +398,29 @@ public final class MagicArrayDetector {
         }
     }
 
+    // TODO: cleanup after acceptance: this method now only activates compiled Operator results.
+    /*
+     * Cross-TODO detector plan:
+     *
+     * 1. Keep this method as lifecycle glue only.
+     *    - Build GroupNode from the current circle.
+     *    - Print AST/compile diagnostics for debugging.
+     *    - Call ArrayNodeCompiler.compile and receive the compiled Operator result.
+     *    - Deactivate an existing array for the same root circle.
+     *    - Activate the Operator through ArrayRuntimes.
+     *    - Register ArrayObject with root circle, bound glyphs, and runtime scratch data.
+     *
+     * 2. Remove semantic knowledge from this class.
+     *    - No center-symbol checks.
+     *    - No rune list construction.
+     *    - No primary element/op selection.
+     *    - No projectile/fireball spawn logic.
+     *
+     * 3. Keep glyph ownership and invalidation here.
+     *    - Detector still decides which circle is affected when a glyph changes.
+     *    - Bound glyphs should come from the compiled Operator/envelope so nested
+     *      circle ownership stays consistent with what was actually accepted.
+     */
     private static void tryCompileCircle(ServerLevel level, PositionedGlyph circleGlyph) {
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
         GroupNode ast = ArrayAstBuilder.build(circleGlyph, mgr);

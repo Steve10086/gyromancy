@@ -1,37 +1,37 @@
 package com.astune.gyromancy.array.compile;
 
-import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
-import com.astune.gyromancy.api.symbol.SymbolRole;
-import com.astune.gyromancy.symbol.SymbolCatalog;
-import net.minecraft.resources.ResourceLocation;
+import com.astune.gyromancy.compile.operator.Operator;
 
+import java.util.LinkedHashSet;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 public final class ArrayNodeCompiler {
     private ArrayNodeCompiler() {}
 
+    //TODO: cleanup after acceptance: remove old CompiledArrayNode/EffectNode/ArrayScript classes and this migration note.
     public static CompileResult<CompiledArray> compile(GroupNode ast) {
         return compile(ast, ArrayEffectRegistry.effects());
     }
 
     public static CompileResult<CompiledArray> compile(GroupNode ast, Collection<ArrayEffectDefinition> effects) {
-        CompileResult<CompiledArrayNode> root = compileGroup(ast, effects);
-        if (root instanceof CompileResult.Failure<CompiledArrayNode> failure) {
+        CompileResult<Operator> root = compileGroup(ast, effects);
+        if (root instanceof CompileResult.Failure<Operator> failure) {
             return new CompileResult.Failure<>(failure.diagnostics());
         }
 
-        CompiledArrayNode node = ((CompileResult.Success<CompiledArrayNode>) root).value();
+        Operator op = ((CompileResult.Success<Operator>) root).value();
         return new CompileResult.Success<>(new CompiledArray(
-                new ArrayScript(node),
+                op,
                 ast.boundary(),
-                ArrayAstBuilder.boundGlyphs(ast),
-                color(node)));
+                boundGlyphs(op),
+                op.color()));
     }
 
-    private static CompileResult<CompiledArrayNode> compileGroup(GroupNode group, Collection<ArrayEffectDefinition> effects) {
+    private static CompileResult<Operator> compileGroup(GroupNode group, Collection<ArrayEffectDefinition> effects) {
         if (!(group.body() instanceof SequenceNode sequence)) {
             return fail("missing_primary_element", "Group has no sequence body");
         }
@@ -43,39 +43,35 @@ public final class ArrayNodeCompiler {
             if (child instanceof SymbolNode symbol) {
                 inputs.add(new OpInput.Rune(symbol.glyph()));
             } else if (child instanceof GroupNode nested) {
-                CompileResult<CompiledArrayNode> compiled = compileGroup(nested, effects);
-                if (compiled instanceof CompileResult.Success<CompiledArrayNode> success) {
+                CompileResult<Operator> compiled = compileGroup(nested, effects);
+                if (compiled instanceof CompileResult.Success<Operator> success) {
                     inputs.add(new OpInput.Op(success.value()));
-                } else if (compiled instanceof CompileResult.Failure<CompiledArrayNode> failure) {
+                } else if (compiled instanceof CompileResult.Failure<Operator> failure) {
                     diagnostics.addAll(failure.diagnostics());
                 }
             }
         }
         if (!diagnostics.isEmpty()) return new CompileResult.Failure<>(diagnostics);
 
+        return createOp(group.boundary(), List.copyOf(inputs), effects);
+    }
+
+    private static CompileResult<Operator> createOp(PositionedGlyph boundary, List<OpInput> inputs,
+                                                    Collection<ArrayEffectDefinition> effects) {
         Match best = bestMatch(inputs, effects);
         if (best == null) {
-            return fail("missing_primary_element", "Local direct symbols did not choose a primary element");
+            return fail("missing_primary_element", "Local direct inputs did not match an operator");
         }
-        if (best.ambiguous()) {
-            return fail("ambiguous_primary_element", "More than one local primary element was present");
-        }
-        if (hasUnmatchedCenterRune(inputs, best.inputs())) {
-            return fail("ambiguous_primary_element", "A local center rune was not consumed by the selected op");
-        }
-        return best.effect().compile(group.boundary(), List.copyOf(inputs));
+        return best.effect().compile(boundary, List.copyOf(best.inputs()), inputs);
     }
 
     private static Match bestMatch(List<OpInput> inputs, Collection<ArrayEffectDefinition> effects) {
         Match best = null;
         for (ArrayEffectDefinition effect : effects) {
             List<OpInput> matched = matchedInputs(inputs, effect);
-            if (!hasCenterRune(matched)) continue;
-            if (matched.isEmpty()) continue;
-            if (best == null || matched.size() > best.inputs().size()) {
-                best = new Match(effect, matched, false);
-            } else if (matched.size() == best.inputs().size()) {
-                best = new Match(best.effect(), best.inputs(), true);
+            if (matched.size() != effect.match().size()) continue;
+            if (best == null || effect.match().size() > best.effect().match().size()) {
+                best = new Match(effect, matched);
             }
         }
         return best;
@@ -83,61 +79,43 @@ public final class ArrayNodeCompiler {
 
     private static List<OpInput> matchedInputs(List<OpInput> inputs, ArrayEffectDefinition effect) {
         List<OpInput> matched = new ArrayList<>();
-        for (OpInput input : inputs) {
-            if (matches(input, effect.match())) matched.add(input);
+        Set<Integer> used = new LinkedHashSet<>();
+        for (OpInputMatcher matcher : effect.match()) {
+            int index = firstMatch(inputs, matcher, used);
+            if (index < 0) return matched;
+            used.add(index);
+            matched.add(inputs.get(index));
         }
         return matched;
     }
 
-    private static boolean matches(OpInput input, List<OpInputMatcher> matchers) {
-        for (OpInputMatcher matcher : matchers) {
-            if (matcher.matches(input)) return true;
+    private static int firstMatch(List<OpInput> inputs, OpInputMatcher matcher, Set<Integer> used) {
+        for (int i = 0; i < inputs.size(); i++) {
+            if (!used.contains(i) && matcher.matches(inputs.get(i))) return i;
         }
-        return false;
+        return -1;
     }
 
-    private static boolean hasCenterRune(List<OpInput> inputs) {
-        for (OpInput input : inputs) {
-            if (input instanceof OpInput.Rune rune && rune.glyph().role() == SymbolRole.CENTER_SYMBOL) return true;
-        }
-        return false;
+    private static List<PositionedGlyph> boundGlyphs(Operator root) {
+        Set<PositionedGlyph> glyphs = new LinkedHashSet<>();
+        collectBoundGlyphs(root, glyphs);
+        return List.copyOf(glyphs);
     }
 
-    private static boolean hasUnmatchedCenterRune(List<OpInput> inputs, List<OpInput> matched) {
-        for (OpInput input : inputs) {
-            if (input instanceof OpInput.Rune rune
-                    && rune.glyph().role() == SymbolRole.CENTER_SYMBOL
-                    && !matched.contains(input)) {
-                return true;
+    private static void collectBoundGlyphs(Operator op, Set<PositionedGlyph> glyphs) {
+        glyphs.add(op.boundary());
+        for (OpInput input : op.inputs()) {
+            if (input instanceof OpInput.Rune rune) {
+                glyphs.add(rune.glyph());
+            } else if (input instanceof OpInput.Op child) {
+                collectBoundGlyphs(child.operator(), glyphs);
             }
         }
-        return false;
-    }
-
-    private static int color(CompiledArrayNode node) {
-        if (node instanceof EffectNode effect) {
-            return SymbolCatalog.glyphColorFor(ResourceLocation.fromNamespaceAndPath("gyromancy", symbolName(effect.primaryElement())));
-        }
-        return SymbolCatalog.DEFAULT_GLYPH_COLOR;
-    }
-
-    public static String symbolName(ElementType element) {
-        return switch (element) {
-            case FIRE -> "fire";
-            case WATER -> "water";
-            case MANA -> "mana";
-            case WIND -> "wind";
-            case EARTH -> "earth";
-            case LIGHT -> "light";
-            case DARK -> "dark";
-            case SPACE -> "space";
-            case TIME -> "time";
-        };
     }
 
     private static <T> CompileResult<T> fail(String code, String message) {
         return new CompileResult.Failure<>(List.of(new CompileDiagnostic(code, message)));
     }
 
-    private record Match(ArrayEffectDefinition effect, List<OpInput> inputs, boolean ambiguous) {}
+    private record Match(ArrayEffectDefinition effect, List<OpInput> inputs) {}
 }

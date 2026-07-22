@@ -5,16 +5,18 @@ import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.compile.ArrayEffectDefinition;
 import com.astune.gyromancy.array.compile.CompileResult;
-import com.astune.gyromancy.array.compile.CompiledArrayNode;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
+import com.astune.gyromancy.compile.operator.Operator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -49,7 +51,7 @@ class MagicArrayManagerHierarchyTest {
     }
 
     @Test
-    void managerAcceptsOverlappingOpMatchers() {
+    void managerAcceptsRegisteredOpDefinitions() {
         ArrayEffectDefinition first = effect("first", "fire");
         ArrayEffectDefinition second = effect("second", "arrow");
 
@@ -67,12 +69,22 @@ class MagicArrayManagerHierarchyTest {
 
             @Override
             public List<OpInputMatcher> match() {
-                return List.of(OpInputMatcher.rune(symbol), OpInputMatcher.rune("arrow"));
+                return List.of(OpInputMatcher.rune(symbol));
             }
 
             @Override
-            public CompileResult<CompiledArrayNode> compile(PositionedGlyph boundary, List<OpInput> inputs) {
-                return new CompileResult.Success<>(null);
+            public CompileResult<Operator> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
+                                                   List<OpInput> inputs) {
+                return new CompileResult.Success<>(new Operator() {
+                    @Override public ResourceLocation id() { return ResourceLocation.fromNamespaceAndPath("gyromancy", id); }
+                    @Override public PositionedGlyph boundary() { return boundary; }
+                    @Override public List<OpInput> inputs() { return inputs; }
+                    @Override public com.astune.gyromancy.array.runtime.RuntimeHandle activate(ServerLevel level) {
+                        return new com.astune.gyromancy.array.runtime.RuntimeHandle(Map.of());
+                    }
+                    @Override public void deactivate(ServerLevel level, Map<String, Object> scratchData) {}
+                    @Override public int color() { return 0xFFFFFFFF; }
+                });
             }
         };
     }
