@@ -41,6 +41,77 @@ class ArrayNodeCompilerTest {
         assertEquals(List.of(circle, fire, arrow, revert), compiled.boundGlyphs());
     }
 
+    @Test
+    void selectedOpReceivesAllLayerInputs() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2);
+        PositionedGlyph fix = glyph("fix", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 4);
+
+        GroupNode ast = new GroupNode(circle, new SequenceNode(List.of(
+                new SymbolNode(fire), new SymbolNode(fix), new SymbolNode(split))));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        EffectNode root = (EffectNode) success.value().script().root();
+
+        assertEquals(List.of("fire", "fix", "split"), root.inputs().stream()
+                .filter(OpInput.Rune.class::isInstance)
+                .map(OpInput.Rune.class::cast)
+                .map(OpInput.Rune::symbolName)
+                .toList());
+    }
+
+    @Test
+    void selectsLongestMatchingOpDefinition() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2);
+        PositionedGlyph fix = glyph("fix", SymbolRole.PARAMETER_RUNE, 3);
+        GroupNode ast = new GroupNode(circle, new SequenceNode(List.of(new SymbolNode(fire), new SymbolNode(fix))));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast, List.of(
+                        op("short", ElementType.FIRE, "fire"),
+                        op("long", ElementType.WATER, "fire", "fix"))));
+        EffectNode root = (EffectNode) success.value().script().root();
+
+        assertEquals(ElementType.WATER, root.primaryElement());
+        assertEquals(List.of("fire", "fix"), root.inputs().stream()
+                .filter(OpInput.Rune.class::isInstance)
+                .map(OpInput.Rune.class::cast)
+                .map(OpInput.Rune::symbolName)
+                .toList());
+    }
+
+    private static ArrayEffectDefinition op(String id, ElementType element, String... symbols) {
+        return new ArrayEffectDefinition() {
+            @Override
+            public ResourceLocation id() {
+                return ResourceLocation.fromNamespaceAndPath("gyromancy", id);
+            }
+
+            @Override
+            public List<OpInputMatcher> match() {
+                return List.of(symbols).stream().map(OpInputMatcher::rune).toList();
+            }
+
+            @Override
+            public CompileResult<CompiledArrayNode> compile(PositionedGlyph boundary, List<OpInput> inputs) {
+                return new CompileResult.Success<>(new EffectNode(
+                        EffectKind.PROJECTILE,
+                        element,
+                        new ShapeSpec(boundary, 1.0F),
+                        TriggerSpec.ON_ACTIVATE,
+                        DurationSpec.INSTANT,
+                        EffectAttributes.EMPTY,
+                        inputs,
+                        List.of()));
+            }
+        };
+    }
+
     private static PositionedGlyph glyph(String name, SymbolRole role, int id) {
         BlockPos pos = new BlockPos(0, 64, 0);
         return new PositionedGlyph(

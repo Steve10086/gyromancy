@@ -1,50 +1,44 @@
 package com.astune.gyromancy.entity.ball;
 
+import com.astune.gyromancy.compile.operator.EntityTickContext;
+import com.astune.gyromancy.compile.operator.ExplosionOp;
+import com.astune.gyromancy.compile.operator.FireballOp;
+import com.astune.gyromancy.compile.operator.OnEntityTickOp;
+import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.registry.ModEntities;
-import com.astune.gyromancy.symbol.CenterSymbol;
-import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.projectile.AbstractArrow;
-import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.BaseFireBlock;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class FireballEntity extends MagicBallEntity {
     private static final int DEFAULT_LIFETIME = 500;
     private static final double MAX_SIZE = 4.5;
-    private static final int ELEMENT_EXCHANGE_INTERVAL = 10;
-    private static final double FIRE_VOLUME_LOSS = 0.1;
-    private static final double FIRE_EQUILIBRIUM = 100.0;
-    private static final double MAX_VOLUME_FIRE_LEVEL = 2000.0;
-    private static final double FIRE_PER_VOLUME = 1000.0;
-    private static final double FIRE_CONVERSION_COST = 100.0;
-    private static final double MANA_TO_VOLUME = 0.01;
-    private float explosionPower = 1.5F;
+    private static final float DEFAULT_EXPLOSION_POWER = 1.5F;
     private int lifetime = DEFAULT_LIFETIME;
-    private Vec3 acceleration = Vec3.ZERO;
     private Vec3 pendingVelocity = Vec3.ZERO;
     private Vec3 pendingAcceleration = Vec3.ZERO;
     private boolean launched;
-    private boolean oldSpawned;
-    private long storedMana;
+    private final Map<String, Object> runtimeData = new HashMap<>();
+    private List<OnEntityTickOp> payload = new ArrayList<>(FireballOp.defaultPayload());
+    private static final String PAYLOAD_KEY = "Payload";
 
     public FireballEntity(EntityType<FireballEntity> type, Level level) {
-        super(type, level);
+        super(type, level, ElementType.FIRE);
+        initRuntimeData(DEFAULT_EXPLOSION_POWER);
     }
 
     public FireballEntity(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
                           double liftDirection, Vec3 acceleration, float size) {
         this(ModEntities.FIREBALL.get(), level);
         setBallSize(size);
-        this.explosionPower = Math.max(1.0F, size);
+        initRuntimeData(Math.max(1.0F, size));
         this.pendingVelocity = launchVelocity(velocity, arrowSizeSum, liftDirection);
         this.pendingAcceleration = acceleration;
         this.acceleration = Vec3.ZERO;
@@ -52,27 +46,22 @@ public class FireballEntity extends MagicBallEntity {
         setDeltaMovement(Vec3.ZERO);
     }
 
+    public void setPayload(List<OnEntityTickOp> payload) {
+        this.payload = new ArrayList<>(payload);
+    }
+
+    public void setLifetime(int lifetime) {
+        this.lifetime = lifetime;
+        runtimeData.put(FireballOp.LIFETIME_KEY, lifetime);
+    }
+
     @Override
     public void tick() {
         super.tick();
         growIntoTargetSize();
-        if (isFullyGrown() && tickCount % ELEMENT_EXCHANGE_INTERVAL == 0) {
-            storedMana = exchangeWithElements(FIRE_VOLUME_LOSS * ELEMENT_EXCHANGE_INTERVAL,
-                    FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL, FIRE_PER_VOLUME,
-                    FIRE_CONVERSION_COST * ELEMENT_EXCHANGE_INTERVAL,
-                    MANA_TO_VOLUME, storedMana);
-        }
         if (tickCount > lifetime) {
             discard();
             return;
-        }
-        if (!level().isClientSide && tickCount > lifetime * 0.9 && !oldSpawned) {
-            OldFireballEntity oldFireball = new OldFireballEntity(level(), position(), getDeltaMovement(), acceleration, getTargetBallSize());
-            oldFireball.setStoredMana(storedMana);
-            storedMana = 0;
-            bindGeneratedEntity(oldFireball, CenterSymbol.OLD_FIREBALL_KEY);
-            level().addFreshEntity(oldFireball);
-            oldSpawned = true;
         }
         if (!launched && !isFullyGrown()) {
             setDeltaMovement(Vec3.ZERO);
@@ -80,32 +69,18 @@ public class FireballEntity extends MagicBallEntity {
         }
         launchIfReady();
 
-        Vec3 velocity = getDeltaMovement();
-        Vec3 start = position();
-        Vec3 end = start.add(velocity);
-        HitResult blockHit = level().clip(new ClipContext(start, end, ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE, this));
-        if (blockHit.getType() != HitResult.Type.MISS) {
-            end = blockHit.getLocation();
-        }
-
-        setPos(end);
-        if (getBallSize() > MAX_SIZE || blockHit.getType() != HitResult.Type.MISS || hitLivingEntity(velocity)) {
-            explode();
-            return;
-        }
-
-        burnEntitiesInPath(velocity);
-        setDeltaMovement(velocity.add(acceleration));
+        runtimeData.put(FireballOp.LIFETIME_KEY, lifetime);
+        EntityTickContext ctx = EntityTickContext.from(this, runtimeData, acceleration);
+        payload.forEach(op -> op.onEntityTick(ctx));
+        if (!isAlive()) return;
     }
 
-    private void burnEntitiesInPath(Vec3 velocity) {
-        var searchBox = getBoundingBox().expandTowards(velocity).inflate(0.3);
-        level().getEntitiesOfClass(Entity.class, searchBox, e -> e != this).forEach(entity -> {
-            if (entity instanceof ItemEntity || entity instanceof AbstractArrow) {
-                entity.setRemainingFireTicks(200);
-            }
-        });
+    private void initRuntimeData(float explosionPower) {
+        runtimeData.putIfAbsent(FireballOp.STORED_MANA_KEY, 0L);
+        runtimeData.putIfAbsent(FireballOp.OLD_SPAWNED_KEY, false);
+        runtimeData.put(FireballOp.LIFETIME_KEY, lifetime);
+        runtimeData.put(ExplosionOp.EXPLOSION_POWER_KEY, explosionPower);
+        runtimeData.put(ExplosionOp.MAX_SIZE_KEY, MAX_SIZE);
     }
 
     private void launchIfReady() {
@@ -115,35 +90,12 @@ public class FireballEntity extends MagicBallEntity {
         setDeltaMovement(pendingVelocity);
     }
 
-    private boolean hitLivingEntity(Vec3 velocity) {
-        var searchBox = getBoundingBox().expandTowards(velocity).inflate(0.1);
-        return !level().getEntitiesOfClass(LivingEntity.class, searchBox,
-                LivingEntity::isAlive).isEmpty();
-    }
 
-    private void explode() {
-        if (!level().isClientSide) {
-            level().explode(this, getX(), getY(), getZ(), explosionPower, true, Level.ExplosionInteraction.MOB);
-            igniteNearbyBlocks();
-        }
-        discard();
-    }
-
-    private void igniteNearbyBlocks() {
-        int radius = Math.max(1, (int)Math.ceil(explosionPower));
-        BlockPos center = blockPosition();
-        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-radius, -radius, -radius),
-                center.offset(radius, radius, radius))) {
-            if (!level().isEmptyBlock(pos)) continue;
-            BlockState fire = BaseFireBlock.getState(level(), pos);
-            if (fire.canSurvive(level(), pos)) level().setBlock(pos, fire, 3);
-        }
-    }
 
     @Override
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-        if (tag.contains("ExplosionPower")) explosionPower = tag.getFloat("ExplosionPower");
+        if (tag.contains("ExplosionPower")) runtimeData.put(ExplosionOp.EXPLOSION_POWER_KEY, tag.getFloat("ExplosionPower"));
         if (tag.contains("Lifetime")) lifetime = tag.getInt("Lifetime");
         if (tag.contains("AccelX")) {
             acceleration = new Vec3(tag.getDouble("AccelX"), tag.getDouble("AccelY"), tag.getDouble("AccelZ"));
@@ -154,14 +106,18 @@ public class FireballEntity extends MagicBallEntity {
         if (tag.contains("PendingAccelX")) {
             pendingAcceleration = new Vec3(tag.getDouble("PendingAccelX"), tag.getDouble("PendingAccelY"), tag.getDouble("PendingAccelZ"));
         }
-        if (tag.contains("StoredMana")) storedMana = tag.getLong("StoredMana");
+        if (tag.contains("StoredMana")) runtimeData.put(FireballOp.STORED_MANA_KEY, tag.getLong("StoredMana"));
+        payload = new ArrayList<>(OnEntityTickOp.loadPayloadList(tag, PAYLOAD_KEY, FireballOp.defaultPayload()));
+        runtimeData.put(FireballOp.LIFETIME_KEY, lifetime);
+        runtimeData.put(FireballOp.OLD_SPAWNED_KEY, tag.getBoolean("OldSpawned"));
+        runtimeData.put(ExplosionOp.MAX_SIZE_KEY, MAX_SIZE);
         launched = tag.getBoolean("Launched");
     }
 
     @Override
     protected void addAdditionalSaveData(@NotNull CompoundTag tag) {
         super.addAdditionalSaveData(tag);
-        tag.putFloat("ExplosionPower", explosionPower);
+        tag.putFloat("ExplosionPower", ((Number)runtimeData.getOrDefault(ExplosionOp.EXPLOSION_POWER_KEY, DEFAULT_EXPLOSION_POWER)).floatValue());
         tag.putInt("Lifetime", lifetime);
         tag.putDouble("AccelX", acceleration.x);
         tag.putDouble("AccelY", acceleration.y);
@@ -172,7 +128,9 @@ public class FireballEntity extends MagicBallEntity {
         tag.putDouble("PendingAccelX", pendingAcceleration.x);
         tag.putDouble("PendingAccelY", pendingAcceleration.y);
         tag.putDouble("PendingAccelZ", pendingAcceleration.z);
-        tag.putLong("StoredMana", storedMana);
+        tag.putLong("StoredMana", ((Number)runtimeData.getOrDefault(FireballOp.STORED_MANA_KEY, 0L)).longValue());
+        tag.put(PAYLOAD_KEY, OnEntityTickOp.savePayloadList(payload));
+        tag.putBoolean("OldSpawned", Boolean.TRUE.equals(runtimeData.get(FireballOp.OLD_SPAWNED_KEY)));
         tag.putBoolean("Launched", launched);
     }
 }

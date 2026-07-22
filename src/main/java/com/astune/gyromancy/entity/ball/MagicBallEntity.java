@@ -4,22 +4,21 @@ import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.element.ElementStorageManager;
 import com.astune.gyromancy.registry.ModAttachments;
+import com.astune.gyromancy.util.MagicBallGeometry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityDimensions;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.*;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,18 +29,58 @@ public abstract class MagicBallEntity extends Entity {
             SynchedEntityData.defineId(MagicBallEntity.class, EntityDataSerializers.FLOAT);
     protected static final float SPAWN_SIZE = 0.1F;
     private static final int GROWTH_RATE = 2;
+    private static final double VOLUME_LOSS_PER_TICK = 0.01;
+    private static final double ELEMENT_EQUILIBRIUM = 100.0;
     private UUID boundArrayId;
+    private final ElementType targetElement;
     private double averageElementLevel;
+    private boolean impactThisTick;
+    private Vec3 velocityThisTick = Vec3.ZERO;
+    Vec3 acceleration = Vec3.ZERO;
 
-    public MagicBallEntity(EntityType<? extends MagicBallEntity> type, Level level) {
+
+    public MagicBallEntity(EntityType<? extends MagicBallEntity> type, Level level, ElementType targetElement) {
         super(type, level);
+        this.targetElement = targetElement;
         this.noPhysics = true;
+    }
+
+    @Override
+    public void tick(){
+        velocityThisTick = getDeltaMovement();
+        Vec3 start = position();
+        Vec3 end = start.add(velocityThisTick);
+        HitResult blockHit = level().clip(new ClipContext(start, end, ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE, this));
+        if (blockHit.getType() != HitResult.Type.MISS) {
+            end = blockHit.getLocation();
+        }
+
+        setPos(end);
+        impactThisTick = blockHit.getType() != HitResult.Type.MISS || hitLivingEntity(velocityThisTick);
+
+        setDeltaMovement(velocityThisTick.add(acceleration));
+        updateSizeFromElementConcentration();
+
     }
 
     @Override
     protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
         builder.define(DATA_TARGET_SIZE, SPAWN_SIZE);
         builder.define(DATA_CURRENT_SIZE, SPAWN_SIZE);
+    }
+    public boolean hasImpactThisTick() {
+        return impactThisTick;
+    }
+
+    private boolean hitLivingEntity(Vec3 velocity) {
+        var searchBox = getBoundingBox().expandTowards(velocity).inflate(0.1);
+        return !level().getEntitiesOfClass(LivingEntity.class, searchBox,
+                LivingEntity::isAlive).isEmpty();
+    }
+
+    public Vec3 velocityThisTick() {
+        return velocityThisTick;
     }
 
     public float getBallSize() {
@@ -90,7 +129,7 @@ public abstract class MagicBallEntity extends Entity {
         this.boundArrayId = arrayId;
     }
 
-    protected void bindGeneratedEntity(MagicBallEntity entity, String scratchKey) {
+    public void bindGeneratedEntity(MagicBallEntity entity, String scratchKey) {
         if (boundArrayId == null || !(level() instanceof ServerLevel serverLevel)) return;
 
         entity.bindToArray(boundArrayId);
@@ -98,91 +137,38 @@ public abstract class MagicBallEntity extends Entity {
                 .setArrayScratchValue(boundArrayId, scratchKey, ArrayObject.EntityRef.of(entity));
     }
 
-    protected double getAverageElementLevel() {
+    public double getAverageElementLevel() {
         return averageElementLevel;
     }
 
-    protected long exchangeWithElements(double fireVolumeLoss, double fireEquilibrium,
-                                        double maxVolumeFireLevel, double firePerVolume,
-                                        double fireConversionCost, double manaToVolume,
-                                        long storedMana) {
-        return exchangeWithElements(ElementType.FIRE, fireVolumeLoss, fireEquilibrium, maxVolumeFireLevel,
-                firePerVolume, fireConversionCost, manaToVolume, storedMana);
-    }
-
-    protected long exchangeWithElements(ElementType element, double fireVolumeLoss, double fireEquilibrium,
-                                        double maxVolumeFireLevel, double firePerVolume,
-                                        double fireConversionCost, double manaToVolume,
-                                        long storedMana) {
-        if (level().isClientSide) return storedMana;
+    private void updateSizeFromElementConcentration() {
+        if (level().isClientSide) return;
 
         float size = getTargetSize();
         List<BlockPos> positions = containedPositions(size);
-        if (positions.isEmpty()) return storedMana;
+        if (positions.isEmpty()) return;
 
-        double volume = volume(size);
-        double averageFire = positions.stream()
-                .mapToLong(pos -> ElementStorageManager.INSTANCE.get(level(), pos).get(element))
+        double volume = MagicBallGeometry.volume(size);
+        double average = positions.stream()
+                .mapToLong(pos -> ElementStorageManager.INSTANCE.get(level(), pos).get(targetElement))
                 .average()
                 .orElse(0.0);
+        averageElementLevel = average;
 
-        double naturalFire = 0.0;
-        if (averageFire < fireEquilibrium * volume) {
-            double lost = Math.min(volume * 0.005 + fireVolumeLoss, volume - volume(SPAWN_SIZE));
-            if (lost > 0.0) {
-                volume -= lost;
-                naturalFire = Math.max(0.0, firePerVolume * lost - fireConversionCost);
-            }
+        if (average >= ELEMENT_EQUILIBRIUM * volume) return;
+        double lost = Math.min(volume * 0.005 + VOLUME_LOSS_PER_TICK,
+                volume - MagicBallGeometry.volume(SPAWN_SIZE));
+        if (lost > 0.0) {
+            Vec3 velocity = getDeltaMovement();
+            setTargetSize((float) MagicBallGeometry.sizeForVolume(volume - lost, SPAWN_SIZE));
+            setDeltaMovement(velocity);
         }
-
-        double maxManaVolumeGain = volume * 0.05 + fireVolumeLoss;
-        long manaBudget = manaToVolume <= 0.0 ? 0 : (long)Math.ceil(maxManaVolumeGain / manaToVolume);
-        if (maxVolumeFireLevel > 0.0 && manaToVolume > 0.0) {
-            double maxVolumeByFire = averageFire / maxVolumeFireLevel;
-            double allowedVolumeGain = Math.max(0.0, maxVolumeByFire - volume);
-            manaBudget = Math.min(manaBudget, (long)Math.floor(allowedVolumeGain / manaToVolume));
-        }
-        storedMana = Math.min(storedMana, manaBudget);
-        storedMana += drainManaForGrowth(positions, Math.max(0L, manaBudget - storedMana));
-        long directMana = drainMana(positions);
-
-        long firePerBlock = (long)Math.floor((naturalFire + directMana) / positions.size());
-        averageElementLevel = averageFire + firePerBlock;
-        if (firePerBlock > 0) {
-            for (BlockPos pos : positions) {
-                var current = ElementStorageManager.INSTANCE.get(level(), pos);
-                ElementStorageManager.INSTANCE.set(level(), pos,
-                        current.withValue(element, current.get(element) + firePerBlock));
-            }
-        }
-
-        long manaToBurn = Math.min(storedMana, manaBudget);
-        storedMana -= manaToBurn;
-
-        Vec3 velocity = getDeltaMovement();
-        setTargetSize((float) sizeForVolume(volume + manaToBurn * manaToVolume));
-        setDeltaMovement(velocity);
-        return storedMana;
     }
 
     protected Vec3 launchVelocity(Vec3 velocity, double arrowSizeSum, double liftDirection) {
         double speed = velocity.length();
         double lift = ((arrowSizeSum - speed) + 0.2 * speed) * liftDirection;
         return velocity.add(0.0, lift, 0.0);
-    }
-
-    private long drainManaForGrowth(List<BlockPos> positions, long needed) {
-        long drained = 0L;
-        for (BlockPos pos : positions) {
-            if (drained >= needed) break;
-            var current = ElementStorageManager.INSTANCE.get(level(), pos);
-            long currentMana = current.get(ElementType.MANA);
-            long absorbed = Math.min(currentMana, needed - drained);
-            if (absorbed == 0) continue;
-            drained += absorbed;
-            ElementStorageManager.INSTANCE.set(level(), pos, current.withValue(ElementType.MANA, currentMana - absorbed));
-        }
-        return drained;
     }
 
     @Override
@@ -215,22 +201,12 @@ public abstract class MagicBallEntity extends Entity {
         if (boundArrayId != null) tag.putUUID("ArrayId", boundArrayId);
     }
 
-    protected boolean inSphere(Vec3 target, double radius) {
-        return position().add(0, radius, 0).distanceToSqr(target) <= radius * radius;
+    public boolean inSphere(Vec3 target, double radius) {
+        return MagicBallGeometry.inSphere(position(), target, radius);
     }
 
     protected List<BlockPos> containedPositions(float size) {
-        double r = size / 2.0;
-        Vec3 center = position().add(0.0, r, 0.0);
-        AABB box = new AABB(center.x - r, center.y - r, center.z - r,
-                center.x + r, center.y + r, center.z + r);
-        List<BlockPos> positions = new ArrayList<>();
-        BlockPos.betweenClosedStream(box)
-                .map(BlockPos::immutable)
-                .filter(pos -> center.distanceToSqr(pos.getCenter()) <= r * r)
-                .forEach(positions::add);
-        if (positions.isEmpty()) positions.add(BlockPos.containing(center));
-        return positions;
+        return MagicBallGeometry.containedPositions(position(), size);
     }
 
     protected void moveWithResistance(double factor, double constant) {
@@ -276,24 +252,4 @@ public abstract class MagicBallEntity extends Entity {
         }
     }
 
-    private long drainMana(List<BlockPos> positions) {
-        long drained = 0L;
-        for (BlockPos pos : positions) {
-            var current = ElementStorageManager.INSTANCE.get(level(), pos);
-            long mana = current.get(ElementType.MANA);
-            if (mana == 0L) continue;
-            drained += mana;
-            ElementStorageManager.INSTANCE.set(level(), pos, current.withValue(ElementType.MANA, 0L));
-        }
-        return drained;
-    }
-
-    private static double volume(float size) {
-        double r = size / 2.0;
-        return 4.0 / 3.0 * Math.PI * r * r * r;
-    }
-
-    private static double sizeForVolume(double volume) {
-        return Math.cbrt(Math.max(volume, volume(SPAWN_SIZE)) * 3.0 / (4.0 * Math.PI)) * 2.0;
-    }
 }

@@ -7,5 +7,4 @@ public record EffectAttributes(
         List<MotionAttribute> motion
 ) {
     public static final EffectAttributes EMPTY = new EffectAttributes(false, List.of());
-    static final EffectAttributes INVALID_INVERSE = new EffectAttributes(true, null);
 }

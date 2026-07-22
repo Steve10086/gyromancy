@@ -27,7 +27,7 @@ public class ManaballEntity extends MagicBallEntity {
     private float manaPerBlock = 0;
 
     public ManaballEntity(EntityType<ManaballEntity> type, Level level) {
-        super(type, level);
+        super(type, level, ElementType.MANA);
     }
 
     public ManaballEntity(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,

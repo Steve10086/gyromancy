@@ -1,6 +1,9 @@
 package com.astune.gyromancy.entity.ball;
 
 import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.compile.operator.ElementConversionOp;
+import com.astune.gyromancy.compile.operator.EntityTickContext;
+import com.astune.gyromancy.compile.operator.OnEntityTickOp;
 import com.astune.gyromancy.registry.ModEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -33,8 +36,10 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -50,21 +55,25 @@ public class WaterBallEntity extends MagicBallEntity {
     private static final double FIRE_PER_VOLUME = 1000.0;
     private static final double FIRE_CONVERSION_COST = 10.0;
     private static final double MANA_TO_VOLUME = 0.05;
+    private static final String STORED_MANA_KEY = "storedMana";
     private static final int BREWING_TIME = PotionBrewing.BREWING_TIME_SECONDS * 20;
     private static final int MAX_BREWING_ROUTE_LENGTH = 4;
     private static final int MISSING_ITEM_GRACE_TICKS = 20;
     private static final double BURST_PUSH_STRENGTH = 1.2;
     private final Set<UUID> trackedItems = new HashSet<>();
+    private final Map<String, Object> runtimeData = new HashMap<>();
+    private final OnEntityTickOp elementConversion = new ElementConversionOp(ElementType.WATER, STORED_MANA_KEY,
+            EFFECT_INTERVAL, FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL,
+            FIRE_PER_VOLUME, FIRE_CONVERSION_COST, MANA_TO_VOLUME);
     private Vec3 acceleration = Vec3.ZERO;
     private Vec3 pendingVelocity = Vec3.ZERO;
     private Vec3 pendingAcceleration = Vec3.ZERO;
     private ItemStack potionState = defaultPotionState();
     private BrewTask brewTask;
     private boolean launched;
-    private long storedMana;
 
     public WaterBallEntity(EntityType<WaterBallEntity> type, Level level) {
-        super(type, level);
+        super(type, level, ElementType.WATER);
     }
 
     public WaterBallEntity(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
@@ -108,12 +117,7 @@ public class WaterBallEntity extends MagicBallEntity {
     public void tick() {
         super.tick();
         growIntoTargetSize();
-        if (isFullyGrown() && tickCount % EFFECT_INTERVAL == 0) {
-            storedMana = exchangeWithElements(ElementType.WATER, FIRE_VOLUME_LOSS * EFFECT_INTERVAL,
-                    FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL, FIRE_PER_VOLUME,
-                    FIRE_CONVERSION_COST * EFFECT_INTERVAL,
-                    MANA_TO_VOLUME, storedMana);
-        }
+        elementConversion.onEntityTick(EntityTickContext.from(this, runtimeData, acceleration));
         if (!launched && isFullyGrown()) {
             launched = true;
             acceleration = pendingAcceleration;
@@ -425,7 +429,7 @@ public class WaterBallEntity extends MagicBallEntity {
         if (tag.contains("PendingVelX")) pendingVelocity = new Vec3(tag.getDouble("PendingVelX"), tag.getDouble("PendingVelY"), tag.getDouble("PendingVelZ"));
         if (tag.contains("PendingAccelX")) pendingAcceleration = new Vec3(tag.getDouble("PendingAccelX"), tag.getDouble("PendingAccelY"), tag.getDouble("PendingAccelZ"));
         launched = tag.getBoolean("Launched");
-        if (tag.contains("StoredMana")) storedMana = tag.getLong("StoredMana");
+        if (tag.contains("StoredMana")) runtimeData.put(STORED_MANA_KEY, tag.getLong("StoredMana"));
         if (tag.contains("PotionState", Tag.TAG_COMPOUND)) {
             potionState = ItemStack.parse(registryAccess(), tag.getCompound("PotionState")).orElse(potionState);
             entityData.set(DATA_POTION_STATE, potionState.copy());
@@ -452,7 +456,7 @@ public class WaterBallEntity extends MagicBallEntity {
         tag.putDouble("PendingAccelY", pendingAcceleration.y);
         tag.putDouble("PendingAccelZ", pendingAcceleration.z);
         tag.putBoolean("Launched", launched);
-        tag.putLong("StoredMana", storedMana);
+        tag.putLong("StoredMana", ((Number)runtimeData.getOrDefault(STORED_MANA_KEY, 0L)).longValue());
         tag.put("PotionState", potionState.save(registryAccess()));
         ListTag tracked = new ListTag();
         trackedItems.forEach(uuid -> {

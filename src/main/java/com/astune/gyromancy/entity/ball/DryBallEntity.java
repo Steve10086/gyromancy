@@ -16,7 +16,7 @@ public class DryBallEntity extends ResistantBallEntity {
     private static final long WATER_BLOCK_MANA_COST = 1000L;
 
     public DryBallEntity(EntityType<DryBallEntity> type, Level level) {
-        super(type, level);
+        super(type, level, ElementType.WATER);
     }
 
     public DryBallEntity(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum, double liftDirection, float size) {

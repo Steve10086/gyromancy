@@ -4,8 +4,10 @@ import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.compile.ArrayEffectDefinition;
+import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.CompiledArrayNode;
-import com.astune.gyromancy.array.compile.EffectAttributes;
+import com.astune.gyromancy.array.compile.OpInput;
+import com.astune.gyromancy.array.compile.OpInputMatcher;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -18,7 +20,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MagicArrayManagerHierarchyTest {
     @Test
@@ -48,11 +49,13 @@ class MagicArrayManagerHierarchyTest {
     }
 
     @Test
-    void managerRejectsOverlappingEffectSymbols() {
+    void managerAcceptsOverlappingOpMatchers() {
         ArrayEffectDefinition first = effect("first", "fire");
-        ArrayEffectDefinition second = effect("second", "fire");
+        ArrayEffectDefinition second = effect("second", "arrow");
 
-        assertThrows(IllegalStateException.class, () -> new MagicArrayManager(List.of(first, second)));
+        MagicArrayManager manager = new MagicArrayManager(List.of(first, second));
+
+        assertEquals(List.of(first, second), manager.effectDefinitions());
     }
 
     private static ArrayEffectDefinition effect(String id, String symbol) {
@@ -63,21 +66,13 @@ class MagicArrayManagerHierarchyTest {
             }
 
             @Override
-            public List<String> symbols() {
-                return List.of(symbol);
+            public List<OpInputMatcher> match() {
+                return List.of(OpInputMatcher.rune(symbol), OpInputMatcher.rune("arrow"));
             }
 
             @Override
-            public com.astune.gyromancy.api.element.ElementType primaryElement(String symbol) {
-                return com.astune.gyromancy.api.element.ElementType.FIRE;
-            }
-
-            @Override
-            public CompiledArrayNode compile(PositionedGlyph boundary,
-                                             com.astune.gyromancy.api.element.ElementType primaryElement,
-                                             EffectAttributes attributes,
-                                             List<CompiledArrayNode> children) {
-                return null;
+            public CompileResult<CompiledArrayNode> compile(PositionedGlyph boundary, List<OpInput> inputs) {
+                return new CompileResult.Success<>(null);
             }
         };
     }

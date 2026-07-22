@@ -11,6 +11,7 @@ public final class EffectNode extends ProjectileRuntimeNode {
     private final TriggerSpec trigger;
     private final DurationSpec duration;
     private final EffectAttributes attributes;
+    private final List<OpInput> inputs;
     private final List<CompiledArrayNode> children;
 
     public EffectNode(EffectKind kind,
@@ -19,6 +20,7 @@ public final class EffectNode extends ProjectileRuntimeNode {
                       TriggerSpec trigger,
                       DurationSpec duration,
                       EffectAttributes attributes,
+                      List<OpInput> inputs,
                       List<CompiledArrayNode> children) {
         this.kind = kind;
         this.primaryElement = primaryElement;
@@ -26,6 +28,7 @@ public final class EffectNode extends ProjectileRuntimeNode {
         this.trigger = trigger;
         this.duration = duration;
         this.attributes = attributes;
+        this.inputs = List.copyOf(inputs);
         this.children = List.copyOf(children);
     }
 
@@ -40,6 +43,8 @@ public final class EffectNode extends ProjectileRuntimeNode {
     public DurationSpec duration() { return duration; }
 
     public EffectAttributes attributes() { return attributes; }
+
+    public List<OpInput> inputs() { return inputs; }
 
     public List<CompiledArrayNode> children() { return children; }
 }

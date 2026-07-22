@@ -1,5 +1,6 @@
 package com.astune.gyromancy.entity.ball;
 
+import com.astune.gyromancy.api.element.ElementType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
@@ -12,8 +13,8 @@ public abstract class ResistantBallEntity extends MagicBallEntity {
     private Vec3 pendingVelocity = Vec3.ZERO;
     private boolean launched;
 
-    protected ResistantBallEntity(EntityType<? extends ResistantBallEntity> type, Level level) {
-        super(type, level);
+    protected ResistantBallEntity(EntityType<? extends ResistantBallEntity> type, Level level, ElementType targetElement) {
+        super(type, level, targetElement);
     }
 
     protected void configure(Vec3 pos, Vec3 velocity, double arrowSizeSum, double liftDirection, float size) {

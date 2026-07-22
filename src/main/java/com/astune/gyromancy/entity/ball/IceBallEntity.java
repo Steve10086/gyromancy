@@ -18,7 +18,7 @@ public class IceBallEntity extends ResistantBallEntity {
     private static final long TIME_MANA_COST = 100L;
 
     public IceBallEntity(EntityType<IceBallEntity> type, Level level) {
-        super(type, level);
+        super(type, level, ElementType.WATER);
     }
 
     public IceBallEntity(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum, double liftDirection, float size) {

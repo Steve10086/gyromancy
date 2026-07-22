@@ -36,7 +36,6 @@ public class MagicArrayManager {
     }
 
     public MagicArrayManager(List<ArrayEffectDefinition> effectDefinitions) {
-        ArrayEffectRegistry.assertNoOverlappingSymbols(effectDefinitions);
         this.effectDefinitions = List.copyOf(effectDefinitions);
     }
 
