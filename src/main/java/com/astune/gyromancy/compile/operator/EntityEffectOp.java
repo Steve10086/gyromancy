@@ -69,8 +69,8 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
     protected List<EntityPayload> payload(List<? extends EntityPayload> defaults) {
         List<EntityPayload> payload = new ArrayList<>(defaults);
         for (OpInput input : inputs) {
-            if (input instanceof OpInput.Op op && op.operator() instanceof EntityPayloadProvider provider) {
-                payload.addAll(provider.entityPayloads());
+            if (input instanceof OpInput.Op op) {
+                op.operator().contributeEntityPayloads(payload);
             }
         }
         return List.copyOf(payload);

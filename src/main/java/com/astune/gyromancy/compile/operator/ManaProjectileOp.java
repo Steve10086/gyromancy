@@ -78,6 +78,7 @@ public final class ManaProjectileOp extends EntityEffectOp {
             Vec3 acceleration = emission.hasMotion() ? new Vec3(0.0, -0.04 * 0.5, 0.0) : Vec3.ZERO;
             ManaballEntity manaball = new ManaballEntity(level, pos, emission.velocity(),
                     emission.motionSum(), liftDirection, acceleration, size);
+            manaball.setPayload(payloadFor(this));
             EntityEmitter.INSTANCE.emit(level, ID, manaball, result);
         }
         return result.toRuntimeHandle();
@@ -113,6 +114,10 @@ public final class ManaProjectileOp extends EntityEffectOp {
             if (!"arrow".equals(rune.symbolId().getPath())) return true;
         }
         return false;
+    }
+
+    private static List<EntityPayload> payloadFor(ManaProjectileOp node) {
+        return node.payload(List.of());
     }
 
     private static List<ParameterRune> toRuneParams(List<OpInput> inputs) {

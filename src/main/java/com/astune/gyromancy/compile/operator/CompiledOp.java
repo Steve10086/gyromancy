@@ -16,6 +16,8 @@ public interface CompiledOp {
 
     int color();
 
+    default void contributeEntityPayloads(List<EntityPayload> payloads) {}
+
     default List<CompiledOp> childOps() {
         List<CompiledOp> children = new ArrayList<>();
         for (OpInput input : inputs()) {

@@ -8,6 +8,7 @@ import com.astune.gyromancy.compile.operator.FireProjectileOp;
 import com.astune.gyromancy.compile.operator.ElementOp;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.compile.operator.EntityEffectOp;
+import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.PersistentOp;
 import com.astune.gyromancy.compile.operator.SplitEmitOp;
 import com.astune.gyromancy.compile.operator.WaterProjectileOp;
@@ -17,6 +18,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -169,6 +171,43 @@ class ArrayNodeCompilerTest {
     }
 
     @Test
+    void elementOpDefaultsToManaAbsorptionWithoutContentElement() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph engaging = glyph("engaging", SymbolRole.PARAMETER_RUNE, 2);
+        GroupNode ast = group(circle, new SymbolNode(engaging));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        ElementOp root = assertInstanceOf(ElementOp.class, success.value().root());
+
+        assertEquals(ElementType.MANA, root.absorbedElement());
+        List<EntityPayload> payloads = new ArrayList<>();
+        root.contributeEntityPayloads(payloads);
+        EntityPayload payload = payloads.getFirst();
+        assertEquals(ElementType.MANA, assertInstanceOf(ElementOp.class, payload).absorbedElement());
+    }
+
+    @Test
+    void elementOpUsesContentElementForPayloadAbsorption() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph engaging = glyph("engaging", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph fire = glyph("fire", SymbolRole.PARAMETER_RUNE, 3);
+        GroupNode ast = group(circle, new SymbolNode(engaging), new SymbolNode(fire));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        ElementOp root = assertInstanceOf(ElementOp.class, success.value().root());
+
+        assertEquals(ElementType.FIRE, root.absorbedElement());
+        List<EntityPayload> payloads = new ArrayList<>();
+        root.contributeEntityPayloads(payloads);
+        EntityPayload payload = payloads.getFirst();
+        assertEquals(ElementType.FIRE, assertInstanceOf(ElementOp.class, payload).absorbedElement());
+    }
+
+    @Test
     void defaultCompilerUsesDistributedRegistryDefinitions() {
         OpDefinition registered = runeOp("registered_star", "star");
         OpDefinitionRegistry.register(registered);
@@ -185,7 +224,7 @@ class ArrayNodeCompilerTest {
     }
 
     @Test
-    void projectileCanOwnNestedElementPayloadOp() {
+    void projectileCanOwnNestedElementPayload() {
         PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
         PositionedGlyph water = glyph("water", SymbolRole.CENTER_SYMBOL, 3);
