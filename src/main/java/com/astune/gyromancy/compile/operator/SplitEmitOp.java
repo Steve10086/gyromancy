@@ -6,6 +6,7 @@ import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
+import com.astune.gyromancy.array.compile.RegisteredOp;
 import com.astune.gyromancy.symbol.CenterSymbol;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import net.minecraft.resources.ResourceLocation;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+@RegisteredOp
 public final class SplitEmitOp extends EmitOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "split_emit");
     private static final ResourceLocation SPLIT_SYMBOL =

@@ -7,7 +7,7 @@
 - 编译后的节点统一是 `CompiledOp`。
 - 只有同时实现 `PersistentOp` 的 `CompiledOp` 才会被法阵生命周期执行。
 - `EmitOp` 和 `EntityPayloadProvider` 是 child 协议。它们作为 root 被编译出来时，不会产生有意义的 runtime effect。
-- 新 Op 通过分布式 `OpDefinition` 注册进入匹配系统。
+- 新 Op 通过类内部的 `@RegisteredOp + DEFINITION` 进入匹配系统。
 
 ## 总体结构
 
@@ -44,7 +44,8 @@ flowchart TD
 | `EmitOp` | `compile/operator/EmitOp.java` | child-only 的发射计划提供者。只输出 `Emission` 数据，不生成实体。 |
 | `EntityPayloadProvider` | `compile/operator/EntityPayloadProvider.java` | child-only 的实体 payload 提供者。 |
 | `OpDefinition` | `array/compile/OpDefinition.java` | 一个 Op 的编译期匹配规则和 factory。 |
-| `OpDefinitionRegistry` | `array/compile/OpDefinitionRegistry.java` | 内置和外部分布式 Op 定义注册表。 |
+| `RegisteredOp` | `array/compile/RegisteredOp.java` | 标记一个 Op class 需要被自动发现并注册。 |
+| `OpDefinitionRegistry` | `array/compile/OpDefinitionRegistry.java` | 发现 `@RegisteredOp`，读取 `DEFINITION`，并保留手动注册扩展入口。 |
 | `OpInput` | `array/compile/OpInput.java` | Op 的输入：直接 rune 或已编译 child Op。 |
 | `OpInputMatcher` | `array/compile/OpInputMatcher.java` | `OpDefinition.match()` 使用的 rune / child Op matcher。 |
 | `CompiledArray` | `array/compile/CompiledArray.java` | root Op、绑定 glyph 和显示颜色。 |
@@ -158,10 +159,18 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 
 - 在 `compile/operator/` 下新增 `CompiledOp` 实现；
 - 暴露静态 `OpDefinition DEFINITION`；
-- 在 `OpDefinitionRegistry` 注册，或通过 manager 的分布式 `opDefinitions()` 来源提供；
+- 在 Op class 上标注 `@RegisteredOp`；
+- 如需测试或外部动态扩展，仍可通过 `OpDefinitionRegistry.register(...)` 手动注入；
 - 在 `ArrayNodeCompilerTest` 或相邻 focused test 中补编译测试。
 
 普通新增 Op 不应该修改 `ArrayNodeCompiler`。编译器应该只知道 `OpDefinition`、`OpInput` 和 `OpInputMatcher`。
+普通新增 Op 也不应该修改 `OpDefinitionRegistry` 的内置列表；registry 只负责发现和校验。
+
+`OpDefinitionRegistry` 的发现顺序：
+
+- 正常 NeoForge runtime 下，优先读取 `ModList.get().getAllScanData()` 中的 `@RegisteredOp` 注解数据；
+- JUnit 或普通 classpath 环境没有 `ModList` 时，fallback 扫描 `compile/operator` 包下的 class 文件；
+- 发现 class 后读取其 public static `DEFINITION` 字段，并校验 id 不重复。
 
 ## 新增各级 Op 的允许修改范围
 
@@ -188,7 +197,7 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 允许修改：
 
 - 在 `compile/operator/` 新增 root Op class；
-- 在 `OpDefinitionRegistry` 注册；
+- 在 root Op class 上标注 `@RegisteredOp`；
 - 只有当多个 root 真正共享逻辑时，才修改 shared base class；
 - 补 compile match 和 activation shape 测试。
 
@@ -205,7 +214,7 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 允许修改：
 
 - 新增 class 并继承 `EmitOp`；
-- 在 `OpDefinitionRegistry` 注册；
+- 在 Emit Op class 上标注 `@RegisteredOp`；
 - 添加 root no-effect 和 nested child usage 测试；
 - 在该 Emit Op 内部写局部 decode helper。
 
@@ -224,7 +233,7 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 - 新增实现 `EntityPayloadProvider` 的 `CompiledOp`；
 - 必要时新增 `EntityPayload` 或 `OnEntityTickOp`；
 - 如果新增了序列化 runtime payload，注册 payload codec；
-- 在 `OpDefinitionRegistry` 注册；
+- 在 payload child Op class 上标注 `@RegisteredOp`；
 - 补 compile nesting 和 codec round-trip 测试。
 
 不允许：
@@ -273,7 +282,7 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 - `OpRuntimeDispatcher` 是 compiled data 到 runtime execution 的边界。
 - Root Op 可以消费协议，例如 `EmitOp`、`EntityPayloadProvider`，但应避免消费具体 child class。
 - Child Op 只描述意图。root Op 决定这个意图最终生成什么 runtime entity/effect。
-- `ArrayEffectDefinition`、`ArrayEffectRegistry`、`ArrayRuntimes` 是兼容 wrapper。新代码应使用 `OpDefinition`、`OpDefinitionRegistry`、`ArrayEffectLifecycle`。
+- `ArrayEffectDefinition`、`ArrayEffectRegistry`、`ArrayRuntimes` 是兼容 wrapper。新代码应使用 `OpDefinition`、`RegisteredOp`、`OpDefinitionRegistry`、`ArrayEffectLifecycle`。
 
 ## 快速流程
 
@@ -282,7 +291,7 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 1. 创建 `MyEmitOp extends EmitOp`。
 2. 添加匹配触发 rune 的 `DEFINITION`。
 3. 根据本地 direct inputs 返回 `List<Emission>`。
-4. 在 `OpDefinitionRegistry` 注册 `MyEmitOp.DEFINITION`。
+4. 在 `MyEmitOp` 上标注 `@RegisteredOp`。
 5. 添加 root no-effect 和 nested root consumption 测试。
 
 不要修改 `FireProjectileOp`、`WaterProjectileOp`、`ManaProjectileOp`，除非 emission 数据契约本身变化。
@@ -293,7 +302,7 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 2. 在 `DEFINITION` 中匹配 primary rune。
 3. 在 `activate` 中遍历 `emissions()` 并生成目标实体。
 4. 如果实体支持 payload，使用 `payload(...)`。
-5. 注册 `MyProjectileOp.DEFINITION`。
+5. 在 `MyProjectileOp` 上标注 `@RegisteredOp`。
 6. 添加编译和 runtime shape 测试。
 
 ### 新增所有 Projectile Root 共用的 direct rune modifier

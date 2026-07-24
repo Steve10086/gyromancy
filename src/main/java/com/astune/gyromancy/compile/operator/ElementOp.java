@@ -6,11 +6,13 @@ import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
+import com.astune.gyromancy.array.compile.RegisteredOp;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 
+@RegisteredOp
 public final class ElementOp implements CompiledOp, EntityPayloadProvider {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "element");
     private static final ResourceLocation ENGAGING_SYMBOL =
