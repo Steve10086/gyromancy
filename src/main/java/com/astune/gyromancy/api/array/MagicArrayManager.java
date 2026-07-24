@@ -2,8 +2,8 @@ package com.astune.gyromancy.api.array;
 
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
-import com.astune.gyromancy.array.compile.ArrayEffectDefinition;
-import com.astune.gyromancy.array.compile.ArrayEffectRegistry;
+import com.astune.gyromancy.array.compile.OpDefinition;
+import com.astune.gyromancy.array.compile.OpDefinitionRegistry;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -24,7 +24,7 @@ public class MagicArrayManager {
     private final Map<Integer, UUID> glyphIdIndex = new HashMap<>();
     private final Map<UUID, UUID> parentCircleByGlyph = new HashMap<>();
     private final Map<UUID, List<PositionedGlyph>> directChildrenByCircle = new HashMap<>();
-    private final List<ArrayEffectDefinition> effectDefinitions;
+    private final List<OpDefinition> opDefinitions;
     private int nextGlyphId = 1;
 
     // ── phrase5 array-object tracking ──
@@ -32,11 +32,11 @@ public class MagicArrayManager {
     private final Map<UUID, UUID> glyphToArray = new HashMap<>(); // glyphUuid → arrayId
 
     public MagicArrayManager() {
-        this(ArrayEffectRegistry.effects());
+        this.opDefinitions = null;
     }
 
-    public MagicArrayManager(List<ArrayEffectDefinition> effectDefinitions) {
-        this.effectDefinitions = List.copyOf(effectDefinitions);
+    public MagicArrayManager(List<? extends OpDefinition> opDefinitions) {
+        this.opDefinitions = List.copyOf(opDefinitions);
     }
 
     private static MagicArrayManager fromPersistentArrays(List<ArrayObject> arrays) {
@@ -153,8 +153,13 @@ public class MagicArrayManager {
         return glyphIndex;
     }
 
-    public List<ArrayEffectDefinition> effectDefinitions() {
-        return effectDefinitions;
+    public List<OpDefinition> opDefinitions() {
+        return opDefinitions != null ? opDefinitions : OpDefinitionRegistry.definitions();
+    }
+
+    @Deprecated(forRemoval = false)
+    public List<OpDefinition> effectDefinitions() {
+        return opDefinitions();
     }
 
     public PositionedGlyph parentCircle(PositionedGlyph glyph) {

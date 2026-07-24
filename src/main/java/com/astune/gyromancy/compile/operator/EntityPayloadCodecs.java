@@ -11,7 +11,7 @@ final class EntityPayloadCodecs {
             ExplosionOp.ID, ExplosionOp.CODEC,
             SmeltOp.ID, SmeltOp.CODEC,
             ElementConversionOp.ID, ElementConversionOp.CODEC,
-            ElementOp.ID, ElementOp.CODEC,
+            ElementOp.ID, ElementPayloadOp.CODEC,
             CarryItemsOp.ID, CarryItemsOp.CODEC,
             WaterBurstOp.ID, WaterBurstOp.CODEC,
             BrewingOp.ID, BrewingOp.CODEC

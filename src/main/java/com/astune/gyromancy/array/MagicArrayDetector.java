@@ -3,19 +3,11 @@ package com.astune.gyromancy.array;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.array.MagicArrayManager;
-import com.astune.gyromancy.array.compile.ArrayAstBuilder;
-import com.astune.gyromancy.array.compile.ArrayCompileDebug;
-import com.astune.gyromancy.array.compile.ArrayNodeCompiler;
-import com.astune.gyromancy.array.compile.CompileResult;
-import com.astune.gyromancy.array.compile.CompiledArray;
-import com.astune.gyromancy.array.compile.GroupNode;
-import com.astune.gyromancy.array.runtime.ArrayRuntimes;
-import com.astune.gyromancy.array.runtime.RuntimeHandle;
+import com.astune.gyromancy.array.runtime.ArrayEffectLifecycle;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolRole;
-import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.registry.ModSymbols;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
@@ -195,10 +187,7 @@ public final class MagicArrayDetector {
             // Array teardown: if this glyph is bound to an active array, destroy it
             ArrayObject arr = mgr.getArrayForGlyph(glyph.glyphUuid());
             if (arr != null && tornDownArrays.add(arr.arrayId())) {
-                ArrayRuntimes.deactivate(level, arr);
-                Gyromancy.LOGGER.info("[MagicArrayDetector] Array deactivated: root={}",
-                        arr.rootCircleGlyph().symbolId());
-                mgr.unregisterArrayObj(arr.arrayId());
+                ArrayEffectLifecycle.deactivate(level, arr);
             }
 
             mgr.unregisterGlyph(glyph.glyphUuid());
@@ -398,68 +387,8 @@ public final class MagicArrayDetector {
         }
     }
 
-    // TODO: cleanup after acceptance: this method now only activates compiled Operator results.
-    /*
-     * Cross-TODO detector plan:
-     *
-     * 1. Keep this method as lifecycle glue only.
-     *    - Build GroupNode from the current circle.
-     *    - Print AST/compile diagnostics for debugging.
-     *    - Call ArrayNodeCompiler.compile and receive the compiled Operator result.
-     *    - Deactivate an existing array for the same root circle.
-     *    - Activate the Operator through ArrayRuntimes.
-     *    - Register ArrayObject with root circle, bound glyphs, and runtime scratch data.
-     *
-     * 2. Remove semantic knowledge from this class.
-     *    - No center-symbol checks.
-     *    - No rune list construction.
-     *    - No primary element/op selection.
-     *    - No projectile/fireball spawn logic.
-     *
-     * 3. Keep glyph ownership and invalidation here.
-     *    - Detector still decides which circle is affected when a glyph changes.
-     *    - Bound glyphs should come from the compiled Operator/envelope so nested
-     *      circle ownership stays consistent with what was actually accepted.
-     */
     private static void tryCompileCircle(ServerLevel level, PositionedGlyph circleGlyph) {
-        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
-        GroupNode ast = ArrayAstBuilder.build(circleGlyph, mgr);
-        ArrayCompileDebug.printAst(level, ast);
-        CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(ast, mgr.effectDefinitions());
-        if (!(result instanceof CompileResult.Success<CompiledArray> success)) {
-            if (result instanceof CompileResult.Failure<CompiledArray> failure) {
-                Gyromancy.LOGGER.debug("[MagicArrayDetector] Compile failed for glyph #{}: {}",
-                        circleGlyph.glyphId(), failure.diagnostics());
-                ArrayCompileDebug.printFailure(level, failure);
-            }
-            return;
-        }
-
-        ArrayObject existing = mgr.getArrayForGlyph(circleGlyph.glyphUuid());
-        if (existing != null) {
-            ArrayRuntimes.deactivate(level, existing);
-            mgr.unregisterArrayObj(existing.arrayId());
-        }
-
-        CompiledArray compiled = success.value();
-        RuntimeHandle handle = ArrayRuntimes.activate(compiled, level);
-        Map<String, Object> scratchData = new HashMap<>(handle.scratchData());
-        scratchData.put("__array_color", compiled.color());
-        ArrayObject arr = new ArrayObject(UUID.randomUUID(), compiled.rootCircleGlyph(),
-                compiled.boundGlyphs(), Map.copyOf(scratchData));
-        mgr.registerArrayObj(arr);
-        bindPersistentEntities(level, arr.arrayId(), arr.scratchData());
-        Gyromancy.LOGGER.info("[MagicArrayDetector] Array activated: root={}, bound={}",
-                circleGlyph.symbolId(), compiled.boundGlyphs().size());
-    }
-
-    private static void bindPersistentEntities(ServerLevel level, UUID arrayId, Map<String, Object> scratchData) {
-        for (Map.Entry<String, Object> entry : scratchData.entrySet()) {
-            if (!(entry.getValue() instanceof ArrayObject.EntityRef ref)) continue;
-            if (ref.resolve(level) instanceof MagicBallEntity ball) {
-                ball.bindToArray(arrayId);
-            }
-        }
+        ArrayEffectLifecycle.activateOrReplace(level, circleGlyph);
     }
 
     private static void syncAffectedCanvases(ExtractedGlyph glyph, ServerLevel level) {

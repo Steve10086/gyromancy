@@ -18,7 +18,7 @@ class OnEntityTickOpCodecTest {
                 new CarryItemsOp(),
                 new WaterBurstOp(),
                 new BrewingOp(),
-                new ElementOp(),
+                new ElementPayloadOp(),
                 new ElementConversionOp(ElementType.FIRE, "storedMana", 10,
                         0.1, 1000.0, 200.0, 1000.0, 10.0, 0.05));
 
@@ -32,7 +32,7 @@ class OnEntityTickOpCodecTest {
         assertInstanceOf(CarryItemsOp.class, loaded.get(2));
         assertInstanceOf(WaterBurstOp.class, loaded.get(3));
         assertInstanceOf(BrewingOp.class, loaded.get(4));
-        assertInstanceOf(ElementOp.class, loaded.get(5));
+        assertInstanceOf(ElementPayloadOp.class, loaded.get(5));
         ElementConversionOp conversion = assertInstanceOf(ElementConversionOp.class, loaded.get(6));
         assertEquals(ElementType.FIRE, conversion.element());
         assertEquals("storedMana", conversion.storedManaKey());

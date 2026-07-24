@@ -5,12 +5,12 @@ import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.runtime.emit.EntityEmitter;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
-import com.astune.gyromancy.array.compile.ArrayEffectDefinition;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.EffectAttributes;
-import com.astune.gyromancy.array.compile.MotionAttribute;
+import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
+import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.entity.ball.FireballEntity;
 import com.astune.gyromancy.symbol.CenterSymbol;
@@ -24,7 +24,7 @@ import java.util.Map;
 
 public final class FireProjectileOp extends EntityEffectOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fireball");
-    public static final ArrayEffectDefinition DEFINITION = new ArrayEffectDefinition() {
+    public static final OpDefinition DEFINITION = new OpDefinition() {
         @Override
         public ResourceLocation id() {
             return ID;
@@ -36,7 +36,7 @@ public final class FireProjectileOp extends EntityEffectOp {
         }
 
         @Override
-        public CompileResult<Operator> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
+        public CompileResult<CompiledOp> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                List<OpInput> inputs) {
             return FireProjectileOp.create(boundary, matchedInputs, inputs);
         }
@@ -51,7 +51,7 @@ public final class FireProjectileOp extends EntityEffectOp {
         super(ID, ElementType.FIRE, boundary, matchedInputs, inputs, attributes);
     }
 
-    public static CompileResult<Operator> create(PositionedGlyph boundary, List<OpInput> matchedInputs,
+    public static CompileResult<CompiledOp> create(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                  List<OpInput> inputs) {
         CompileResult<EffectAttributes> attributes = compileAttributes(inputs, ElementType.FIRE);
         if (attributes instanceof CompileResult.Failure<EffectAttributes> failure) {
@@ -73,33 +73,29 @@ public final class FireProjectileOp extends EntityEffectOp {
     }
 
     @Override
-    public RuntimeHandle activate(ServerLevel level) {
+    public RuntimeHandle activate(OpRuntimeContext ctx) {
+        ServerLevel level = ctx.level();
         PositionedGlyph centerGlyph = primaryRune();
         if (centerGlyph == null) return new RuntimeHandle(Map.of());
-        List<MotionAttribute> motions = attributes().motion();
-        Vec3 velocity = Vec3.ZERO;
-        double motionSum = 0.0;
-        for (MotionAttribute motion : motions) {
-            motionSum += motion.speed();
-            if (motion.direction().lengthSqr() >= 1e-8) {
-                velocity = velocity.add(motion.direction().normalize().scale(motion.speed()));
-            }
-        }
-
-        float size = scale();
-        double liftDirection = CenterSymbol.isFacingDown(boundary()) ? -1.0 : 1.0;
-        Vec3 pos = CenterSymbol.glyphCenter(level, centerGlyph)
-                .add(CenterSymbol.faceNormal(centerGlyph).scale(size * 2.0));
-        Vec3 acceleration = motions.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
-        FireballEntity fireball = create(level, pos, velocity, motionSum, liftDirection, acceleration, size);
-        fireball.setPayload(payloadFor(this));
         EmitResult result = new EmitResult();
-        EntityEmitter.INSTANCE.emit(level, ID, fireball, result);
+        double liftDirection = CenterSymbol.isFacingDown(boundary()) ? -1.0 : 1.0;
+        Vec3 center = CenterSymbol.glyphCenter(level, centerGlyph);
+        Vec3 normal = CenterSymbol.faceNormal(centerGlyph);
+        for (EmitOp.Emission emission : emissions()) {
+            float size = Math.max(0.1F, scale() * emission.sizeScale());
+            Vec3 pos = center.add(normal.scale(size * 2.0));
+            Vec3 acceleration = emission.hasMotion() ? new Vec3(0.0, -0.04 * 0.5, 0.0) : Vec3.ZERO;
+            FireballEntity fireball = create(level, pos, emission.velocity(),
+                    emission.motionSum(), liftDirection, acceleration, size);
+            fireball.setPayload(payloadFor(this));
+            EntityEmitter.INSTANCE.emit(level, ID, fireball, result);
+        }
         return result.toRuntimeHandle();
     }
 
     @Override
-    public void deactivate(ServerLevel level, Map<String, Object> scratchData) {
+    public void deactivate(OpRuntimeContext ctx, Map<String, Object> scratchData) {
+        ServerLevel level = ctx.level();
         CenterSymbol.boundEntity(level, scratchData, CenterSymbol.FIREBALL_KEY)
                 .ifPresent(entity -> entity.discard());
     }
@@ -115,10 +111,4 @@ public final class FireProjectileOp extends EntityEffectOp {
         return null;
     }
 
-    private static boolean hasMatchedRune(List<OpInput> inputs, String symbolName) {
-        for (OpInput input : inputs) {
-            if (input instanceof OpInput.Rune rune && symbolName.equals(rune.symbolName())) return true;
-        }
-        return false;
-    }
 }

@@ -1,7 +1,7 @@
 package com.astune.gyromancy.array.compile;
 
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
-import com.astune.gyromancy.compile.operator.Operator;
+import com.astune.gyromancy.compile.operator.CompiledOp;
 
 import java.util.LinkedHashSet;
 import java.util.ArrayList;
@@ -14,16 +14,16 @@ public final class ArrayNodeCompiler {
 
     //TODO: cleanup after acceptance: remove old CompiledArrayNode/EffectNode/ArrayScript classes and this migration note.
     public static CompileResult<CompiledArray> compile(GroupNode ast) {
-        return compile(ast, ArrayEffectRegistry.effects());
+        return compile(ast, OpDefinitionRegistry.definitions());
     }
 
-    public static CompileResult<CompiledArray> compile(GroupNode ast, Collection<ArrayEffectDefinition> effects) {
-        CompileResult<Operator> root = compileGroup(ast, effects);
-        if (root instanceof CompileResult.Failure<Operator> failure) {
+    public static CompileResult<CompiledArray> compile(GroupNode ast, Collection<? extends OpDefinition> effects) {
+        CompileResult<CompiledOp> root = compileGroup(ast, effects);
+        if (root instanceof CompileResult.Failure<CompiledOp> failure) {
             return new CompileResult.Failure<>(failure.diagnostics());
         }
 
-        Operator op = ((CompileResult.Success<Operator>) root).value();
+        CompiledOp op = ((CompileResult.Success<CompiledOp>) root).value();
         return new CompileResult.Success<>(new CompiledArray(
                 op,
                 ast.boundary(),
@@ -31,7 +31,7 @@ public final class ArrayNodeCompiler {
                 op.color()));
     }
 
-    private static CompileResult<Operator> compileGroup(GroupNode group, Collection<ArrayEffectDefinition> effects) {
+    private static CompileResult<CompiledOp> compileGroup(GroupNode group, Collection<? extends OpDefinition> effects) {
         if (!(group.body() instanceof SequenceNode sequence)) {
             return fail("missing_primary_element", "Group has no sequence body");
         }
@@ -43,10 +43,10 @@ public final class ArrayNodeCompiler {
             if (child instanceof SymbolNode symbol) {
                 inputs.add(new OpInput.Rune(symbol.glyph()));
             } else if (child instanceof GroupNode nested) {
-                CompileResult<Operator> compiled = compileGroup(nested, effects);
-                if (compiled instanceof CompileResult.Success<Operator> success) {
+                CompileResult<CompiledOp> compiled = compileGroup(nested, effects);
+                if (compiled instanceof CompileResult.Success<CompiledOp> success) {
                     inputs.add(new OpInput.Op(success.value()));
-                } else if (compiled instanceof CompileResult.Failure<Operator> failure) {
+                } else if (compiled instanceof CompileResult.Failure<CompiledOp> failure) {
                     diagnostics.addAll(failure.diagnostics());
                 }
             }
@@ -56,8 +56,8 @@ public final class ArrayNodeCompiler {
         return createOp(group.boundary(), List.copyOf(inputs), effects);
     }
 
-    private static CompileResult<Operator> createOp(PositionedGlyph boundary, List<OpInput> inputs,
-                                                    Collection<ArrayEffectDefinition> effects) {
+    private static CompileResult<CompiledOp> createOp(PositionedGlyph boundary, List<OpInput> inputs,
+                                                    Collection<? extends OpDefinition> effects) {
         Match best = bestMatch(inputs, effects);
         if (best == null) {
             return fail("missing_primary_element", "Local direct inputs did not match an operator");
@@ -65,9 +65,9 @@ public final class ArrayNodeCompiler {
         return best.effect().compile(boundary, List.copyOf(best.inputs()), inputs);
     }
 
-    private static Match bestMatch(List<OpInput> inputs, Collection<ArrayEffectDefinition> effects) {
+    private static Match bestMatch(List<OpInput> inputs, Collection<? extends OpDefinition> effects) {
         Match best = null;
-        for (ArrayEffectDefinition effect : effects) {
+        for (OpDefinition effect : effects) {
             List<OpInput> matched = matchedInputs(inputs, effect);
             if (matched.size() != effect.match().size()) continue;
             if (best == null || effect.match().size() > best.effect().match().size()) {
@@ -77,7 +77,7 @@ public final class ArrayNodeCompiler {
         return best;
     }
 
-    private static List<OpInput> matchedInputs(List<OpInput> inputs, ArrayEffectDefinition effect) {
+    private static List<OpInput> matchedInputs(List<OpInput> inputs, OpDefinition effect) {
         List<OpInput> matched = new ArrayList<>();
         Set<Integer> used = new LinkedHashSet<>();
         for (OpInputMatcher matcher : effect.match()) {
@@ -96,13 +96,13 @@ public final class ArrayNodeCompiler {
         return -1;
     }
 
-    private static List<PositionedGlyph> boundGlyphs(Operator root) {
+    private static List<PositionedGlyph> boundGlyphs(CompiledOp root) {
         Set<PositionedGlyph> glyphs = new LinkedHashSet<>();
         collectBoundGlyphs(root, glyphs);
         return List.copyOf(glyphs);
     }
 
-    private static void collectBoundGlyphs(Operator op, Set<PositionedGlyph> glyphs) {
+    private static void collectBoundGlyphs(CompiledOp op, Set<PositionedGlyph> glyphs) {
         glyphs.add(op.boundary());
         for (OpInput input : op.inputs()) {
             if (input instanceof OpInput.Rune rune) {
@@ -117,5 +117,5 @@ public final class ArrayNodeCompiler {
         return new CompileResult.Failure<>(List.of(new CompileDiagnostic(code, message)));
     }
 
-    private record Match(ArrayEffectDefinition effect, List<OpInput> inputs) {}
+    private record Match(OpDefinition effect, List<OpInput> inputs) {}
 }

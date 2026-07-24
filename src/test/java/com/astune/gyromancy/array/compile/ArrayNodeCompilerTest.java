@@ -6,19 +6,18 @@ import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.compile.operator.FireProjectileOp;
 import com.astune.gyromancy.compile.operator.ElementOp;
-import com.astune.gyromancy.compile.operator.Operator;
+import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.compile.operator.EntityEffectOp;
+import com.astune.gyromancy.compile.operator.PersistentOp;
+import com.astune.gyromancy.compile.operator.SplitEmitOp;
 import com.astune.gyromancy.compile.operator.WaterProjectileOp;
-import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -106,8 +105,8 @@ class ArrayNodeCompilerTest {
         PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2);
         PositionedGlyph fix = glyph("fix", SymbolRole.PARAMETER_RUNE, 3);
         PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 4);
-        ArrayEffectDefinition shortOp = runeOp("short", "fire");
-        ArrayEffectDefinition longOp = runeOp("long", "fire", "fix");
+        OpDefinition shortOp = runeOp("short", "fire");
+        OpDefinition longOp = runeOp("long", "fire", "fix");
         GroupNode ast = group(circle, new SymbolNode(fire), new SymbolNode(fix), new SymbolNode(arrow));
 
         @SuppressWarnings("unchecked")
@@ -124,8 +123,8 @@ class ArrayNodeCompilerTest {
     void partialLongerDefinitionDoesNotBeatFullShortDefinition() {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2);
-        ArrayEffectDefinition shortOp = runeOp("short", "fire");
-        ArrayEffectDefinition partialLongOp = runeOp("partial_long", "fire", "fix");
+        OpDefinition shortOp = runeOp("short", "fire");
+        OpDefinition partialLongOp = runeOp("partial_long", "fire", "fix");
         GroupNode ast = group(circle, new SymbolNode(fire));
 
         @SuppressWarnings("unchecked")
@@ -143,8 +142,8 @@ class ArrayNodeCompilerTest {
         PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
         PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 3);
         PositionedGlyph water = glyph("water", SymbolRole.CENTER_SYMBOL, 4);
-        ArrayEffectDefinition innerOp = runeOp("inner", "water");
-        ArrayEffectDefinition outerOp = runeAndChildOp("outer", "fire", DummyOperator.class);
+        OpDefinition innerOp = runeOp("inner", "water");
+        OpDefinition outerOp = runeAndChildOp("outer", "fire", DummyOperator.class);
         GroupNode ast = group(outer, new SymbolNode(fire), group(inner, new SymbolNode(water)));
 
         @SuppressWarnings("unchecked")
@@ -170,6 +169,22 @@ class ArrayNodeCompilerTest {
     }
 
     @Test
+    void defaultCompilerUsesDistributedRegistryDefinitions() {
+        OpDefinition registered = runeOp("registered_star", "star");
+        OpDefinitionRegistry.register(registered);
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph star = glyph("star", SymbolRole.PARAMETER_RUNE, 2);
+        GroupNode ast = group(circle, new SymbolNode(star));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        DummyOperator root = assertInstanceOf(DummyOperator.class, success.value().root());
+
+        assertEquals("registered_star", root.id().getPath());
+    }
+
+    @Test
     void projectileCanOwnNestedElementPayloadOp() {
         PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
@@ -181,9 +196,79 @@ class ArrayNodeCompilerTest {
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
         WaterProjectileOp root = assertInstanceOf(WaterProjectileOp.class, success.value().root());
-        Operator child = assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator();
+        CompiledOp child = assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator();
 
         assertInstanceOf(ElementOp.class, child);
+    }
+
+    @Test
+    void splitEmitCompilesButIsNotPersistentRoot() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
+        GroupNode ast = group(circle, new SymbolNode(split), new SymbolNode(arrow));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+
+        assertInstanceOf(SplitEmitOp.class, success.value().root());
+        assertEquals(false, success.value().root() instanceof PersistentOp);
+    }
+
+    @Test
+    void splitEmitPlansOneEmissionPerDirectArrow() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph arrowA = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph arrowB = glyph("arrow", SymbolRole.PARAMETER_RUNE, 4);
+        GroupNode ast = group(circle, new SymbolNode(split), new SymbolNode(arrowA), new SymbolNode(arrowB));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        SplitEmitOp splitOp = assertInstanceOf(SplitEmitOp.class, success.value().root());
+
+        assertEquals(2, splitOp.emissions().size());
+        assertEquals(0.5F, splitOp.emissions().getFirst().sizeScale());
+        assertEquals(new Vec3(2.0, 0.0, 0.0), splitOp.emissions().getFirst().velocity());
+    }
+
+    @Test
+    void splitEmitTreatsArrowUpAsNormalLockedArrow() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 4);
+        GroupNode ast = group(circle, new SymbolNode(split), new SymbolNode(arrow), new SymbolNode(arrowUp));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        SplitEmitOp splitOp = assertInstanceOf(SplitEmitOp.class, success.value().root());
+
+        assertEquals(2, splitOp.emissions().size());
+        assertEquals(new Vec3(2.0, 0.0, 0.0), splitOp.emissions().get(0).velocity());
+        assertEquals(new Vec3(0.0, 0.0, -2.0), splitOp.emissions().get(1).velocity());
+        assertEquals(0.5F, splitOp.emissions().get(1).sizeScale());
+    }
+
+    @Test
+    void projectileCanOwnNestedSplitEmitOpWithoutChangingRootType() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
+        PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 3);
+        PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 4);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 5);
+        GroupNode ast = group(outer, new SymbolNode(fire), group(inner, new SymbolNode(split), new SymbolNode(arrow)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        FireProjectileOp root = assertInstanceOf(FireProjectileOp.class, success.value().root());
+        CompiledOp child = assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator();
+
+        assertInstanceOf(SplitEmitOp.class, child);
     }
 
     private static GroupNode group(PositionedGlyph circle, ArrayNode... children) {
@@ -198,7 +283,7 @@ class ArrayNodeCompilerTest {
                 .toList();
     }
 
-    private static ArrayEffectDefinition runeOp(String id, String... symbols) {
+    private static OpDefinition runeOp(String id, String... symbols) {
         List<OpInputMatcher> matchers = List.of(symbols).stream()
                 .map(OpInputMatcher::rune)
                 .toList();
@@ -206,16 +291,16 @@ class ArrayNodeCompilerTest {
     }
 
     @SafeVarargs
-    private static ArrayEffectDefinition runeAndChildOp(String id, String firstSymbol,
-                                                        Class<? extends Operator>... opTypes) {
+    private static OpDefinition runeAndChildOp(String id, String firstSymbol,
+                                                        Class<? extends CompiledOp>... opTypes) {
         List<OpInputMatcher> matchers = new java.util.ArrayList<>();
         matchers.add(OpInputMatcher.rune(firstSymbol));
-        for (Class<? extends Operator> opType : opTypes) matchers.add(OpInputMatcher.op(opType));
+        for (Class<? extends CompiledOp> opType : opTypes) matchers.add(OpInputMatcher.op(opType));
         return op(id, List.copyOf(matchers));
     }
 
-    private static ArrayEffectDefinition op(String id, List<OpInputMatcher> matchers) {
-        return new ArrayEffectDefinition() {
+    private static OpDefinition op(String id, List<OpInputMatcher> matchers) {
+        return new OpDefinition() {
             @Override
             public ResourceLocation id() {
                 return ResourceLocation.fromNamespaceAndPath("gyromancy", id);
@@ -227,7 +312,7 @@ class ArrayNodeCompilerTest {
             }
 
             @Override
-            public CompileResult<Operator> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
+            public CompileResult<CompiledOp> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                    List<OpInput> inputs) {
                 return new CompileResult.Success<>(new DummyOperator(id, boundary, matchedInputs, inputs));
             }
@@ -235,19 +320,10 @@ class ArrayNodeCompilerTest {
     }
 
     private record DummyOperator(String name, PositionedGlyph boundary, List<OpInput> matchedInputs,
-                                 List<OpInput> inputs) implements Operator {
+                                 List<OpInput> inputs) implements CompiledOp {
         @Override
         public ResourceLocation id() {
             return ResourceLocation.fromNamespaceAndPath("gyromancy", name);
-        }
-
-        @Override
-        public RuntimeHandle activate(ServerLevel level) {
-            return new RuntimeHandle(Map.of());
-        }
-
-        @Override
-        public void deactivate(ServerLevel level, Map<String, Object> scratchData) {
         }
 
         @Override

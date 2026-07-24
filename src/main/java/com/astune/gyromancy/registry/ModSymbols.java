@@ -3,6 +3,7 @@ package com.astune.gyromancy.registry;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.SymbolTemplate;
 import com.astune.gyromancy.symbol.ArrowSymbol;
+import com.astune.gyromancy.symbol.ArrowUpSymbol;
 import com.astune.gyromancy.symbol.CircleOuterSymbol;
 import com.astune.gyromancy.symbol.CrossSymbol;
 import com.astune.gyromancy.symbol.CurlSymbol;
@@ -37,6 +38,7 @@ public final class ModSymbols {
 
     static {
         registerSymbol(ArrowSymbol.INSTANCE);
+        registerSymbol(ArrowUpSymbol.INSTANCE);
         registerSymbol(CircleOuterSymbol.INSTANCE);
         registerSymbol(CrossSymbol.INSTANCE);
         registerSymbol(CurlSymbol.INSTANCE);

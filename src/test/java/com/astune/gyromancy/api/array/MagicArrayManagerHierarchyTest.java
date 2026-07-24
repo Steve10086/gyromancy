@@ -3,20 +3,18 @@ package com.astune.gyromancy.api.array;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
-import com.astune.gyromancy.array.compile.ArrayEffectDefinition;
 import com.astune.gyromancy.array.compile.CompileResult;
+import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
-import com.astune.gyromancy.compile.operator.Operator;
+import com.astune.gyromancy.compile.operator.CompiledOp;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -52,16 +50,16 @@ class MagicArrayManagerHierarchyTest {
 
     @Test
     void managerAcceptsRegisteredOpDefinitions() {
-        ArrayEffectDefinition first = effect("first", "fire");
-        ArrayEffectDefinition second = effect("second", "arrow");
+        OpDefinition first = effect("first", "fire");
+        OpDefinition second = effect("second", "arrow");
 
         MagicArrayManager manager = new MagicArrayManager(List.of(first, second));
 
-        assertEquals(List.of(first, second), manager.effectDefinitions());
+        assertEquals(List.of(first, second), manager.opDefinitions());
     }
 
-    private static ArrayEffectDefinition effect(String id, String symbol) {
-        return new ArrayEffectDefinition() {
+    private static OpDefinition effect(String id, String symbol) {
+        return new OpDefinition() {
             @Override
             public ResourceLocation id() {
                 return ResourceLocation.fromNamespaceAndPath("gyromancy", id);
@@ -73,16 +71,12 @@ class MagicArrayManagerHierarchyTest {
             }
 
             @Override
-            public CompileResult<Operator> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
+            public CompileResult<CompiledOp> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                    List<OpInput> inputs) {
-                return new CompileResult.Success<>(new Operator() {
+                return new CompileResult.Success<>(new CompiledOp() {
                     @Override public ResourceLocation id() { return ResourceLocation.fromNamespaceAndPath("gyromancy", id); }
                     @Override public PositionedGlyph boundary() { return boundary; }
                     @Override public List<OpInput> inputs() { return inputs; }
-                    @Override public com.astune.gyromancy.array.runtime.RuntimeHandle activate(ServerLevel level) {
-                        return new com.astune.gyromancy.array.runtime.RuntimeHandle(Map.of());
-                    }
-                    @Override public void deactivate(ServerLevel level, Map<String, Object> scratchData) {}
                     @Override public int color() { return 0xFFFFFFFF; }
                 });
             }

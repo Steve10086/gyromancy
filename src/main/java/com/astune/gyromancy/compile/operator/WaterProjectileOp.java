@@ -5,12 +5,12 @@ import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.runtime.emit.EntityEmitter;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
-import com.astune.gyromancy.array.compile.ArrayEffectDefinition;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.EffectAttributes;
-import com.astune.gyromancy.array.compile.MotionAttribute;
+import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
+import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.entity.ball.DryBallEntity;
 import com.astune.gyromancy.entity.ball.WaterBallEntity;
@@ -26,7 +26,7 @@ import java.util.Map;
 
 public final class WaterProjectileOp extends EntityEffectOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "water_projectile");
-    public static final ArrayEffectDefinition DEFINITION = new ArrayEffectDefinition() {
+    public static final OpDefinition DEFINITION = new OpDefinition() {
         @Override
         public ResourceLocation id() {
             return ID;
@@ -38,7 +38,7 @@ public final class WaterProjectileOp extends EntityEffectOp {
         }
 
         @Override
-        public CompileResult<Operator> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
+        public CompileResult<CompiledOp> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                List<OpInput> inputs) {
             return WaterProjectileOp.create(boundary, matchedInputs, inputs);
         }
@@ -49,7 +49,7 @@ public final class WaterProjectileOp extends EntityEffectOp {
         super(ID, ElementType.WATER, boundary, matchedInputs, inputs, attributes);
     }
 
-    public static CompileResult<Operator> create(PositionedGlyph boundary, List<OpInput> matchedInputs,
+    public static CompileResult<CompiledOp> create(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                  List<OpInput> inputs) {
         if (!hasMatchedRune(matchedInputs, "water")) {
             return new CompileResult.Failure<>(List.of(
@@ -83,38 +83,35 @@ public final class WaterProjectileOp extends EntityEffectOp {
     }
 
     @Override
-    public RuntimeHandle activate(ServerLevel level) {
+    public RuntimeHandle activate(OpRuntimeContext ctx) {
+        ServerLevel level = ctx.level();
         PositionedGlyph center = primaryRune();
         if (center == null) return new RuntimeHandle(Map.of());
-        List<MotionAttribute> motions = attributes().motion();
-        Vec3 velocity = Vec3.ZERO;
-        double motionSum = 0.0;
-        for (MotionAttribute motion : motions) {
-            motionSum += motion.speed();
-            if (motion.direction().lengthSqr() >= 1e-8) {
-                velocity = velocity.add(motion.direction().normalize().scale(motion.speed()));
-            }
-        }
-
-        float size = scale();
-        double liftDirection = CenterSymbol.isFacingDown(boundary()) ? -1.0 : 1.0;
-        Vec3 pos = CenterSymbol.glyphCenter(level, center).add(CenterSymbol.faceNormal(center).scale(size * 2.0));
-        Vec3 acceleration = motions.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
-        Entity entity;
-        if (attributes().inverted()) {
-            entity = new DryBallEntity(level, pos, velocity, motionSum, liftDirection, size);
-        } else {
-            WaterBallEntity waterball = create(level, pos, velocity, motionSum, liftDirection, acceleration, size);
-            waterball.setPayload(payloadFor(this));
-            entity = waterball;
-        }
         EmitResult result = new EmitResult();
-        EntityEmitter.INSTANCE.emit(level, ID, entity, result);
+        double liftDirection = CenterSymbol.isFacingDown(boundary()) ? -1.0 : 1.0;
+        Vec3 centerPos = CenterSymbol.glyphCenter(level, center);
+        Vec3 normal = CenterSymbol.faceNormal(center);
+        for (EmitOp.Emission emission : emissions()) {
+            float size = Math.max(0.1F, scale() * emission.sizeScale());
+            Vec3 pos = centerPos.add(normal.scale(size * 2.0));
+            Vec3 acceleration = emission.hasMotion() ? new Vec3(0.0, -0.04 * 0.5, 0.0) : Vec3.ZERO;
+            Entity entity;
+            if (attributes().inverted()) {
+                entity = new DryBallEntity(level, pos, emission.velocity(), emission.motionSum(), liftDirection, size);
+            } else {
+                WaterBallEntity waterball = create(level, pos, emission.velocity(),
+                        emission.motionSum(), liftDirection, acceleration, size);
+                waterball.setPayload(payloadFor(this));
+                entity = waterball;
+            }
+            EntityEmitter.INSTANCE.emit(level, ID, entity, result);
+        }
         return result.toRuntimeHandle();
     }
 
     @Override
-    public void deactivate(ServerLevel level, Map<String, Object> scratchData) {
+    public void deactivate(OpRuntimeContext ctx, Map<String, Object> scratchData) {
+        ServerLevel level = ctx.level();
         CenterSymbol.boundEntity(level, scratchData, CenterSymbol.WATERBALL_KEY).ifPresent(entity -> entity.discard());
         CenterSymbol.boundEntity(level, scratchData, CenterSymbol.DRYBALL_KEY).ifPresent(entity -> entity.discard());
     }
