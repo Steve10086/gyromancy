@@ -29,6 +29,14 @@ public class Config {
             .comment("A magic number")
             .defineInRange("magicNumber", 42, 0, Integer.MAX_VALUE);
 
+    public static final ModConfigSpec.DoubleValue PAINT_CAMERA_PAN_RANGE = BUILDER
+            .comment("The side length, in blocks, of the paint camera panning area.")
+            .defineInRange("paintCameraPanRange", 4.0, 0.0, 64.0);
+
+    public static final ModConfigSpec.DoubleValue PAINT_CAMERA_ZOOM_RANGE = BUILDER
+            .comment("The maximum extra camera distance, in blocks, used for paint camera zooming.")
+            .defineInRange("paintCameraZoomRange", 2.0, 0.0, 16.0);
+
     public static final ModConfigSpec.ConfigValue<String> MAGIC_NUMBER_INTRODUCTION = BUILDER
             .comment("What you want the introduction message to be for the magic number")
             .define("magicNumberIntroduction", "The magic number is... ");

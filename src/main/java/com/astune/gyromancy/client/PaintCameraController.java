@@ -1,5 +1,6 @@
 package com.astune.gyromancy.client;
 
+import com.astune.gyromancy.Config;
 import com.astune.painter.api.PaintProviders;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Camera;
@@ -30,6 +31,8 @@ public final class PaintCameraController {
     private static final String KEY_CATEGORY = "key.categories.gyromancy";
     private static final double CAMERA_DISTANCE = 1.6;
     private static final double FACE_EPSILON = 1.0E-5;
+    private static final double PAN_SPEED = 0.1;
+    private static final double ZOOM_SPEED = 0.08;
 
     private static final KeyMapping PAINT_CAMERA_KEY = new KeyMapping(
             "key.gyromancy.paint_camera",
@@ -43,6 +46,12 @@ public final class PaintCameraController {
     private static State active;
     private static boolean suppressScreenClose;
     private static boolean stopRequested;
+    private static boolean panForward;
+    private static boolean panBack;
+    private static boolean panLeft;
+    private static boolean panRight;
+    private static boolean zoomOut;
+    private static boolean zoomIn;
     private static double activeFovDegrees = 70.0;
 
     private PaintCameraController() {}
@@ -82,12 +91,18 @@ public final class PaintCameraController {
             return;
         }
 
+        releasePlayerMovementKeys(minecraft);
         lockPlayerRotation(player, active.yaw, active.pitch);
         updatePointerHitResult(minecraft);
     }
 
     public static void onRenderFramePre(RenderFrameEvent.Pre event) {
-        updatePointerHitResult(Minecraft.getInstance());
+        Minecraft minecraft = Minecraft.getInstance();
+        if (active != null) {
+            updateCameraControls(active, Math.max(0.0F, event.getPartialTick().getRealtimeDeltaTicks()));
+            releasePlayerMovementKeys(minecraft);
+        }
+        updatePointerHitResult(minecraft);
     }
 
     public static void onComputeCameraAngles(ViewportEvent.ComputeCameraAngles event) {
@@ -105,7 +120,7 @@ public final class PaintCameraController {
 
     public static void applyCameraPose(Camera camera) {
         if (active == null) return;
-        ((CameraPoseAccess) camera).gyromancy$setPaintCameraPose(active.cameraPosition, active.yaw, active.pitch);
+        ((CameraPoseAccess) camera).gyromancy$setPaintCameraPose(currentCameraPosition(active), active.yaw, active.pitch);
     }
 
     public static boolean isActive() {
@@ -142,11 +157,12 @@ public final class PaintCameraController {
         PlaneBasis planeBasis = planeBasis(normal);
 
         activeFovDegrees = minecraft.options.fov().get();
+        resetCameraControls();
+        releasePlayerMovementKeys(minecraft);
         active = new State(
                 face,
                 normal,
                 faceCenter,
-                cameraPosition,
                 planeBasis.right,
                 planeBasis.up,
                 rotation.yaw,
@@ -164,6 +180,7 @@ public final class PaintCameraController {
 
     private static void stop() {
         Minecraft minecraft = Minecraft.getInstance();
+        resetCameraControls();
         minecraft.options.keyUse.setDown(false);
         KeyMapping.set(InputConstants.Type.MOUSE.getOrCreate(GLFW.GLFW_MOUSE_BUTTON_RIGHT), false);
         boolean wasPaintScreen = minecraft.screen instanceof PaintPointerScreen;
@@ -210,11 +227,94 @@ public final class PaintCameraController {
         double ndcX = screenWidth <= 0.0 ? 0.0 : (minecraft.mouseHandler.xpos() / screenWidth) * 2.0 - 1.0;
         double ndcY = screenHeight <= 0.0 ? 0.0 : 1.0 - (minecraft.mouseHandler.ypos() / screenHeight) * 2.0;
         double aspect = screenHeight <= 0.0 ? 1.0 : screenWidth / screenHeight;
-        double halfHeight = CAMERA_DISTANCE * Math.tan(Math.toRadians(activeFovDegrees) / 2.0);
+        double halfHeight = currentCameraDistance(state) * Math.tan(Math.toRadians(activeFovDegrees) / 2.0);
         double halfWidth = halfHeight * aspect;
-        return state.faceCenter
+        return currentFaceCenter(state)
                 .add(state.right.scale(ndcX * halfWidth))
                 .add(state.up.scale(ndcY * halfHeight));
+    }
+
+    private static void updateCameraControls(State state, double deltaTicks) {
+        double rightInput = impulse(panRight, panLeft);
+        double upInput = impulse(panForward, panBack);
+        double length = Math.sqrt(rightInput * rightInput + upInput * upInput);
+        if (length > 1.0E-6) {
+            double scale = (PAN_SPEED * deltaTicks) / Math.max(1.0, length);
+            double maxPan = Math.max(0.0, Config.PAINT_CAMERA_PAN_RANGE.get()) * 0.5;
+            state.panRight = Mth.clamp(state.panRight + rightInput * scale, -maxPan, maxPan);
+            state.panUp = Mth.clamp(state.panUp + upInput * scale, -maxPan, maxPan);
+        }
+
+        double zoomInput = impulse(zoomOut, zoomIn);
+        if (zoomInput != 0.0) {
+            double maxZoom = Math.max(0.0, Config.PAINT_CAMERA_ZOOM_RANGE.get());
+            state.zoom = Mth.clamp(state.zoom + zoomInput * ZOOM_SPEED * deltaTicks, 0.0, maxZoom);
+        }
+    }
+
+    private static double impulse(boolean positive, boolean negative) {
+        if (positive == negative) return 0.0;
+        return positive ? 1.0 : -1.0;
+    }
+
+    private static void releasePlayerMovementKeys(Minecraft minecraft) {
+        minecraft.options.keyUp.setDown(false);
+        minecraft.options.keyDown.setDown(false);
+        minecraft.options.keyLeft.setDown(false);
+        minecraft.options.keyRight.setDown(false);
+        minecraft.options.keyJump.setDown(false);
+        minecraft.options.keyShift.setDown(false);
+    }
+
+    private static void resetCameraControls() {
+        panForward = false;
+        panBack = false;
+        panLeft = false;
+        panRight = false;
+        zoomOut = false;
+        zoomIn = false;
+    }
+
+    private static boolean setCameraControlKey(Minecraft minecraft, int keyCode, int scanCode, boolean down) {
+        if (minecraft.options.keyUp.matches(keyCode, scanCode)) {
+            panForward = down;
+            return true;
+        }
+        if (minecraft.options.keyDown.matches(keyCode, scanCode)) {
+            panBack = down;
+            return true;
+        }
+        if (minecraft.options.keyLeft.matches(keyCode, scanCode)) {
+            panLeft = down;
+            return true;
+        }
+        if (minecraft.options.keyRight.matches(keyCode, scanCode)) {
+            panRight = down;
+            return true;
+        }
+        if (minecraft.options.keyJump.matches(keyCode, scanCode)) {
+            zoomOut = down;
+            return true;
+        }
+        if (minecraft.options.keyShift.matches(keyCode, scanCode)) {
+            zoomIn = down;
+            return true;
+        }
+        return false;
+    }
+
+    private static Vec3 currentFaceCenter(State state) {
+        return state.faceCenter
+                .add(state.right.scale(state.panRight))
+                .add(state.up.scale(state.panUp));
+    }
+
+    private static double currentCameraDistance(State state) {
+        return CAMERA_DISTANCE + state.zoom;
+    }
+
+    private static Vec3 currentCameraPosition(State state) {
+        return currentFaceCenter(state).add(state.normal.scale(currentCameraDistance(state)));
     }
 
     private static PlaneBasis planeBasis(Vec3 normal) {
@@ -241,8 +341,31 @@ public final class PaintCameraController {
         void gyromancy$setPaintCameraPose(Vec3 position, float yaw, float pitch);
     }
 
-    private record State(Direction face, Vec3 normal, Vec3 faceCenter, Vec3 cameraPosition,
-                         Vec3 right, Vec3 up, float yaw, float pitch, int selectedSlot) {}
+    private static final class State {
+        private final Direction face;
+        private final Vec3 normal;
+        private final Vec3 faceCenter;
+        private final Vec3 right;
+        private final Vec3 up;
+        private final float yaw;
+        private final float pitch;
+        private final int selectedSlot;
+        private double panRight;
+        private double panUp;
+        private double zoom;
+
+        private State(Direction face, Vec3 normal, Vec3 faceCenter, Vec3 right, Vec3 up,
+                      float yaw, float pitch, int selectedSlot) {
+            this.face = face;
+            this.normal = normal;
+            this.faceCenter = faceCenter;
+            this.right = right;
+            this.up = up;
+            this.yaw = yaw;
+            this.pitch = pitch;
+            this.selectedSlot = selectedSlot;
+        }
+    }
 
     private record Rotation(float yaw, float pitch) {}
 
@@ -324,6 +447,9 @@ public final class PaintCameraController {
                     return true;
                 }
             }
+            if (setCameraControlKey(minecraft, keyCode, scanCode, true)) {
+                return true;
+            }
             if (minecraft.options.keyUse.matches(keyCode, scanCode)) {
                 minecraft.options.keyUse.setDown(true);
                 return true;
@@ -334,6 +460,9 @@ public final class PaintCameraController {
         @Override
         public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
             Minecraft minecraft = Minecraft.getInstance();
+            if (setCameraControlKey(minecraft, keyCode, scanCode, false)) {
+                return true;
+            }
             if (minecraft.options.keyUse.matches(keyCode, scanCode)) {
                 minecraft.options.keyUse.setDown(false);
                 return true;

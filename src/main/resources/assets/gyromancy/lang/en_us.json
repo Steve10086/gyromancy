@@ -15,5 +15,7 @@
   "gyromancy.configuration.items": "Item List",
   "gyromancy.configuration.logDirtBlock": "Log Dirt Block",
   "gyromancy.configuration.magicNumberIntroduction": "Magic Number Text",
-  "gyromancy.configuration.magicNumber": "Magic Number"
+  "gyromancy.configuration.magicNumber": "Magic Number",
+  "gyromancy.configuration.paintCameraPanRange": "Paint Camera Pan Range",
+  "gyromancy.configuration.paintCameraZoomRange": "Paint Camera Zoom Range"
 }

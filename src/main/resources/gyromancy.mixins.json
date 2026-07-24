@@ -9,6 +9,7 @@
   "client": [
     "CameraMixin",
     "GameRendererMixin",
+    "GuiMixin",
     "PaintInputHandlerMixin"
   ],
   "injectors": {
