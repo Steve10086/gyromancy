@@ -3,6 +3,7 @@ package com.astune.gyromancy;
 import javax.annotation.Nullable;
 
 import com.astune.gyromancy.client.ElementDebugRenderer;
+import com.astune.gyromancy.client.PaintCameraController;
 import com.astune.gyromancy.client.effect.ClientRayEffects;
 import com.astune.gyromancy.client.effect.FlipbookEffect;
 import com.astune.gyromancy.client.effect.VortexOrbitEffect;
@@ -13,12 +14,17 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.ViewportEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 @Mod(value = Gyromancy.MODID, dist = Dist.CLIENT)
@@ -27,8 +33,9 @@ public class GyromancyClient {
     @Nullable
     private static VortexOrbitEffect testVortex;
 
-    public GyromancyClient(ModContainer container) {
+    public GyromancyClient(IEventBus modEventBus, ModContainer container) {
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
+        modEventBus.addListener(PaintCameraController::registerKeyMappings);
 
         // ── Client commands — /gyromancy debug ──
         NeoForge.EVENT_BUS.<RegisterClientCommandsEvent>addListener(event -> {
@@ -92,6 +99,15 @@ public class GyromancyClient {
                 FlipbookEffect::onRenderLevelStage);
 
         // ── Vortex effect tick (game-time guard inside) ──
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST,
+                (RenderFrameEvent.Pre e) -> PaintCameraController.onRenderFramePre(e));
+        NeoForge.EVENT_BUS.<ClientTickEvent.Post>addListener(
+                PaintCameraController::onClientTick);
+        NeoForge.EVENT_BUS.<ViewportEvent.ComputeCameraAngles>addListener(
+                PaintCameraController::onComputeCameraAngles);
+        NeoForge.EVENT_BUS.<ViewportEvent.ComputeFov>addListener(
+                PaintCameraController::onComputeFov);
+
         NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(e -> {
             if (testVortex != null) testVortex.tick();
         });

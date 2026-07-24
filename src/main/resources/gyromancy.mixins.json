@@ -6,6 +6,11 @@
     "LevelChunkMixin",
     "LevelChunkSectionAccessor"
   ],
+  "client": [
+    "CameraMixin",
+    "GameRendererMixin",
+    "PaintInputHandlerMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   },
