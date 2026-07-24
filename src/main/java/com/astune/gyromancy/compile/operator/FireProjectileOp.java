@@ -1,9 +1,10 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.Gyromancy;
-import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.array.runtime.emit.EntityEmitter;
+import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.compile.ArrayEffectDefinition;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.EffectAttributes;
@@ -92,8 +93,9 @@ public final class FireProjectileOp extends EntityEffectOp {
         Vec3 acceleration = motions.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
         FireballEntity fireball = create(level, pos, velocity, motionSum, liftDirection, acceleration, size);
         fireball.setPayload(payloadFor(this));
-        level.addFreshEntity(fireball);
-        return new RuntimeHandle(Map.of(CenterSymbol.FIREBALL_KEY, ArrayObject.EntityRef.of(fireball)));
+        EmitResult result = new EmitResult();
+        EntityEmitter.INSTANCE.emit(level, ID, fireball, result);
+        return result.toRuntimeHandle();
     }
 
     @Override

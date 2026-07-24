@@ -1,9 +1,10 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.Gyromancy;
-import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.array.runtime.emit.EntityEmitter;
+import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.compile.ArrayEffectDefinition;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.EffectAttributes;
@@ -16,6 +17,7 @@ import com.astune.gyromancy.entity.ball.WaterBallEntity;
 import com.astune.gyromancy.symbol.CenterSymbol;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -97,17 +99,18 @@ public final class WaterProjectileOp extends EntityEffectOp {
         float size = scale();
         double liftDirection = CenterSymbol.isFacingDown(boundary()) ? -1.0 : 1.0;
         Vec3 pos = CenterSymbol.glyphCenter(level, center).add(CenterSymbol.faceNormal(center).scale(size * 2.0));
-        if (attributes().inverted()) {
-            DryBallEntity dryball = new DryBallEntity(level, pos, velocity, motionSum, liftDirection, size);
-            level.addFreshEntity(dryball);
-            return new RuntimeHandle(Map.of(CenterSymbol.DRYBALL_KEY, ArrayObject.EntityRef.of(dryball)));
-        }
-
         Vec3 acceleration = motions.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
-        WaterBallEntity waterball = create(level, pos, velocity, motionSum, liftDirection, acceleration, size);
-        waterball.setPayload(payloadFor(this));
-        level.addFreshEntity(waterball);
-        return new RuntimeHandle(Map.of(CenterSymbol.WATERBALL_KEY, ArrayObject.EntityRef.of(waterball)));
+        Entity entity;
+        if (attributes().inverted()) {
+            entity = new DryBallEntity(level, pos, velocity, motionSum, liftDirection, size);
+        } else {
+            WaterBallEntity waterball = create(level, pos, velocity, motionSum, liftDirection, acceleration, size);
+            waterball.setPayload(payloadFor(this));
+            entity = waterball;
+        }
+        EmitResult result = new EmitResult();
+        EntityEmitter.INSTANCE.emit(level, ID, entity, result);
+        return result.toRuntimeHandle();
     }
 
     @Override

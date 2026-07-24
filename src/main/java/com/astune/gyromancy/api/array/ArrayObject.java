@@ -1,5 +1,7 @@
 package com.astune.gyromancy.api.array;
 
+import com.astune.gyromancy.array.runtime.emit.EmitResult;
+import com.astune.gyromancy.array.runtime.emit.EmittedObject;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -64,11 +66,26 @@ public record ArrayObject(
 
     private static Map<String, Object> decodeScratchData(List<ScratchEntry> encoded) {
         Map<String, Object> decoded = new HashMap<>();
+        List<EmittedObject> emissions = new ArrayList<>();
         for (ScratchEntry entry : encoded) {
+            if (EmitResult.EMISSIONS_KEY.equals(entry.key()) && "emitted_entity".equals(entry.kind())) {
+                decodeEmittedEntity(entry).ifPresent(emissions::add);
+                continue;
+            }
             Object value = decodeScratchValue(entry);
             if (value != null) decoded.put(entry.key(), value);
         }
+        if (!emissions.isEmpty()) decoded.put(EmitResult.EMISSIONS_KEY, List.copyOf(emissions));
         return decoded;
+    }
+
+    private static Optional<EmittedObject> decodeEmittedEntity(ScratchEntry entry) {
+        if (entry.entityType().isEmpty()) return Optional.empty();
+        String[] parts = entry.value().split("\\|", 2);
+        if (parts.length != 2) return Optional.empty();
+        ResourceLocation emitType = ResourceLocation.parse(parts[0]);
+        EntityRef ref = new EntityRef(UUID.fromString(parts[1]), entry.entityType().get());
+        return Optional.of(new EmittedObject(emitType, ref));
     }
 
     private static Object decodeScratchValue(ScratchEntry entry) {
@@ -89,10 +106,23 @@ public record ArrayObject(
     private static List<ScratchEntry> encodeScratchData(Map<String, Object> scratchData) {
         List<ScratchEntry> encoded = new ArrayList<>();
         for (Map.Entry<String, Object> entry : scratchData.entrySet()) {
+            if (EmitResult.EMISSIONS_KEY.equals(entry.getKey()) && entry.getValue() instanceof List<?> emissions) {
+                for (Object value : emissions) {
+                    ScratchEntry encodedValue = encodeEmittedObject(entry.getKey(), value);
+                    if (encodedValue != null) encoded.add(encodedValue);
+                }
+                continue;
+            }
             ScratchEntry encodedValue = encodeScratchValue(entry.getKey(), entry.getValue());
             if (encodedValue != null) encoded.add(encodedValue);
         }
         return encoded;
+    }
+
+    private static ScratchEntry encodeEmittedObject(String key, Object value) {
+        if (!(value instanceof EmittedObject emitted) || !(emitted.ref() instanceof EntityRef ref)) return null;
+        return new ScratchEntry(key, "emitted_entity", emitted.emitType() + "|" + ref.uuid(),
+                Optional.of(ref.entityType()));
     }
 
     private static ScratchEntry encodeScratchValue(String key, Object value) {

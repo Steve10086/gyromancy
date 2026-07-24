@@ -2,10 +2,8 @@ package com.astune.gyromancy.array.runtime;
 
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.array.compile.CompiledArray;
+import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.compile.operator.Operator;
-import com.astune.gyromancy.compile.operator.FireProjectileOp;
-import com.astune.gyromancy.compile.operator.ManaProjectileOp;
-import com.astune.gyromancy.symbol.CenterSymbol;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.HashMap;
@@ -14,10 +12,6 @@ import java.util.Map;
 public final class ArrayRuntimes {
     private static final String RUNTIME_KEY = "__runtime";
     private static final String OPERATOR_KEY = "__operator";
-    private static final Map<String, RuntimeDeactivator> DEACTIVATORS = Map.of(
-            FireProjectileOp.ID.toString(), (level, data) -> discard(level, data, CenterSymbol.FIREBALL_KEY),
-            ManaProjectileOp.ID.toString(), (level, data) -> discard(level, data, CenterSymbol.MANABALL_KEY)
-    );
 
     private ArrayRuntimes() {}
 
@@ -55,23 +49,9 @@ public final class ArrayRuntimes {
     }
 
     public static void deactivate(ServerLevel level, ArrayObject array) {
+        EmitResult.discardEmittedEntities(level, array.scratchData());
         if (array.scratchData().get(OPERATOR_KEY) instanceof Operator operator) {
             operator.deactivate(level, array.scratchData());
-            return;
         }
-        Object runtime = array.scratchData().get(RUNTIME_KEY);
-        RuntimeDeactivator deactivator = runtime instanceof String id ? DEACTIVATORS.get(id) : null;
-        if (deactivator != null) deactivator.deactivate(level, array.scratchData());
-    }
-
-    private static void discard(ServerLevel level, Map<String, Object> scratchData, String... keys) {
-        for (String key : keys) {
-            CenterSymbol.boundEntity(level, scratchData, key).ifPresent(entity -> entity.discard());
-        }
-    }
-
-    @FunctionalInterface
-    private interface RuntimeDeactivator {
-        void deactivate(ServerLevel level, Map<String, Object> scratchData);
     }
 }
