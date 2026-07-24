@@ -10,7 +10,6 @@ import com.astune.gyromancy.array.compile.EffectAttributes;
 import com.astune.gyromancy.array.compile.MotionAttribute;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
-import com.astune.gyromancy.array.compile.OpInputs;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.entity.ball.FireballEntity;
 import com.astune.gyromancy.symbol.CenterSymbol;
@@ -20,10 +19,9 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Map;
 
-public final class FireballOp extends ProjectileOp {
+public final class FireProjectileOp extends EntityEffectOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fireball");
     public static final ArrayEffectDefinition DEFINITION = new ArrayEffectDefinition() {
         @Override
@@ -39,7 +37,7 @@ public final class FireballOp extends ProjectileOp {
         @Override
         public CompileResult<Operator> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                List<OpInput> inputs) {
-            return FireballOp.create(boundary, matchedInputs, inputs);
+            return FireProjectileOp.create(boundary, matchedInputs, inputs);
         }
     };
 
@@ -47,8 +45,8 @@ public final class FireballOp extends ProjectileOp {
     public static final String OLD_SPAWNED_KEY = "oldSpawned";
     public static final String LIFETIME_KEY = "lifetime";
 
-    private FireballOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs,
-                       EffectAttributes attributes) {
+    private FireProjectileOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs,
+                             EffectAttributes attributes) {
         super(ID, ElementType.FIRE, boundary, matchedInputs, inputs, attributes);
     }
 
@@ -59,7 +57,7 @@ public final class FireballOp extends ProjectileOp {
             return new CompileResult.Failure<>(failure.diagnostics());
         }
         EffectAttributes attrs = ((CompileResult.Success<EffectAttributes>) attributes).value();
-        return new CompileResult.Success<>(new FireballOp(boundary, matchedInputs, inputs, attrs));
+        return new CompileResult.Success<>(new FireProjectileOp(boundary, matchedInputs, inputs, attrs));
     }
 
     public static FireballEntity create(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
@@ -69,7 +67,7 @@ public final class FireballOp extends ProjectileOp {
         return entity;
     }
 
-    public static List<OnEntityTickOp> defaultPayload() {
+    public static List<EntityPayload> defaultPayload() {
         return List.of();
     }
 
@@ -104,11 +102,8 @@ public final class FireballOp extends ProjectileOp {
                 .ifPresent(entity -> entity.discard());
     }
 
-    private static List<OnEntityTickOp> payloadFor(FireballOp node) {
-        List<OnEntityTickOp> payload = new ArrayList<>();
-        payload.add(new ExplosionOp());
-        if (OpInputs.hasRune(node.inputs(), "fix")) payload.add(new SmeltOp());
-        return List.copyOf(payload);
+    private static List<EntityPayload> payloadFor(FireProjectileOp node) {
+        return node.payload(List.of(new ExplosionOp()));
     }
 
     private PositionedGlyph primaryRune() {

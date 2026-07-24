@@ -2,7 +2,9 @@ package com.astune.gyromancy.entity.ball;
 
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.compile.operator.EntityTickContext;
 import com.astune.gyromancy.element.ElementStorageManager;
+import com.astune.gyromancy.entity.MagicEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.util.MagicBallGeometry;
 import net.minecraft.core.BlockPos;
@@ -20,9 +22,10 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
-public abstract class MagicBallEntity extends Entity {
+public abstract class MagicBallEntity extends MagicEntity {
     private static final EntityDataAccessor<Float> DATA_TARGET_SIZE =
             SynchedEntityData.defineId(MagicBallEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_CURRENT_SIZE =
@@ -46,7 +49,7 @@ public abstract class MagicBallEntity extends Entity {
     }
 
     @Override
-    public void tick(){
+    protected boolean tickBeforePayload() {
         velocityThisTick = getDeltaMovement();
         Vec3 start = position();
         Vec3 end = start.add(velocityThisTick);
@@ -61,11 +64,22 @@ public abstract class MagicBallEntity extends Entity {
 
         setDeltaMovement(velocityThisTick.add(acceleration));
         updateSizeFromElementConcentration();
+        return true;
 
     }
 
     @Override
+    protected EntityTickContext payloadContext(Map<String, Object> runtimeData) {
+        return EntityTickContext.from(this, runtimeData, payloadAcceleration());
+    }
+
+    protected Vec3 payloadAcceleration() {
+        return acceleration;
+    }
+
+    @Override
     protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
+        super.defineSynchedData(builder);
         builder.define(DATA_TARGET_SIZE, SPAWN_SIZE);
         builder.define(DATA_CURRENT_SIZE, SPAWN_SIZE);
     }
@@ -141,6 +155,10 @@ public abstract class MagicBallEntity extends Entity {
         return averageElementLevel;
     }
 
+    public ElementType elementType() {
+        return targetElement;
+    }
+
     private void updateSizeFromElementConcentration() {
         if (level().isClientSide) return;
 
@@ -189,6 +207,7 @@ public abstract class MagicBallEntity extends Entity {
 
     @Override
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
+        super.readAdditionalSaveData(tag);
         if (tag.contains("Size")) setBallSize(tag.getFloat("Size"));
         if (tag.contains("CurrentSize")) entityData.set(DATA_CURRENT_SIZE, tag.getFloat("CurrentSize"));
         if (tag.hasUUID("ArrayId")) boundArrayId = tag.getUUID("ArrayId");
@@ -196,6 +215,7 @@ public abstract class MagicBallEntity extends Entity {
 
     @Override
     protected void addAdditionalSaveData(@NotNull CompoundTag tag) {
+        super.addAdditionalSaveData(tag);
         tag.putFloat("Size", getTargetBallSize());
         tag.putFloat("CurrentSize", getBallSize());
         if (boundArrayId != null) tag.putUUID("ArrayId", boundArrayId);

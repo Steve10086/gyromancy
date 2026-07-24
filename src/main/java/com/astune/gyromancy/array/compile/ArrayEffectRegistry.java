@@ -1,6 +1,7 @@
 package com.astune.gyromancy.array.compile;
 
-import com.astune.gyromancy.compile.operator.FireballOp;
+import com.astune.gyromancy.compile.operator.FireProjectileOp;
+import com.astune.gyromancy.compile.operator.ElementOp;
 import com.astune.gyromancy.compile.operator.ManaProjectileOp;
 import com.astune.gyromancy.compile.operator.WaterProjectileOp;
 
@@ -11,9 +12,10 @@ public final class ArrayEffectRegistry {
     private static final List<ArrayEffectDefinition> EFFECTS = new ArrayList<>();
 
     static {
-        register(FireballOp.DEFINITION);
+        register(FireProjectileOp.DEFINITION);
         register(WaterProjectileOp.DEFINITION);
         register(ManaProjectileOp.DEFINITION);
+        register(ElementOp.DEFINITION);
     }
 
     private ArrayEffectRegistry() {}

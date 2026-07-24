@@ -4,9 +4,11 @@ import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
-import com.astune.gyromancy.compile.operator.FireballOp;
+import com.astune.gyromancy.compile.operator.FireProjectileOp;
+import com.astune.gyromancy.compile.operator.ElementOp;
 import com.astune.gyromancy.compile.operator.Operator;
-import com.astune.gyromancy.compile.operator.ProjectileOp;
+import com.astune.gyromancy.compile.operator.EntityEffectOp;
+import com.astune.gyromancy.compile.operator.WaterProjectileOp;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -35,7 +37,7 @@ class ArrayNodeCompilerTest {
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
-        ProjectileOp root = assertInstanceOf(FireballOp.class, success.value().root());
+        EntityEffectOp root = assertInstanceOf(FireProjectileOp.class, success.value().root());
 
         assertEquals(ElementType.FIRE, root.primaryElement());
         assertEquals(true, root.attributes().inverted());
@@ -55,7 +57,7 @@ class ArrayNodeCompilerTest {
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
 
-        assertInstanceOf(FireballOp.class, success.value().root());
+        assertInstanceOf(FireProjectileOp.class, success.value().root());
         assertEquals(List.of("fire"), runeNames(success.value().root().inputs()));
     }
 
@@ -95,7 +97,7 @@ class ArrayNodeCompilerTest {
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
 
-        assertInstanceOf(FireballOp.class, success.value().root());
+        assertInstanceOf(FireProjectileOp.class, success.value().root());
     }
 
     @Test
@@ -152,6 +154,36 @@ class ArrayNodeCompilerTest {
 
         assertEquals("outer", root.id().getPath());
         assertEquals(2, root.matchedInputs().size());
+    }
+
+    @Test
+    void engagingRuneCompilesStandaloneElementOp() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph engaging = glyph("engaging", SymbolRole.PARAMETER_RUNE, 2);
+        GroupNode ast = group(circle, new SymbolNode(engaging));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+
+        assertInstanceOf(ElementOp.class, success.value().root());
+    }
+
+    @Test
+    void projectileCanOwnNestedElementPayloadOp() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
+        PositionedGlyph water = glyph("water", SymbolRole.CENTER_SYMBOL, 3);
+        PositionedGlyph engaging = glyph("engaging", SymbolRole.PARAMETER_RUNE, 4);
+        GroupNode ast = group(outer, new SymbolNode(water), group(inner, new SymbolNode(engaging)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        WaterProjectileOp root = assertInstanceOf(WaterProjectileOp.class, success.value().root());
+        Operator child = assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator();
+
+        assertInstanceOf(ElementOp.class, child);
     }
 
     private static GroupNode group(PositionedGlyph circle, ArrayNode... children) {

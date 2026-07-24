@@ -22,16 +22,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 import java.util.Map;
 
-public final class WaterProjectileOp extends ProjectileOp {
+public final class WaterProjectileOp extends EntityEffectOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "water_projectile");
-    private static final int EFFECT_INTERVAL = 10;
-    private static final double FIRE_VOLUME_LOSS = 0.1;
-    private static final double FIRE_EQUILIBRIUM = 1000.0;
-    private static final double MAX_VOLUME_FIRE_LEVEL = 200.0;
-    private static final double FIRE_PER_VOLUME = 1000.0;
-    private static final double FIRE_CONVERSION_COST = 10.0;
-    private static final double MANA_TO_VOLUME = 0.05;
-    private static final String STORED_MANA_KEY = "storedMana";
     public static final ArrayEffectDefinition DEFINITION = new ArrayEffectDefinition() {
         @Override
         public ResourceLocation id() {
@@ -77,13 +69,15 @@ public final class WaterProjectileOp extends ProjectileOp {
         return entity;
     }
 
-    public static List<OnEntityTickOp> defaultPayload() {
+    public static List<EntityPayload> defaultPayload() {
         return List.of(
-                new ElementConversionOp(ElementType.WATER, STORED_MANA_KEY,
-                        EFFECT_INTERVAL, FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL,
-                        FIRE_PER_VOLUME, FIRE_CONVERSION_COST, MANA_TO_VOLUME),
+                new WaterBurstOp(),
                 new CarryItemsOp()
         );
+    }
+
+    private static List<EntityPayload> payloadFor(WaterProjectileOp node) {
+        return node.payload(defaultPayload());
     }
 
     @Override
@@ -111,6 +105,7 @@ public final class WaterProjectileOp extends ProjectileOp {
 
         Vec3 acceleration = motions.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
         WaterBallEntity waterball = create(level, pos, velocity, motionSum, liftDirection, acceleration, size);
+        waterball.setPayload(payloadFor(this));
         level.addFreshEntity(waterball);
         return new RuntimeHandle(Map.of(CenterSymbol.WATERBALL_KEY, ArrayObject.EntityRef.of(waterball)));
     }

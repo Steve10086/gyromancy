@@ -12,7 +12,7 @@ import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
-final class BrewingRoutePlanner {
+public final class BrewingRoutePlanner {
     private BrewingRoutePlanner() {}
 
     static <S, I> OptionalInt findFirstIngredient(S initialState, List<I> ingredients, int maxDepth,
@@ -25,11 +25,11 @@ final class BrewingRoutePlanner {
         return route.isEmpty() ? OptionalInt.empty() : OptionalInt.of(route.get().get(0));
     }
 
-    static <S, I> Optional<List<Integer>> findIngredientRoute(S initialState, List<I> ingredients, int maxDepth,
-                                                              BiFunction<I, S, S> mixer,
-                                                              Predicate<S> isValid,
-                                                              BiPredicate<S, S> isSame,
-                                                              Predicate<S> isGoal) {
+    public static <S, I> Optional<List<Integer>> findIngredientRoute(S initialState, List<I> ingredients, int maxDepth,
+                                                                     BiFunction<I, S, S> mixer,
+                                                                     Predicate<S> isValid,
+                                                                     BiPredicate<S, S> isSame,
+                                                                     Predicate<S> isGoal) {
         Queue<Node<S>> queue = new ArrayDeque<>();
         queue.add(new Node<>(initialState, Set.of(), List.of(), 0));
         while (!queue.isEmpty()) {

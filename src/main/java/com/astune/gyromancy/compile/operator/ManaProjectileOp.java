@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public final class ManaProjectileOp extends ProjectileOp {
+public final class ManaProjectileOp extends EntityEffectOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "mana_projectile");
     public static final ArrayEffectDefinition DEFINITION = new ArrayEffectDefinition() {
         @Override

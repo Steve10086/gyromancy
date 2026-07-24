@@ -25,13 +25,14 @@ public abstract class ResistantBallEntity extends MagicBallEntity {
     }
 
     @Override
-    public void tick() {
-        super.tick();
+    protected boolean tickBeforePayload() {
+        if (!super.tickBeforePayload()) return false;
         growIntoTargetSize();
         if (!launched && isFullyGrown()) {
             launched = true;
         }
         if (launched) moveWithResistance(RESISTANCE_FACTOR, RESISTANCE_CONSTANT);
+        return true;
     }
 
     @Override

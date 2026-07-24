@@ -25,8 +25,7 @@ public class DryBallEntity extends ResistantBallEntity {
     }
 
     @Override
-    public void tick() {
-        super.tick();
+    protected void tickAfterPayload() {
         if (level().isClientSide || tickCount % EFFECT_INTERVAL != 0) return;
         List<BlockPos> positions = containedPositions(getTargetSize());
         for (BlockPos pos : positions) {

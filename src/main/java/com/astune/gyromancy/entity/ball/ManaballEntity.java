@@ -43,12 +43,12 @@ public class ManaballEntity extends MagicBallEntity {
     }
 
     @Override
-    public void tick() {
-        super.tick();
+    protected boolean tickBeforePayload() {
+        if (!super.tickBeforePayload()) return false;
         growIntoTargetSize();
         if (getBallSize() <= DISCARD_SIZE) {
             discard();
-            return;
+            return false;
         }
 
         float target = getTargetSize();
@@ -61,13 +61,13 @@ public class ManaballEntity extends MagicBallEntity {
         setDeltaMovement(getDeltaMovement().add(acceleration));
         moveWithResistance(RESISTANCE_FACTOR, RESISTANCE_CONSTANT);
 
-        if (tickCount % ELEMENT_EXCHANGE_INTERVAL != 0) return;
+        if (tickCount % ELEMENT_EXCHANGE_INTERVAL != 0) return true;
 
         BlockPos.betweenClosedStream(inflatedBox).map(BlockPos::immutable)
                 .filter(p -> !inSphere(p.getCenter(), r) && inSphere(p.getCenter(), 1.5 * r))
                 .forEach(this::absorbMana);
 
-        if (mana == 0) return;
+        if (mana == 0) return true;
 
         manaPerBlock = mana / max(1, BlockPos.betweenClosedStream(box).map(BlockPos::immutable)
                 .filter(p -> inSphere(p.getCenter(), r))
@@ -81,6 +81,12 @@ public class ManaballEntity extends MagicBallEntity {
             releaseMana(BlockPos.containing(position()));
         }
         mana = 0;
+        return true;
+    }
+
+    @Override
+    protected Vec3 payloadAcceleration() {
+        return acceleration;
     }
 
     private void absorbMana(BlockPos pos) {

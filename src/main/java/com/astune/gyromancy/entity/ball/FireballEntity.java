@@ -1,9 +1,8 @@
 package com.astune.gyromancy.entity.ball;
 
-import com.astune.gyromancy.compile.operator.EntityTickContext;
+import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.ExplosionOp;
-import com.astune.gyromancy.compile.operator.FireballOp;
-import com.astune.gyromancy.compile.operator.OnEntityTickOp;
+import com.astune.gyromancy.compile.operator.FireProjectileOp;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.registry.ModEntities;
 import net.minecraft.nbt.CompoundTag;
@@ -12,10 +11,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class FireballEntity extends MagicBallEntity {
     private static final int DEFAULT_LIFETIME = 500;
@@ -25,9 +21,6 @@ public class FireballEntity extends MagicBallEntity {
     private Vec3 pendingVelocity = Vec3.ZERO;
     private Vec3 pendingAcceleration = Vec3.ZERO;
     private boolean launched;
-    private final Map<String, Object> runtimeData = new HashMap<>();
-    private List<OnEntityTickOp> payload = new ArrayList<>(FireballOp.defaultPayload());
-    private static final String PAYLOAD_KEY = "Payload";
 
     public FireballEntity(EntityType<FireballEntity> type, Level level) {
         super(type, level, ElementType.FIRE);
@@ -46,41 +39,40 @@ public class FireballEntity extends MagicBallEntity {
         setDeltaMovement(Vec3.ZERO);
     }
 
-    public void setPayload(List<OnEntityTickOp> payload) {
-        this.payload = new ArrayList<>(payload);
-    }
-
     public void setLifetime(int lifetime) {
         this.lifetime = lifetime;
-        runtimeData.put(FireballOp.LIFETIME_KEY, lifetime);
+        runtimeData().put(FireProjectileOp.LIFETIME_KEY, lifetime);
     }
 
     @Override
-    public void tick() {
-        super.tick();
+    protected List<? extends EntityPayload> defaultPayload() {
+        return FireProjectileOp.defaultPayload();
+    }
+
+    @Override
+    protected boolean tickBeforePayload() {
+        if (!super.tickBeforePayload()) return false;
         growIntoTargetSize();
         if (tickCount > lifetime) {
             discard();
-            return;
+            return false;
         }
         if (!launched && !isFullyGrown()) {
             setDeltaMovement(Vec3.ZERO);
-            return;
+            return false;
         }
         launchIfReady();
 
-        runtimeData.put(FireballOp.LIFETIME_KEY, lifetime);
-        EntityTickContext ctx = EntityTickContext.from(this, runtimeData, acceleration);
-        payload.forEach(op -> op.onEntityTick(ctx));
-        if (!isAlive()) return;
+        runtimeData().put(FireProjectileOp.LIFETIME_KEY, lifetime);
+        return true;
     }
 
     private void initRuntimeData(float explosionPower) {
-        runtimeData.putIfAbsent(FireballOp.STORED_MANA_KEY, 0L);
-        runtimeData.putIfAbsent(FireballOp.OLD_SPAWNED_KEY, false);
-        runtimeData.put(FireballOp.LIFETIME_KEY, lifetime);
-        runtimeData.put(ExplosionOp.EXPLOSION_POWER_KEY, explosionPower);
-        runtimeData.put(ExplosionOp.MAX_SIZE_KEY, MAX_SIZE);
+        runtimeData().putIfAbsent(FireProjectileOp.STORED_MANA_KEY, 0L);
+        runtimeData().putIfAbsent(FireProjectileOp.OLD_SPAWNED_KEY, false);
+        runtimeData().put(FireProjectileOp.LIFETIME_KEY, lifetime);
+        runtimeData().put(ExplosionOp.EXPLOSION_POWER_KEY, explosionPower);
+        runtimeData().put(ExplosionOp.MAX_SIZE_KEY, MAX_SIZE);
     }
 
     private void launchIfReady() {
@@ -95,7 +87,7 @@ public class FireballEntity extends MagicBallEntity {
     @Override
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-        if (tag.contains("ExplosionPower")) runtimeData.put(ExplosionOp.EXPLOSION_POWER_KEY, tag.getFloat("ExplosionPower"));
+        if (tag.contains("ExplosionPower")) runtimeData().put(ExplosionOp.EXPLOSION_POWER_KEY, tag.getFloat("ExplosionPower"));
         if (tag.contains("Lifetime")) lifetime = tag.getInt("Lifetime");
         if (tag.contains("AccelX")) {
             acceleration = new Vec3(tag.getDouble("AccelX"), tag.getDouble("AccelY"), tag.getDouble("AccelZ"));
@@ -106,18 +98,17 @@ public class FireballEntity extends MagicBallEntity {
         if (tag.contains("PendingAccelX")) {
             pendingAcceleration = new Vec3(tag.getDouble("PendingAccelX"), tag.getDouble("PendingAccelY"), tag.getDouble("PendingAccelZ"));
         }
-        if (tag.contains("StoredMana")) runtimeData.put(FireballOp.STORED_MANA_KEY, tag.getLong("StoredMana"));
-        payload = new ArrayList<>(OnEntityTickOp.loadPayloadList(tag, PAYLOAD_KEY, FireballOp.defaultPayload()));
-        runtimeData.put(FireballOp.LIFETIME_KEY, lifetime);
-        runtimeData.put(FireballOp.OLD_SPAWNED_KEY, tag.getBoolean("OldSpawned"));
-        runtimeData.put(ExplosionOp.MAX_SIZE_KEY, MAX_SIZE);
+        if (tag.contains("StoredMana")) runtimeData().put(FireProjectileOp.STORED_MANA_KEY, tag.getLong("StoredMana"));
+        runtimeData().put(FireProjectileOp.LIFETIME_KEY, lifetime);
+        runtimeData().put(FireProjectileOp.OLD_SPAWNED_KEY, tag.getBoolean("OldSpawned"));
+        runtimeData().put(ExplosionOp.MAX_SIZE_KEY, MAX_SIZE);
         launched = tag.getBoolean("Launched");
     }
 
     @Override
     protected void addAdditionalSaveData(@NotNull CompoundTag tag) {
         super.addAdditionalSaveData(tag);
-        tag.putFloat("ExplosionPower", ((Number)runtimeData.getOrDefault(ExplosionOp.EXPLOSION_POWER_KEY, DEFAULT_EXPLOSION_POWER)).floatValue());
+        tag.putFloat("ExplosionPower", ((Number)runtimeData().getOrDefault(ExplosionOp.EXPLOSION_POWER_KEY, DEFAULT_EXPLOSION_POWER)).floatValue());
         tag.putInt("Lifetime", lifetime);
         tag.putDouble("AccelX", acceleration.x);
         tag.putDouble("AccelY", acceleration.y);
@@ -128,9 +119,8 @@ public class FireballEntity extends MagicBallEntity {
         tag.putDouble("PendingAccelX", pendingAcceleration.x);
         tag.putDouble("PendingAccelY", pendingAcceleration.y);
         tag.putDouble("PendingAccelZ", pendingAcceleration.z);
-        tag.putLong("StoredMana", ((Number)runtimeData.getOrDefault(FireballOp.STORED_MANA_KEY, 0L)).longValue());
-        tag.put(PAYLOAD_KEY, OnEntityTickOp.savePayloadList(payload));
-        tag.putBoolean("OldSpawned", Boolean.TRUE.equals(runtimeData.get(FireballOp.OLD_SPAWNED_KEY)));
+        tag.putLong("StoredMana", ((Number)runtimeData().getOrDefault(FireProjectileOp.STORED_MANA_KEY, 0L)).longValue());
+        tag.putBoolean("OldSpawned", Boolean.TRUE.equals(runtimeData().get(FireProjectileOp.OLD_SPAWNED_KEY)));
         tag.putBoolean("Launched", launched);
     }
 }

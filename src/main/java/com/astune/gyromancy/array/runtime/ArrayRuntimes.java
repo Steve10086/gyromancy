@@ -3,7 +3,7 @@ package com.astune.gyromancy.array.runtime;
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.array.compile.CompiledArray;
 import com.astune.gyromancy.compile.operator.Operator;
-import com.astune.gyromancy.compile.operator.FireballOp;
+import com.astune.gyromancy.compile.operator.FireProjectileOp;
 import com.astune.gyromancy.compile.operator.ManaProjectileOp;
 import com.astune.gyromancy.symbol.CenterSymbol;
 import net.minecraft.server.level.ServerLevel;
@@ -15,7 +15,7 @@ public final class ArrayRuntimes {
     private static final String RUNTIME_KEY = "__runtime";
     private static final String OPERATOR_KEY = "__operator";
     private static final Map<String, RuntimeDeactivator> DEACTIVATORS = Map.of(
-            FireballOp.ID.toString(), (level, data) -> discard(level, data, CenterSymbol.FIREBALL_KEY),
+            FireProjectileOp.ID.toString(), (level, data) -> discard(level, data, CenterSymbol.FIREBALL_KEY),
             ManaProjectileOp.ID.toString(), (level, data) -> discard(level, data, CenterSymbol.MANABALL_KEY)
     );
 

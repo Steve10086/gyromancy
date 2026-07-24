@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public abstract class ProjectileOp implements Operator {
+public abstract class EntityEffectOp implements Operator {
 
     private final ElementType element;
     private final ResourceLocation id;
@@ -24,9 +24,9 @@ public abstract class ProjectileOp implements Operator {
     private final List<OpInput> inputs;
     private final EffectAttributes attributes;
 
-    protected ProjectileOp(ResourceLocation id, ElementType element, PositionedGlyph boundary,
-                           List<OpInput> matchedInputs, List<OpInput> inputs,
-                           EffectAttributes attributes) {
+    protected EntityEffectOp(ResourceLocation id, ElementType element, PositionedGlyph boundary,
+                             List<OpInput> matchedInputs, List<OpInput> inputs,
+                             EffectAttributes attributes) {
         this.id = id;
         this.element = element;
         this.boundary = boundary;
@@ -61,6 +61,16 @@ public abstract class ProjectileOp implements Operator {
             if (input instanceof OpInput.Op op) children.add(op.operator());
         }
         return List.copyOf(children);
+    }
+
+    protected List<EntityPayload> payload(List<? extends EntityPayload> defaults) {
+        List<EntityPayload> payload = new ArrayList<>(defaults);
+        for (OpInput input : inputs) {
+            if (input instanceof OpInput.Op op && op.operator() instanceof EntityPayload entityPayload) {
+                payload.add(entityPayload);
+            }
+        }
+        return List.copyOf(payload);
     }
 
     public float scale() {

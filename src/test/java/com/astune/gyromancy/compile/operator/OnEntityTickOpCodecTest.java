@@ -16,18 +16,24 @@ class OnEntityTickOpCodecTest {
                 new ExplosionOp(),
                 new SmeltOp(),
                 new CarryItemsOp(),
+                new WaterBurstOp(),
+                new BrewingOp(),
+                new ElementOp(),
                 new ElementConversionOp(ElementType.FIRE, "storedMana", 10,
                         0.1, 1000.0, 200.0, 1000.0, 10.0, 0.05));
 
         CompoundTag tag = new CompoundTag();
-        tag.put("Payload", OnEntityTickOp.savePayloadList(payload));
+        tag.put("Payload", EntityPayload.savePayloadList(payload));
 
-        List<OnEntityTickOp> loaded = OnEntityTickOp.loadPayloadList(tag, "Payload", List.of());
+        List<EntityPayload> loaded = EntityPayload.loadPayloadList(tag, "Payload", List.of());
 
         assertInstanceOf(ExplosionOp.class, loaded.get(0));
         assertInstanceOf(SmeltOp.class, loaded.get(1));
         assertInstanceOf(CarryItemsOp.class, loaded.get(2));
-        ElementConversionOp conversion = assertInstanceOf(ElementConversionOp.class, loaded.get(3));
+        assertInstanceOf(WaterBurstOp.class, loaded.get(3));
+        assertInstanceOf(BrewingOp.class, loaded.get(4));
+        assertInstanceOf(ElementOp.class, loaded.get(5));
+        ElementConversionOp conversion = assertInstanceOf(ElementConversionOp.class, loaded.get(6));
         assertEquals(ElementType.FIRE, conversion.element());
         assertEquals("storedMana", conversion.storedManaKey());
         assertEquals(10, conversion.interval());

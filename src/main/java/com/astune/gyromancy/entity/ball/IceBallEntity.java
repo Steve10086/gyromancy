@@ -27,8 +27,7 @@ public class IceBallEntity extends ResistantBallEntity {
     }
 
     @Override
-    public void tick() {
-        super.tick();
+    protected void tickAfterPayload() {
         if (!(level() instanceof ServerLevel server)) return;
         if (tickCount % EFFECT_INTERVAL == 0) {
             reduceElementWithMana(ElementType.FIRE, FIRE_MANA_COST);

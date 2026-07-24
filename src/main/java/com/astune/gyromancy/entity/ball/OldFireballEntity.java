@@ -1,9 +1,8 @@
 package com.astune.gyromancy.entity.ball;
 
-import com.astune.gyromancy.compile.operator.EntityTickContext;
-import com.astune.gyromancy.compile.operator.OnEntityTickOp;
+import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.ElementConversionOp;
-import com.astune.gyromancy.compile.operator.FireballOp;
+import com.astune.gyromancy.compile.operator.FireProjectileOp;
 import com.astune.gyromancy.compile.operator.SmeltOp;
 import com.astune.gyromancy.registry.ModEntities;
 import com.astune.gyromancy.api.element.ElementType;
@@ -21,9 +20,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashSet;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 
@@ -42,16 +39,14 @@ public class OldFireballEntity extends MagicBallEntity {
     private static final double FIRE_PER_VOLUME = 1000.0;
     private static final double FIRE_CONVERSION_COST = 10.0;
     private static final double MANA_TO_VOLUME = 0.05;
-    private static final String PAYLOAD_KEY = "Payload";
 
-    private final Map<String, Object> runtimeData = new HashMap<>();
-    private List<OnEntityTickOp> payload = defaultPayload();
     private Vec3 velocity = Vec3.ZERO;
     private Vec3 acceleration = Vec3.ZERO;
 
-    private static List<OnEntityTickOp> defaultPayload() {
+    @Override
+    protected List<? extends EntityPayload> defaultPayload() {
         return List.of(
-            new ElementConversionOp(ElementType.FIRE, FireballOp.STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
+            new ElementConversionOp(ElementType.FIRE, FireProjectileOp.STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
                     FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL, FIRE_PER_VOLUME,
                     FIRE_CONVERSION_COST, MANA_TO_VOLUME),
             new SmeltOp());
@@ -89,13 +84,16 @@ public class OldFireballEntity extends MagicBallEntity {
     }
 
     @Override
-    public void tick() {
-        super.tick();
+    protected boolean tickBeforePayload() {
+        if (!super.tickBeforePayload()) return false;
         growIntoTargetSize();
         velocity = velocity.add(acceleration);
         setPos(position().add(velocity));
-        EntityTickContext ctx = EntityTickContext.from(this, runtimeData, acceleration);
-        payload.forEach(op -> op.onEntityTick(ctx));
+        return true;
+    }
+
+    @Override
+    protected void tickAfterPayload() {
         entityData.set(DATA_AVERAGE_ELEMENT_LEVEL, (float) getAverageElementLevel());
 
         float target = getTargetSize();
@@ -109,8 +107,13 @@ public class OldFireballEntity extends MagicBallEntity {
 
     }
 
+    @Override
+    protected Vec3 payloadAcceleration() {
+        return acceleration;
+    }
+
     public void setStoredMana(long storedMana) {
-        runtimeData.put(FireballOp.STORED_MANA_KEY, storedMana);
+        runtimeData().put(FireProjectileOp.STORED_MANA_KEY, storedMana);
     }
 
     private void tryPutFire(BlockPos pos){
@@ -170,8 +173,7 @@ public class OldFireballEntity extends MagicBallEntity {
             velocity = new Vec3(tag.getDouble("VelX"), tag.getDouble("VelY"), tag.getDouble("VelZ"));
         if (tag.contains("AccelX"))
             acceleration = new Vec3(tag.getDouble("AccelX"), tag.getDouble("AccelY"), tag.getDouble("AccelZ"));
-        if (tag.contains("StoredMana")) runtimeData.put(FireballOp.STORED_MANA_KEY, tag.getLong("StoredMana"));
-        payload = OnEntityTickOp.loadPayloadList(tag, PAYLOAD_KEY, defaultPayload());
+        if (tag.contains("StoredMana")) runtimeData().put(FireProjectileOp.STORED_MANA_KEY, tag.getLong("StoredMana"));
         if (tag.contains("AverageElementLevel")) {
             entityData.set(DATA_AVERAGE_ELEMENT_LEVEL, tag.getFloat("AverageElementLevel"));
         }
@@ -188,8 +190,7 @@ public class OldFireballEntity extends MagicBallEntity {
         tag.putDouble("AccelX", acceleration.x);
         tag.putDouble("AccelY", acceleration.y);
         tag.putDouble("AccelZ", acceleration.z);
-        tag.putLong("StoredMana", ((Number)runtimeData.getOrDefault(FireballOp.STORED_MANA_KEY, 0L)).longValue());
-        tag.put(PAYLOAD_KEY, OnEntityTickOp.savePayloadList(payload));
+        tag.putLong("StoredMana", ((Number)runtimeData().getOrDefault(FireProjectileOp.STORED_MANA_KEY, 0L)).longValue());
         tag.putFloat("AverageElementLevel", getSyncedAverageElementLevel());
         tag.putBoolean("Debug", isDebug());
     }
