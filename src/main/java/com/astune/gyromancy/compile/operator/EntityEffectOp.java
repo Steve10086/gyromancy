@@ -6,6 +6,7 @@ import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.EffectAttributes;
 import com.astune.gyromancy.array.compile.MotionAttribute;
 import com.astune.gyromancy.array.compile.OpInput;
+import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.OpInputs;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import net.minecraft.resources.ResourceLocation;
@@ -40,6 +41,13 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
             return new CompileResult.Failure<>(failure.diagnostics());
         }
         return attributes;
+    }
+
+    protected static List<OpInputMatcher> acceptedProjectileInputs() {
+        return List.of(
+                OpInputMatcher.rune("arrow"),
+                OpInputMatcher.rune("revert"),
+                OpInputMatcher.op(CompiledOp.class));
     }
 
     public PositionedGlyph boundary() {

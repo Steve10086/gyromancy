@@ -10,6 +10,7 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -27,6 +28,7 @@ public abstract class MagicEntity extends Entity {
     private final Map<String, Object> runtimeData = new HashMap<>();
     private List<EntityPayload> payload = new ArrayList<>();
     private boolean payloadInitialized;
+    protected Vec3 velocityThisTick = Vec3.ZERO;
 
     protected MagicEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -38,6 +40,7 @@ public abstract class MagicEntity extends Entity {
         tickPayloads();
         if (!isAlive()) return;
         tickAfterPayload();
+        velocityThisTick = getDeltaMovement();
     }
 
     protected boolean tickBeforePayload() {
@@ -46,7 +49,9 @@ public abstract class MagicEntity extends Entity {
 
     protected void tickAfterPayload() {
     }
-
+    public Vec3 velocityThisTick() {
+        return velocityThisTick;
+    }
     public void setPayload(List<? extends EntityPayload> payload) {
         this.payload = new ArrayList<>(payload);
         payloadInitialized = true;

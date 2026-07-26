@@ -10,8 +10,10 @@ import com.astune.gyromancy.array.compile.ArrayNodeCompiler;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.CompiledArray;
 import com.astune.gyromancy.array.compile.GroupNode;
+import com.astune.gyromancy.compile.operator.PersistentOp;
 import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import com.astune.gyromancy.registry.ModAttachments;
+import com.astune.gyromancy.symbol.GlyphStrokeValidator;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.HashMap;
@@ -24,7 +26,8 @@ public final class ArrayEffectLifecycle {
 
     public static Optional<ArrayObject> activateOrReplace(ServerLevel level, PositionedGlyph circleGlyph) {
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
-        GroupNode ast = ArrayAstBuilder.build(circleGlyph, mgr);
+        GroupNode ast = ArrayAstBuilder.build(circleGlyph, mgr,
+                glyph -> GlyphStrokeValidator.isValidForCollection(glyph, mgr, level));
         ArrayCompileDebug.printAst(level, ast);
 
         CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(ast, mgr.opDefinitions());
@@ -37,10 +40,12 @@ public final class ArrayEffectLifecycle {
             return Optional.empty();
         }
 
+        CompiledArray compiled = success.value();
+        if (!(compiled.root() instanceof PersistentOp)) return Optional.empty();
+
         ArrayObject existing = mgr.getArrayForGlyph(circleGlyph.glyphUuid());
         if (existing != null) deactivate(level, existing);
 
-        CompiledArray compiled = success.value();
         RuntimeHandle handle = OpRuntimeDispatcher.activate(compiled, level);
         Map<String, Object> scratchData = new HashMap<>(handle.scratchData());
         scratchData.put("__array_color", compiled.color());

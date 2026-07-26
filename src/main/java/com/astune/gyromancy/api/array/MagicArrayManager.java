@@ -4,7 +4,9 @@ import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpDefinitionRegistry;
+import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -15,8 +17,18 @@ import java.util.*;
  * Stored as an Attachment on {@code Level} via {@code ModAttachments.ARRAY_MANAGER}.
  */
 public class MagicArrayManager {
-    public static final Codec<MagicArrayManager> CODEC = ArrayObject.CODEC.listOf()
-            .xmap(MagicArrayManager::fromPersistentArrays, mgr -> List.copyOf(mgr.activeArrays.values()));
+    private static final Codec<UUID> UUID_CODEC = Codec.STRING.xmap(UUID::fromString, UUID::toString);
+
+    /**
+     * The right side accepts the legacy attachment format, which was just a list
+     * of active arrays and therefore could not preserve hierarchy ownership.
+     */
+    public static final Codec<MagicArrayManager> CODEC = Codec.either(
+                    PersistentData.CODEC,
+                    ArrayObject.CODEC.listOf())
+            .xmap(data -> data.map(MagicArrayManager::fromPersistentData,
+                            MagicArrayManager::fromPersistentArrays),
+                    manager -> Either.left(manager.toPersistentData()));
 
     private final Map<UUID, MagicArrayState> arrays = new HashMap<>();
     private final Map<BlockPos, UUID> positionIndex = new HashMap<>();
@@ -48,6 +60,46 @@ public class MagicArrayManager {
             }
         }
         return mgr;
+    }
+
+    private static MagicArrayManager fromPersistentData(PersistentData data) {
+        MagicArrayManager mgr = new MagicArrayManager();
+        for (PositionedGlyph glyph : data.glyphs()) {
+            mgr.registerGlyph(glyph);
+        }
+        for (ArrayObject array : data.arrays()) {
+            mgr.registerArrayObj(array);
+            for (PositionedGlyph glyph : array.allBoundGlyphs()) {
+                if (mgr.getGlyph(glyph.glyphUuid()) == null) mgr.registerGlyph(glyph);
+            }
+        }
+        mgr.restoreParentRelations(data.parentRelations());
+        return mgr;
+    }
+
+    private PersistentData toPersistentData() {
+        List<ParentRelation> relations = parentCircleByGlyph.entrySet().stream()
+                .map(entry -> new ParentRelation(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparing(relation -> relation.child().toString()))
+                .toList();
+        return new PersistentData(
+                List.copyOf(activeArrays.values()),
+                List.copyOf(glyphIndex.values()),
+                relations);
+    }
+
+    private void restoreParentRelations(List<ParentRelation> relations) {
+        parentCircleByGlyph.clear();
+        directChildrenByCircle.clear();
+        for (ParentRelation relation : relations) {
+            PositionedGlyph child = glyphIndex.get(relation.child());
+            PositionedGlyph parent = glyphIndex.get(relation.parent());
+            if (child == null || parent == null || child == parent
+                    || parent.role() != SymbolRole.OUTER_CIRCLE) {
+                continue;
+            }
+            assignParent(child, parent);
+        }
     }
 
     // ═══════════════════ arrays ═══════════════════
@@ -107,7 +159,7 @@ public class MagicArrayManager {
     public void registerGlyph(PositionedGlyph glyph) {
         glyphIndex.put(glyph.glyphUuid(), glyph);
         glyphIdIndex.put(glyph.glyphId(), glyph.glyphUuid());
-        if (glyph.role() == SymbolRole.OUTER_CIRCLE) claimUnparentedChildren(glyph);
+        rebuildHierarchyFromGeometry();
     }
 
     public PositionedGlyph restoreGlyph(PositionedGlyph stored) {
@@ -188,10 +240,55 @@ public class MagicArrayManager {
         }
     }
 
+    /**
+     * Geometry is only a runtime fallback for newly discovered glyphs and
+     * legacy saves. New-format saves replace this result with their explicit
+     * parent relations after all glyphs have been restored.
+     */
+    private void rebuildHierarchyFromGeometry() {
+        parentCircleByGlyph.clear();
+        directChildrenByCircle.clear();
+        glyphIndex.values().stream()
+                .filter(glyph -> glyph.role() == SymbolRole.OUTER_CIRCLE)
+                .sorted(Comparator.comparingDouble(MagicArrayManager::boundsArea)
+                        .thenComparingInt(PositionedGlyph::glyphId))
+                .forEach(this::claimUnparentedChildren);
+    }
+
+    private static double boundsArea(PositionedGlyph glyph) {
+        return Math.max(0.0, glyph.maxWorldX() - glyph.minWorldX())
+                * Math.max(0.0, glyph.maxWorldY() - glyph.minWorldY());
+    }
+
     private void assignParent(PositionedGlyph glyph, PositionedGlyph parent) {
-        parentCircleByGlyph.put(glyph.glyphUuid(), parent.glyphUuid());
-        directChildrenByCircle.computeIfAbsent(parent.glyphUuid(), ignored -> new ArrayList<>()).add(glyph);
+        if (glyph.glyphUuid().equals(parent.glyphUuid())
+                || wouldCreateParentCycle(glyph.glyphUuid(), parent.glyphUuid())) {
+            return;
+        }
+        UUID previousParent = parentCircleByGlyph.put(glyph.glyphUuid(), parent.glyphUuid());
+        if (previousParent != null) {
+            List<PositionedGlyph> previousSiblings = directChildrenByCircle.get(previousParent);
+            if (previousSiblings != null) {
+                previousSiblings.removeIf(child -> child.glyphUuid().equals(glyph.glyphUuid()));
+                if (previousSiblings.isEmpty()) directChildrenByCircle.remove(previousParent);
+            }
+        }
+        List<PositionedGlyph> children =
+                directChildrenByCircle.computeIfAbsent(parent.glyphUuid(), ignored -> new ArrayList<>());
+        if (children.stream().noneMatch(child -> child.glyphUuid().equals(glyph.glyphUuid()))) {
+            children.add(glyph);
+        }
         directChildrenByCircle.get(parent.glyphUuid()).sort(Comparator.comparingInt(PositionedGlyph::glyphId));
+    }
+
+    private boolean wouldCreateParentCycle(UUID child, UUID parent) {
+        UUID current = parent;
+        Set<UUID> visited = new HashSet<>();
+        while (current != null && visited.add(current)) {
+            if (current.equals(child)) return true;
+            current = parentCircleByGlyph.get(current);
+        }
+        return current != null;
     }
 
     private void detachGlyph(PositionedGlyph glyph) {
@@ -281,5 +378,27 @@ public class MagicArrayManager {
         Map<String, Object> data = new HashMap<>(existing.scratchData());
         data.put(key, value);
         setArrayScratchData(arrayId, data);
+    }
+
+    private record ParentRelation(UUID child, UUID parent) {
+        private static final Codec<ParentRelation> CODEC = RecordCodecBuilder.create(instance ->
+                instance.group(
+                                UUID_CODEC.fieldOf("child").forGetter(ParentRelation::child),
+                                UUID_CODEC.fieldOf("parent").forGetter(ParentRelation::parent))
+                        .apply(instance, ParentRelation::new));
+    }
+
+    private record PersistentData(
+            List<ArrayObject> arrays,
+            List<PositionedGlyph> glyphs,
+            List<ParentRelation> parentRelations
+    ) {
+        private static final Codec<PersistentData> CODEC = RecordCodecBuilder.create(instance ->
+                instance.group(
+                                ArrayObject.CODEC.listOf().fieldOf("arrays").forGetter(PersistentData::arrays),
+                                PositionedGlyph.CODEC.listOf().fieldOf("glyphs").forGetter(PersistentData::glyphs),
+                                ParentRelation.CODEC.listOf().fieldOf("parent_relations")
+                                        .forGetter(PersistentData::parentRelations))
+                        .apply(instance, PersistentData::new));
     }
 }

@@ -11,5 +11,9 @@ public interface OpDefinition {
 
     List<OpInputMatcher> match();
 
+    default List<OpInputMatcher> accepted() {
+        return List.of();
+    }
+
     CompileResult<CompiledOp> compile(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs);
 }

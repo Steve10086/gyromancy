@@ -40,6 +40,11 @@ public final class WaterProjectileOp extends EntityEffectOp {
         }
 
         @Override
+        public List<OpInputMatcher> accepted() {
+            return acceptedProjectileInputs();
+        }
+
+        @Override
         public CompileResult<CompiledOp> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                List<OpInput> inputs) {
             return WaterProjectileOp.create(boundary, matchedInputs, inputs);

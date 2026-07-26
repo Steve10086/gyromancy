@@ -14,7 +14,9 @@ final class EntityPayloadCodecs {
             ElementOp.ID, ElementOp.CODEC,
             CarryItemsOp.ID, CarryItemsOp.CODEC,
             WaterBurstOp.ID, WaterBurstOp.CODEC,
-            BrewingOp.ID, BrewingOp.CODEC
+            BrewingOp.ID, BrewingOp.CODEC,
+            MomentumOp.ID, MomentumOp.CODEC,
+            RotationOp.ID, RotationOp.CODEC
     );
 
     private EntityPayloadCodecs() {}

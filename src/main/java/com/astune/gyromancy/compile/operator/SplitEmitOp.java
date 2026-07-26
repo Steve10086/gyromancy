@@ -33,6 +33,13 @@ public final class SplitEmitOp extends EmitOp {
         }
 
         @Override
+        public List<OpInputMatcher> accepted() {
+            return List.of(
+                    OpInputMatcher.rune("arrow"),
+                    OpInputMatcher.rune("arrow_up"));
+        }
+
+        @Override
         public CompileResult<CompiledOp> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                  List<OpInput> inputs) {
             return new CompileResult.Success<>(new SplitEmitOp(boundary, matchedInputs, inputs));

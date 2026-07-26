@@ -51,6 +51,20 @@ public final class ElementOp extends OnEntityTickOp implements CompiledOp {
         }
 
         @Override
+        public List<OpInputMatcher> accepted() {
+            return List.of(
+                    OpInputMatcher.rune("fire"),
+                    OpInputMatcher.rune("water"),
+                    OpInputMatcher.rune("mana"),
+                    OpInputMatcher.rune("wind"),
+                    OpInputMatcher.rune("earth"),
+                    OpInputMatcher.rune("light"),
+                    OpInputMatcher.rune("dark"),
+                    OpInputMatcher.rune("space"),
+                    OpInputMatcher.rune("time"));
+        }
+
+        @Override
         public CompileResult<CompiledOp> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                List<OpInput> inputs) {
             return new CompileResult.Success<>(new ElementOp(boundary, matchedInputs, inputs));

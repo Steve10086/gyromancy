@@ -9,7 +9,9 @@ import com.astune.gyromancy.compile.operator.ElementOp;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.compile.operator.EntityEffectOp;
 import com.astune.gyromancy.compile.operator.EntityPayload;
+import com.astune.gyromancy.compile.operator.MomentumOp;
 import com.astune.gyromancy.compile.operator.PersistentOp;
+import com.astune.gyromancy.compile.operator.RotationOp;
 import com.astune.gyromancy.compile.operator.SplitEmitOp;
 import com.astune.gyromancy.compile.operator.WaterProjectileOp;
 import net.minecraft.core.BlockPos;
@@ -75,10 +77,145 @@ class ArrayNodeCompilerTest {
     }
 
     @Test
-    void modifierOnlyCircleFailsWithoutOperator() {
+    void arrowOnlyCircleCompilesMomentumOperator() {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 2);
         GroupNode ast = group(circle, new SymbolNode(arrow));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+
+        assertInstanceOf(MomentumOp.class, success.value().root());
+    }
+
+    @Test
+    void arrowUpOnlyCircleCompilesMomentumOperator() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 2);
+        GroupNode ast = group(circle, new SymbolNode(arrowUp));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+
+        assertInstanceOf(MomentumOp.class, success.value().root());
+    }
+
+    @Test
+    void momentumReadsEveryDirectArrowVariant() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 3);
+        GroupNode ast = group(circle, new SymbolNode(arrow), new SymbolNode(arrowUp));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        MomentumOp momentum = assertInstanceOf(MomentumOp.class, success.value().root());
+
+        assertEquals(2, momentum.accelerationInputs().size());
+        assertEquals(false, momentum.accelerationInputs().get(0).alongFacing());
+        assertEquals(true, momentum.accelerationInputs().get(1).alongFacing());
+    }
+
+    @Test
+    void momentumRecognitionDoesNotClaimProjectileInputs() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph water = glyph("water", SymbolRole.CENTER_SYMBOL, 2);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
+        GroupNode ast = group(circle, new SymbolNode(water), new SymbolNode(arrow));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+
+        assertInstanceOf(WaterProjectileOp.class, success.value().root());
+    }
+
+    @Test
+    void drainCompilesRotationSpeedFromRuneLength() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph drain = glyph("drain", SymbolRole.PARAMETER_RUNE, 3);
+        GroupNode ast = group(circle, new SymbolNode(drain));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        RotationOp rotation = assertInstanceOf(RotationOp.class, success.value().root());
+
+        assertEquals(drain.length() * RotationOp.ROTATION_SPEED_SCALE, rotation.rotationSpeed());
+    }
+
+    @Test
+    void revertReversesDrainRotationSpeed() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph drain = glyph("drain", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph revert = glyph("revert", SymbolRole.PARAMETER_RUNE, 4);
+        GroupNode ast = group(circle, new SymbolNode(drain), new SymbolNode(revert));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        RotationOp rotation = assertInstanceOf(RotationOp.class, success.value().root());
+
+        assertEquals(-drain.length() * RotationOp.ROTATION_SPEED_SCALE, rotation.rotationSpeed());
+    }
+
+    @Test
+    void projectileCanOwnNestedRotationPayload() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
+        PositionedGlyph water = glyph("water", SymbolRole.CENTER_SYMBOL, 3);
+        PositionedGlyph drain = glyph("drain", SymbolRole.PARAMETER_RUNE, 4);
+        PositionedGlyph revert = glyph("revert", SymbolRole.PARAMETER_RUNE, 5);
+        GroupNode ast = group(outer, new SymbolNode(water),
+                group(inner, new SymbolNode(drain), new SymbolNode(revert)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        WaterProjectileOp root = assertInstanceOf(WaterProjectileOp.class, success.value().root());
+        RotationOp child = assertInstanceOf(RotationOp.class,
+                assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator());
+        List<EntityPayload> payloads = new ArrayList<>();
+
+        child.contributeEntityPayloads(payloads);
+
+        RotationOp payload = assertInstanceOf(RotationOp.class, payloads.getFirst());
+        assertEquals(-drain.length() * RotationOp.ROTATION_SPEED_SCALE, payload.rotationSpeed());
+    }
+
+    @Test
+    void projectileCanOwnNestedMomentumPayload() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
+        PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 3);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 4);
+        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 5);
+        GroupNode ast = group(outer, new SymbolNode(fire),
+                group(inner, new SymbolNode(arrow), new SymbolNode(arrowUp)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        FireProjectileOp root = assertInstanceOf(FireProjectileOp.class, success.value().root());
+        MomentumOp child = assertInstanceOf(MomentumOp.class,
+                assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator());
+        List<EntityPayload> payloads = new ArrayList<>();
+
+        child.contributeEntityPayloads(payloads);
+
+        MomentumOp payload = assertInstanceOf(MomentumOp.class, payloads.getFirst());
+        assertEquals(2, payload.accelerationInputs().size());
+    }
+
+    @Test
+    void unacceptedExtraPrimaryRuneRejectsAllCandidates() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2);
+        PositionedGlyph water = glyph("water", SymbolRole.CENTER_SYMBOL, 3);
+        GroupNode ast = group(circle, new SymbolNode(fire), new SymbolNode(water));
 
         @SuppressWarnings("unchecked")
         var failure = (CompileResult.Failure<CompiledArray>) assertInstanceOf(CompileResult.Failure.class,
@@ -88,27 +225,13 @@ class ArrayNodeCompilerTest {
     }
 
     @Test
-    void extraPrimaryRuneDoesNotCreateCompilerAmbiguity() {
-        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
-        PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2);
-        PositionedGlyph water = glyph("water", SymbolRole.CENTER_SYMBOL, 3);
-        GroupNode ast = group(circle, new SymbolNode(fire), new SymbolNode(water));
-
-        @SuppressWarnings("unchecked")
-        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
-                ArrayNodeCompiler.compile(ast));
-
-        assertInstanceOf(FireProjectileOp.class, success.value().root());
-    }
-
-    @Test
     void longestMatchingDefinitionReceivesMatchedInputsAndFullInputs() {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2);
         PositionedGlyph fix = glyph("fix", SymbolRole.PARAMETER_RUNE, 3);
         PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 4);
-        OpDefinition shortOp = runeOp("short", "fire");
-        OpDefinition longOp = runeOp("long", "fire", "fix");
+        OpDefinition shortOp = runeOpAccepting("short", List.of("fix", "arrow"), "fire");
+        OpDefinition longOp = runeOpAccepting("long", List.of("arrow"), "fire", "fix");
         GroupNode ast = group(circle, new SymbolNode(fire), new SymbolNode(fix), new SymbolNode(arrow));
 
         @SuppressWarnings("unchecked")
@@ -323,10 +446,17 @@ class ArrayNodeCompilerTest {
     }
 
     private static OpDefinition runeOp(String id, String... symbols) {
+        return runeOpAccepting(id, List.of(), symbols);
+    }
+
+    private static OpDefinition runeOpAccepting(String id, List<String> accepted, String... symbols) {
         List<OpInputMatcher> matchers = List.of(symbols).stream()
                 .map(OpInputMatcher::rune)
                 .toList();
-        return op(id, matchers);
+        List<OpInputMatcher> acceptedMatchers = accepted.stream()
+                .map(OpInputMatcher::rune)
+                .toList();
+        return op(id, matchers, acceptedMatchers);
     }
 
     @SafeVarargs
@@ -339,6 +469,11 @@ class ArrayNodeCompilerTest {
     }
 
     private static OpDefinition op(String id, List<OpInputMatcher> matchers) {
+        return op(id, matchers, List.of());
+    }
+
+    private static OpDefinition op(String id, List<OpInputMatcher> matchers,
+                                   List<OpInputMatcher> acceptedMatchers) {
         return new OpDefinition() {
             @Override
             public ResourceLocation id() {
@@ -348,6 +483,11 @@ class ArrayNodeCompilerTest {
             @Override
             public List<OpInputMatcher> match() {
                 return matchers;
+            }
+
+            @Override
+            public List<OpInputMatcher> accepted() {
+                return acceptedMatchers;
             }
 
             @Override

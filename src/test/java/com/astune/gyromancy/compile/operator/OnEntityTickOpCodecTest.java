@@ -18,6 +18,11 @@ class OnEntityTickOpCodecTest {
                 new CarryItemsOp(),
                 new WaterBurstOp(),
                 new BrewingOp(),
+                new MomentumOp(List.of(
+                        new MomentumOp.AccelerationInput(new net.minecraft.world.phys.Vec3(1.0, 2.0, 3.0),
+                                4.0, false),
+                        new MomentumOp.AccelerationInput(net.minecraft.world.phys.Vec3.ZERO, 5.0, true))),
+                new RotationOp(-3.0),
                 new ElementOp(ElementType.WATER),
                 new ElementConversionOp(ElementType.FIRE, "storedMana", 10,
                         0.1, 1000.0, 200.0, 1000.0, 10.0, 0.05));
@@ -32,9 +37,15 @@ class OnEntityTickOpCodecTest {
         assertInstanceOf(CarryItemsOp.class, loaded.get(2));
         assertInstanceOf(WaterBurstOp.class, loaded.get(3));
         assertInstanceOf(BrewingOp.class, loaded.get(4));
-        ElementOp elementPayload = assertInstanceOf(ElementOp.class, loaded.get(5));
+        MomentumOp momentum = assertInstanceOf(MomentumOp.class, loaded.get(5));
+        assertEquals(2, momentum.accelerationInputs().size());
+        assertEquals(4.0, momentum.accelerationInputs().getFirst().magnitude());
+        assertEquals(true, momentum.accelerationInputs().get(1).alongFacing());
+        RotationOp rotation = assertInstanceOf(RotationOp.class, loaded.get(6));
+        assertEquals(-3.0, rotation.rotationSpeed());
+        ElementOp elementPayload = assertInstanceOf(ElementOp.class, loaded.get(7));
         assertEquals(ElementType.WATER, elementPayload.absorbedElement());
-        ElementConversionOp conversion = assertInstanceOf(ElementConversionOp.class, loaded.get(6));
+        ElementConversionOp conversion = assertInstanceOf(ElementConversionOp.class, loaded.get(8));
         assertEquals(ElementType.FIRE, conversion.element());
         assertEquals("storedMana", conversion.storedManaKey());
         assertEquals(10, conversion.interval());

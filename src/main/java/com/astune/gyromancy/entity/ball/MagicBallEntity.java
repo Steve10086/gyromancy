@@ -38,7 +38,6 @@ public abstract class MagicBallEntity extends MagicEntity {
     private final ElementType targetElement;
     private double averageElementLevel;
     private boolean impactThisTick;
-    private Vec3 velocityThisTick = Vec3.ZERO;
     Vec3 acceleration = Vec3.ZERO;
 
 
@@ -50,7 +49,6 @@ public abstract class MagicBallEntity extends MagicEntity {
 
     @Override
     protected boolean tickBeforePayload() {
-        velocityThisTick = getDeltaMovement();
         Vec3 start = position();
         Vec3 end = start.add(velocityThisTick);
         HitResult blockHit = level().clip(new ClipContext(start, end, ClipContext.Block.COLLIDER,
@@ -91,10 +89,6 @@ public abstract class MagicBallEntity extends MagicEntity {
         var searchBox = getBoundingBox().expandTowards(velocity).inflate(0.1);
         return !level().getEntitiesOfClass(LivingEntity.class, searchBox,
                 LivingEntity::isAlive).isEmpty();
-    }
-
-    public Vec3 velocityThisTick() {
-        return velocityThisTick;
     }
 
     public float getBallSize() {

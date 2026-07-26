@@ -154,22 +154,33 @@ public final class OpDefinitionRegistry {
     private static void registerIfAnnotated(String className) {
         try {
             Class<?> type = Class.forName(className);
-            if (!type.isAnnotationPresent(RegisteredOp.class)) return;
-            Field definition = type.getField("DEFINITION");
+            RegisteredOp registration = type.getAnnotation(RegisteredOp.class);
+            if (registration == null) return;
+            for (String fieldName : registration.definitions()) {
+                registerDefinitionField(type, fieldName);
+            }
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException("Failed to load operator class " + className, e);
+        }
+    }
+
+    private static void registerDefinitionField(Class<?> type, String fieldName) {
+        String className = type.getName();
+        try {
+            Field definition = type.getField(fieldName);
             if (!Modifier.isStatic(definition.getModifiers())) {
-                throw new IllegalStateException(className + ".DEFINITION must be static");
+                throw new IllegalStateException(className + "." + fieldName + " must be static");
             }
             Object value = definition.get(null);
             if (!(value instanceof OpDefinition opDefinition)) {
-                throw new IllegalStateException(className + ".DEFINITION must be an OpDefinition");
+                throw new IllegalStateException(className + "." + fieldName + " must be an OpDefinition");
             }
             register(opDefinition);
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("Failed to load operator class " + className, e);
         } catch (NoSuchFieldException e) {
-            throw new IllegalStateException(className + " is @RegisteredOp but has no public DEFINITION field", e);
+            throw new IllegalStateException(className + " is @RegisteredOp but has no public "
+                    + fieldName + " field", e);
         } catch (IllegalAccessException e) {
-            throw new IllegalStateException("Cannot access " + className + ".DEFINITION", e);
+            throw new IllegalStateException("Cannot access " + className + "." + fieldName, e);
         }
     }
 }

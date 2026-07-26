@@ -7,4 +7,6 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
-public @interface RegisteredOp {}
+public @interface RegisteredOp {
+    String[] definitions() default {"DEFINITION"};
+}

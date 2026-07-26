@@ -68,25 +68,36 @@ public final class ArrayNodeCompiler {
     private static Match bestMatch(List<OpInput> inputs, Collection<? extends OpDefinition> effects) {
         Match best = null;
         for (OpDefinition effect : effects) {
-            List<OpInput> matched = matchedInputs(inputs, effect);
-            if (matched.size() != effect.match().size()) continue;
+            InputMatch matched = matchedInputs(inputs, effect);
+            if (matched.inputs().size() != effect.match().size()) continue;
+            if (!acceptsAllUnmatchedInputs(inputs, matched.used(), effect.accepted())) continue;
             if (best == null || effect.match().size() > best.effect().match().size()) {
-                best = new Match(effect, matched);
+                best = new Match(effect, matched.inputs());
             }
         }
         return best;
     }
 
-    private static List<OpInput> matchedInputs(List<OpInput> inputs, OpDefinition effect) {
+    private static InputMatch matchedInputs(List<OpInput> inputs, OpDefinition effect) {
         List<OpInput> matched = new ArrayList<>();
         Set<Integer> used = new LinkedHashSet<>();
         for (OpInputMatcher matcher : effect.match()) {
             int index = firstMatch(inputs, matcher, used);
-            if (index < 0) return matched;
+            if (index < 0) return new InputMatch(List.copyOf(matched), Set.copyOf(used));
             used.add(index);
             matched.add(inputs.get(index));
         }
-        return matched;
+        return new InputMatch(List.copyOf(matched), Set.copyOf(used));
+    }
+
+    private static boolean acceptsAllUnmatchedInputs(List<OpInput> inputs, Set<Integer> used,
+                                                     List<OpInputMatcher> accepted) {
+        for (int i = 0; i < inputs.size(); i++) {
+            if (used.contains(i)) continue;
+            OpInput input = inputs.get(i);
+            if (accepted.stream().noneMatch(matcher -> matcher.matches(input))) return false;
+        }
+        return true;
     }
 
     private static int firstMatch(List<OpInput> inputs, OpInputMatcher matcher, Set<Integer> used) {
@@ -116,6 +127,8 @@ public final class ArrayNodeCompiler {
     private static <T> CompileResult<T> fail(String code, String message) {
         return new CompileResult.Failure<>(List.of(new CompileDiagnostic(code, message)));
     }
+
+    private record InputMatch(List<OpInput> inputs, Set<Integer> used) {}
 
     private record Match(OpDefinition effect, List<OpInput> inputs) {}
 }

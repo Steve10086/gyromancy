@@ -17,9 +17,9 @@ public final class OpRuntimeDispatcher {
     private OpRuntimeDispatcher() {}
 
     public static RuntimeHandle activate(CompiledArray compiled, ServerLevel level) {
-        RuntimeHandle handle = compiled.root() instanceof PersistentOp persistent
-                ? persistent.activate(new OpRuntimeContext(level, compiled.root()))
-                : new RuntimeHandle(Map.of());
+        if (!(compiled.root() instanceof PersistentOp persistent)) return new RuntimeHandle(Map.of());
+
+        RuntimeHandle handle = persistent.activate(new OpRuntimeContext(level, compiled.root()));
         Map<String, Object> data = new HashMap<>(handle.scratchData());
         data.put(RUNTIME_KEY, compiled.root().id().toString());
         data.put(COMPILED_OP_KEY, compiled.root());

@@ -7,7 +7,7 @@
 - 编译后的节点统一是 `CompiledOp`。
 - 只有同时实现 `PersistentOp` 的 `CompiledOp` 才会被法阵生命周期执行。
 - `EmitOp` 是 child 发射协议；实体 payload 贡献通过 `CompiledOp` 的 direct child 方法完成。它们作为 root 被编译出来时，不会产生有意义的 runtime effect。
-- 新 Op 通过类内部的 `@RegisteredOp + DEFINITION` 进入匹配系统。
+- 新 Op 通过类内部的 `@RegisteredOp + DEFINITION` 进入匹配系统；需要多个互斥入口时，可由注解显式列出多个 definition 字段。
 
 ## 总体结构
 
@@ -21,8 +21,9 @@ flowchart TD
     Lifecycle["ArrayEffectLifecycle"]
     Dispatcher["OpRuntimeDispatcher"]
     Persistent["PersistentOp.activate/deactivate"]
-    ChildEmit["child EmitOp.emissions()"]
-    ChildPayload["direct child contributeEntityPayloads(...)"]
+    DirectChild["direct child Ops"]
+    EmitContribution["emission contribution"]
+    PayloadContribution["entity payload contribution"]
 
     Glyphs --> Ast
     Ast --> Compile
@@ -31,8 +32,9 @@ flowchart TD
     Root --> Lifecycle
     Lifecycle --> Dispatcher
     Dispatcher -->|"root instanceof PersistentOp"| Persistent
-    Persistent --> ChildEmit
-    Persistent --> ChildPayload
+    Persistent --> DirectChild
+    DirectChild --> EmitContribution
+    DirectChild --> PayloadContribution
 ```
 
 ## 核心类型
@@ -42,9 +44,9 @@ flowchart TD
 | `CompiledOp` | `compile/operator/CompiledOp.java` | 编译后 Op 的最小契约：id、boundary、inputs、color、child 遍历。 |
 | `PersistentOp` | `compile/operator/PersistentOp.java` | runtime 生命周期契约。只有实现它的 root 会被 activate/deactivate。 |
 | `EmitOp` | `compile/operator/EmitOp.java` | child-only 的发射计划提供者。只输出 `Emission` 数据，不生成实体。 |
-| `OpDefinition` | `array/compile/OpDefinition.java` | 一个 Op 的编译期匹配规则和 factory。 |
+| `OpDefinition` | `array/compile/OpDefinition.java` | 一个 Op 的必需输入 `match()`、剩余输入白名单 `accepted()` 和编译 factory。 |
 | `RegisteredOp` | `array/compile/RegisteredOp.java` | 标记一个 Op class 需要被自动发现并注册。 |
-| `OpDefinitionRegistry` | `array/compile/OpDefinitionRegistry.java` | 发现 `@RegisteredOp`，读取 `DEFINITION`，并保留手动注册扩展入口。 |
+| `OpDefinitionRegistry` | `array/compile/OpDefinitionRegistry.java` | 发现 `@RegisteredOp`，读取注解声明的 definition 字段（默认 `DEFINITION`），并保留手动注册扩展入口。 |
 | `OpInput` | `array/compile/OpInput.java` | Op 的输入：直接 rune 或已编译 child Op。 |
 | `OpInputMatcher` | `array/compile/OpInputMatcher.java` | `OpDefinition.match()` 使用的 rune / child Op matcher。 |
 | `CompiledArray` | `array/compile/CompiledArray.java` | root Op、绑定 glyph 和显示颜色。 |
@@ -59,12 +61,15 @@ flowchart TD
    - 直接符号节点变成 `OpInput.Rune`；
    - 嵌套 group 递归编译后变成 `OpInput.Op`；
    - 当前 group 的本地 direct inputs 用注册的 `OpDefinition` 做匹配。
-4. `ArrayNodeCompiler` 选择最长的完整匹配。
-5. 胜出的 `OpDefinition` 会收到：
+4. `ArrayNodeCompiler` 只保留满足以下条件的候选：
+   - `match()` 中的 matcher 全部消费到不同的 direct input；
+   - 所有未被消费的 direct input 都至少匹配 `accepted()` 中的一个 matcher。
+5. 在这些能接受全部 direct inputs 的候选中选择 `match()` 最长者。`CompileResult` 只表达已选 Definition 的编译成功或失败，不参与识别。
+6. 胜出的 `OpDefinition` 会收到：
    - `boundary`：当前 group 的边界 glyph；
    - `matchedInputs`：只包含 match pattern 消耗掉的 inputs；
    - `inputs`：当前 group 的全部 direct runes 和已编译 child Ops。
-6. 最终产物是一个 `CompiledArray`，它持有唯一 root `CompiledOp`。
+7. 最终产物是一个 `CompiledArray`，它持有唯一 root `CompiledOp`。
 
 匹配是 group-local 的。父 Op 看不到 child group 内部的 direct runes，只能看到一个 `OpInput.Op`。
 
@@ -82,10 +87,67 @@ flowchart TD
 `OpRuntimeDispatcher` 控制实际执行：
 
 - activate 时，只有 `compiled.root() instanceof PersistentOp` 才调用 `activate`；
-- 它总是把 root id 和 compiled root 写入 scratch data；
+- non-persistent root 返回空 handle，由 lifecycle 过滤且不注册 `ArrayObject`；
+- persistent root 的 handle 会写入 root id 和 compiled root；
 - deactivate 时，先通过 `EmitResult` 丢弃已记录的 emitted entities，再调用 root `PersistentOp.deactivate`。
 
 因此 child-only Op 没有 root 效果。它们可以被编译、被嵌套、被绑定 glyph，但只要不实现 `PersistentOp`，dispatcher 就不会执行它们。
+
+## 当前处理模式
+
+当前系统不再有 `EntityPayloadProvider` 这种统一管理协议，也不新增独立 `Context` DTO。处理关系保持在 Op 树内部：
+
+```text
+root Op
+  -> 只处理自己的 direct child
+  -> 对 direct child 发出具体贡献请求
+
+child Op
+  -> 如果理解该请求，就贡献自己的结果
+  -> 如果需要附属 child 参与，由 child 自己继续请求自己的 direct child
+  -> 不要求 root 认识 deep leaf
+```
+
+现有贡献请求是 `CompiledOp.contributeEntityPayloads(List<EntityPayload> payloads)`。它是默认 no-op 方法，不是 provider 接口：
+
+```java
+default void contributeEntityPayloads(List<EntityPayload> payloads) {}
+```
+
+`EntityEffectOp.payload(...)` 的职责是创建 payload 列表并把请求发给 direct child：
+
+```text
+EntityEffectOp.payload(defaults)
+  -> payload = defaults
+  -> for each direct child:
+       child.contributeEntityPayloads(payload)
+  -> return payload copy
+```
+
+如果某个 child 需要继续组合自己的附属 child，它应该在自己的 override 中递归处理：
+
+```text
+SomeChildOp.contributeEntityPayloads(payloads)
+  -> payloads.add(自己的 runtime payload)
+  -> for each direct child of SomeChildOp:
+       child.contributeEntityPayloads(payloads)
+```
+
+这个递归不是由 root 或全局 registry 做的。root 只负责自己的一层 child；每一层 child 自己决定是否继续传递、传递什么请求，以及附属 child 的结果如何参与自己的语义。
+
+当前 `ElementOp` 的行为：
+
+```text
+ElementOp as compiled child
+  -> contributeEntityPayloads(payloads)
+  -> payloads.add(new ElementOp(absorbedElement))
+
+ElementOp as entity payload
+  -> onEntityTick(EntityTickContext)
+  -> 执行元素吸收/释放
+```
+
+因此 `ElementOp` 没有新的 Context 需求，也没有独立 `ElementPayloadOp`。它自身同时承担“编译期 child 节点”和“实体 tick payload”两种角色，但两种角色由调用入口区分。
 
 ## 当前 Op 层级
 
@@ -100,7 +162,7 @@ Root Op 创建或管理 runtime effect。当前例子：
 它们继承 `EntityEffectOp`，复用以下逻辑：
 
 - 从 direct runes 编译 projectile attributes；
-- 通过 `emissions()` 统一扫描 child `EmitOp`；
+- 通过 `emissions()` 只读取 direct child 提供的发射计划；
 - 没有 child `EmitOp` 时回退到旧 direct-arrow 行为；
 - 通过 `payload(...)` 只向 direct child 请求实体 payload 贡献。
 
@@ -159,7 +221,8 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 新增编译期行为时走这条线：
 
 - 在 `compile/operator/` 下新增 `CompiledOp` 实现；
-- 暴露静态 `OpDefinition DEFINITION`；
+- 暴露静态 `OpDefinition DEFINITION`；同一 Op 需要多个匹配入口时，暴露多个 definition 字段并在 `@RegisteredOp(definitions = {...})` 中显式列出；
+- 在 Definition 的 `accepted()` 中声明允许但不参与主匹配的 direct rune / child Op；默认空列表表示不接受任何额外输入；
 - 在 Op class 上标注 `@RegisteredOp`；
 - 如需测试或外部动态扩展，仍可通过 `OpDefinitionRegistry.register(...)` 手动注入；
 - 在 `ArrayNodeCompilerTest` 或相邻 focused test 中补编译测试。
@@ -171,7 +234,7 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 
 - 正常 NeoForge runtime 下，优先读取 `ModList.get().getAllScanData()` 中的 `@RegisteredOp` 注解数据；
 - JUnit 或普通 classpath 环境没有 `ModList` 时，fallback 扫描 `compile/operator` 包下的 class 文件；
-- 发现 class 后读取其 public static `DEFINITION` 字段，并校验 id 不重复。
+- 发现 class 后读取注解声明的 public static definition 字段（默认 `DEFINITION`），并校验 id 不重复。
 
 ## 新增各级 Op 的允许修改范围
 
@@ -216,10 +279,10 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 
 - 新增 class 并继承 `EmitOp`；
 - 在 Emit Op class 上标注 `@RegisteredOp`；
-- 添加 root no-effect 和 nested child usage 测试；
+- 添加 root no-effect、direct child usage 和必要的递归 child 传递测试；
 - 在该 Emit Op 内部写局部 decode helper。
 
-新的 Emit Op 可以检查自己的 direct runes 和 child Ops，但只能返回 `EmitOp.Emission` 数据。
+新的 Emit Op 可以检查自己的 direct runes 和 direct child Ops，但只能返回 `EmitOp.Emission` 数据。它是否继续请求附属 child，由该 Emit Op 自己决定。
 
 不允许：
 
@@ -283,7 +346,7 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 - `MagicArrayDetector` 必须保持事件入口角色，把 effect activate/deactivate 委托给 `ArrayEffectLifecycle`。
 - `OpRuntimeDispatcher` 是 compiled data 到 runtime execution 的边界。
 - Root Op 可以消费直接 child 的贡献，例如 emission 或 entity payload，但应避免识别 deep leaf。
-- Child Op 只描述意图。root Op 决定这个意图最终生成什么 runtime entity/effect。
+- Child Op 解释自己的 direct children。root 只决定当前 root effect 的执行入口和实体生成方式，不解释 deep leaf。
 - `ArrayEffectDefinition`、`ArrayEffectRegistry`、`ArrayRuntimes` 是兼容 wrapper。新代码应使用 `OpDefinition`、`RegisteredOp`、`OpDefinitionRegistry`、`ArrayEffectLifecycle`。
 
 ## 快速流程
@@ -294,7 +357,7 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 2. 添加匹配触发 rune 的 `DEFINITION`。
 3. 根据本地 direct inputs 返回 `List<Emission>`。
 4. 在 `MyEmitOp` 上标注 `@RegisteredOp`。
-5. 添加 root no-effect 和 nested root consumption 测试。
+5. 添加 root no-effect、direct child usage 和递归 child 传递测试。
 
 不要修改 `FireProjectileOp`、`WaterProjectileOp`、`ManaProjectileOp`，除非 emission 数据契约本身变化。
 
