@@ -36,7 +36,8 @@ public final class SplitEmitOp extends EmitOp {
         public List<OpInputMatcher> accepted() {
             return List.of(
                     OpInputMatcher.rune("arrow"),
-                    OpInputMatcher.rune("arrow_up"));
+                    OpInputMatcher.rune("arrow_up"),
+                    OpInputMatcher.op(MomentumOp.class));
         }
 
         @Override
@@ -53,23 +54,27 @@ public final class SplitEmitOp extends EmitOp {
     @Override
     public List<Emission> emissions() {
         Vec3 arrayNormal = CenterSymbol.faceNormal(boundary());
-        List<EmissionSource> sources = new ArrayList<>();
+        List<Emission> emissions = new ArrayList<>();
         for (OpInput input : inputs()) {
             if (input instanceof OpInput.Rune rune) {
-                decodeEmissionSource(rune, arrayNormal).ifPresent(sources::add);
+                decodeEmissionSource(rune, arrayNormal)
+                        .map(SplitEmitOp::emission)
+                        .ifPresent(emissions::add);
+            } else if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp momentum) {
+                emissions.add(momentum.modifyEntityEmission(
+                        new Emission(Vec3.ZERO, 0.0, 1.0F, false)));
             }
         }
-        if (sources.isEmpty()) return List.of();
+        if (emissions.isEmpty()) return List.of();
 
-        float sizeScale = 1.0F / sources.size();
-        List<Emission> emissions = new ArrayList<>(sources.size());
-        for (EmissionSource source : sources) {
-            Vec3 velocity = source.direction().lengthSqr() >= 1.0E-8
-                    ? source.direction().normalize().scale(source.speed())
-                    : Vec3.ZERO;
-            emissions.add(new Emission(velocity, source.speed(), sizeScale, true));
-        }
-        return List.copyOf(emissions);
+        float sizeScale = 1.0F / emissions.size();
+        return emissions.stream()
+                .map(emission -> new Emission(
+                        emission.velocity(),
+                        emission.motionSum(),
+                        sizeScale,
+                        emission.hasMotion()))
+                .toList();
     }
 
     private static Optional<EmissionSource> decodeEmissionSource(OpInput.Rune rune, Vec3 arrayNormal) {
@@ -78,6 +83,13 @@ public final class SplitEmitOp extends EmitOp {
             case "arrow_up" -> Optional.of(new EmissionSource(arrayNormal, rune.glyph().length()));
             default -> Optional.empty();
         };
+    }
+
+    private static Emission emission(EmissionSource source) {
+        Vec3 velocity = source.direction().lengthSqr() >= 1.0E-8
+                ? source.direction().normalize().scale(source.speed())
+                : Vec3.ZERO;
+        return new Emission(velocity, source.speed(), 1.0F, true);
     }
 
     @Override

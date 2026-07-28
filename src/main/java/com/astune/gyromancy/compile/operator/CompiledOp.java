@@ -16,6 +16,10 @@ public interface CompiledOp {
 
     int color();
 
+    default EmitOp.Emission modifyEntityEmission(EmitOp.Emission emission) {
+        return emission;
+    }
+
     default void contributeEntityPayloads(List<EntityPayload> payloads) {}
 
     default List<CompiledOp> childOps() {

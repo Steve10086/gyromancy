@@ -7,6 +7,7 @@ import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.RegisteredOp;
+import com.astune.gyromancy.symbol.CenterSymbol;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -16,7 +17,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-@RegisteredOp(definitions = {"ARROW_DEFINITION", "ARROW_UP_DEFINITION"})
+@RegisteredOp(definitions = {"ARROW_DEFINITION", "ARROW_UP_DEFINITION", "MOMENTUM_DEFINITION"})
 public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "momentum");
@@ -24,9 +25,12 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "momentum_arrow");
     public static final ResourceLocation ARROW_UP_DEFINITION_ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "momentum_arrow_up");
+    public static final ResourceLocation MOMENTUM_DEFINITION_ID =
+            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "momentum_child");
 
     static final int ACTIVE_TICKS = 100;
-    private static final double ACCELERATION_SCALE = 1.0/10;
+    private static final double MOMENTUM_SCALE = 1.0 / 10;
+    private static final double DRAIN_ROTATION_SCALE = 18;
     private static final double DIRECTION_EPSILON = 1.0E-8;
 
     private static final Codec<Vec3> VEC3_CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -44,38 +48,47 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
     public static final Codec<MomentumOp> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             INPUT_CODEC.listOf().fieldOf("inputs").forGetter(MomentumOp::accelerationInputs),
             VEC3_CODEC.optionalFieldOf("acceleration", Vec3.ZERO).forGetter(op -> op.acceleration),
-            Codec.INT.optionalFieldOf("elapsed_ticks", 0).forGetter(op -> op.elapsedTicks)
+            Codec.INT.optionalFieldOf("elapsed_ticks", 0).forGetter(op -> op.elapsedTicks),
+            Codec.DOUBLE.optionalFieldOf("drain_rotation_speed", 0.0).forGetter(op -> op.drainRotationSpeed)
     ).apply(instance, MomentumOp::new));
 
-    public static final OpDefinition ARROW_DEFINITION = definition(ARROW_DEFINITION_ID, "arrow");
-    public static final OpDefinition ARROW_UP_DEFINITION = definition(ARROW_UP_DEFINITION_ID, "arrow_up");
+    public static final OpDefinition ARROW_DEFINITION =
+            definition(ARROW_DEFINITION_ID, OpInputMatcher.rune("arrow"));
+    public static final OpDefinition ARROW_UP_DEFINITION =
+            definition(ARROW_UP_DEFINITION_ID, OpInputMatcher.rune("arrow_up"));
+    public static final OpDefinition MOMENTUM_DEFINITION =
+            definition(MOMENTUM_DEFINITION_ID, OpInputMatcher.op(MomentumOp.class));
 
     private final PositionedGlyph boundary;
     private final List<OpInput> matchedInputs;
     private final List<OpInput> inputs;
     private final List<AccelerationInput> accelerationInputs;
+    private final double drainRotationSpeed;
     private Vec3 acceleration;
     private int elapsedTicks;
 
     private MomentumOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
-        this(boundary, matchedInputs, inputs, accelerationInputs(inputs), Vec3.ZERO, 0);
+        this(boundary, matchedInputs, inputs, accelerationInputs(inputs), Vec3.ZERO, 0,
+                drainRotationSpeed(inputs));
     }
 
-    private MomentumOp(List<AccelerationInput> accelerationInputs, Vec3 acceleration, int elapsedTicks) {
-        this(null, List.of(), List.of(), accelerationInputs, acceleration, elapsedTicks);
+    private MomentumOp(List<AccelerationInput> accelerationInputs, Vec3 acceleration, int elapsedTicks,
+                       double drainRotationSpeed) {
+        this(null, List.of(), List.of(), accelerationInputs, acceleration, elapsedTicks, drainRotationSpeed);
     }
 
     MomentumOp(List<AccelerationInput> accelerationInputs) {
-        this(accelerationInputs, Vec3.ZERO, 0);
+        this(accelerationInputs, Vec3.ZERO, 0, 0.0);
     }
 
     private MomentumOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs,
                        List<AccelerationInput> accelerationInputs, Vec3 acceleration,
-                       int elapsedTicks) {
+                       int elapsedTicks, double drainRotationSpeed) {
         this.boundary = boundary;
         this.matchedInputs = List.copyOf(matchedInputs);
         this.inputs = List.copyOf(inputs);
         this.accelerationInputs = List.copyOf(accelerationInputs);
+        this.drainRotationSpeed = drainRotationSpeed;
         this.acceleration = acceleration;
         this.elapsedTicks = Math.max(0, Math.min(ACTIVE_TICKS, elapsedTicks));
     }
@@ -125,8 +138,29 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
     }
 
     @Override
+    public EmitOp.Emission modifyEntityEmission(EmitOp.Emission emission) {
+        Vec3 normal = emission.velocity();
+        if (normal.lengthSqr() < DIRECTION_EPSILON && boundary != null) {
+            normal = CenterSymbol.faceNormal(boundary);
+        }
+        Vec3 contribution = solveVector(normal);
+        double momentumSum = accelerationInputs.stream()
+                .mapToDouble(AccelerationInput::magnitude)
+                .sum();
+        return new EmitOp.Emission(
+                emission.velocity().add(contribution),
+                emission.motionSum() + momentumSum,
+                emission.sizeScale(),
+                emission.hasMotion() || !accelerationInputs.isEmpty());
+    }
+
+    @Override
     public void contributeEntityPayloads(List<EntityPayload> payloads) {
-        payloads.add(new MomentumOp(accelerationInputs, Vec3.ZERO, 0));
+        for (OpInput input : inputs) {
+            if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp momentum) {
+                payloads.add(momentum.runtimePayload());
+            }
+        }
     }
 
     @Override
@@ -137,14 +171,14 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
 
     Vec3 accelerationForTick(Vec3 facingDirection) {
         if (elapsedTicks >= ACTIVE_TICKS) return Vec3.ZERO;
-        acceleration = solveAcceleration(facingDirection);
+        acceleration = solveVector(facingDirection);
         Vec3 result = acceleration;
         elapsedTicks++;
         if (elapsedTicks >= ACTIVE_TICKS) acceleration = Vec3.ZERO;
         return result;
     }
 
-    Vec3 solveAcceleration(Vec3 facingDirection) {
+    Vec3 solveVector(Vec3 facingDirection) {
         if (facingDirection.lengthSqr() < DIRECTION_EPSILON) return Vec3.ZERO;
 
         Vec3 normal = facingDirection.normalize();
@@ -160,6 +194,14 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
             }
             result = result.add(direction.scale(input.magnitude()));
         }
+        if (drainRotationSpeed != 0.0 && result.lengthSqr() >= DIRECTION_EPSILON) {
+            double radians = Math.toRadians(drainRotationSpeed * elapsedTicks);
+            double cos = Math.cos(radians);
+            double sin = Math.sin(radians);
+            result = result.scale(cos)
+                    .add(normal.cross(result).scale(sin))
+                    .add(normal.scale(normal.dot(result) * (1.0 - cos)));
+        }
         return result;
     }
 
@@ -171,7 +213,7 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
         return acceleration;
     }
 
-    private static OpDefinition definition(ResourceLocation definitionId, String runeName) {
+    private static OpDefinition definition(ResourceLocation definitionId, OpInputMatcher requiredInput) {
         return new OpDefinition() {
             @Override
             public ResourceLocation id() {
@@ -180,14 +222,16 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
 
             @Override
             public List<OpInputMatcher> match() {
-                return List.of(OpInputMatcher.rune(runeName));
+                return List.of(requiredInput);
             }
 
             @Override
             public List<OpInputMatcher> accepted() {
                 return List.of(
                         OpInputMatcher.rune("arrow"),
-                        OpInputMatcher.rune("arrow_up"));
+                        OpInputMatcher.rune("arrow_up"),
+                        OpInputMatcher.rune("drain"),
+                        OpInputMatcher.op(MomentumOp.class));
             }
 
             @Override
@@ -198,12 +242,25 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
         };
     }
 
+    private static double drainRotationSpeed(List<OpInput> inputs) {
+        for (OpInput input : inputs) {
+            if (input instanceof OpInput.Rune rune && "drain".equals(rune.symbolName())) {
+                return rune.glyph().length() * DRAIN_ROTATION_SCALE;
+            }
+        }
+        return 0.0;
+    }
+
+    private MomentumOp runtimePayload() {
+        return new MomentumOp(accelerationInputs, Vec3.ZERO, 0, drainRotationSpeed);
+    }
+
     private static List<AccelerationInput> accelerationInputs(List<OpInput> inputs) {
         List<AccelerationInput> result = new ArrayList<>();
         for (OpInput input : inputs) {
             if (!(input instanceof OpInput.Rune rune)) continue;
             PositionedGlyph glyph = rune.glyph();
-            double magnitude = glyph.length() * ACCELERATION_SCALE;
+            double magnitude = glyph.length() * MOMENTUM_SCALE;
             switch (rune.symbolName()) {
                 case "arrow" -> result.add(new AccelerationInput(glyph.front(), magnitude, false));
                 case "arrow_up" -> result.add(new AccelerationInput(Vec3.ZERO, magnitude, true));

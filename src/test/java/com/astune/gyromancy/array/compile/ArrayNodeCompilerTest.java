@@ -187,7 +187,7 @@ class ArrayNodeCompilerTest {
     }
 
     @Test
-    void projectileCanOwnNestedMomentumPayload() {
+    void directProjectileMomentumDoesNotBecomeAccelerationPayload() {
         PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
         PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 3);
@@ -206,8 +206,61 @@ class ArrayNodeCompilerTest {
 
         child.contributeEntityPayloads(payloads);
 
+        assertEquals(List.of(), payloads);
+    }
+
+    @Test
+    void onlyMomentumNestedUnderMomentumBecomesAccelerationPayload() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph momentumBoundary = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
+        PositionedGlyph accelerationBoundary = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
+        PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 4);
+        PositionedGlyph launchArrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 5);
+        PositionedGlyph accelerationArrow = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 6);
+        GroupNode ast = group(outer, new SymbolNode(fire),
+                group(momentumBoundary, new SymbolNode(launchArrow),
+                        group(accelerationBoundary, new SymbolNode(accelerationArrow))));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        FireProjectileOp root = assertInstanceOf(FireProjectileOp.class, success.value().root());
+        MomentumOp launchMomentum = assertInstanceOf(MomentumOp.class,
+                assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator());
+        MomentumOp accelerationMomentum = assertInstanceOf(MomentumOp.class,
+                assertInstanceOf(OpInput.Op.class, launchMomentum.inputs().get(1)).operator());
+        List<EntityPayload> payloads = new ArrayList<>();
+
+        launchMomentum.contributeEntityPayloads(payloads);
+
         MomentumOp payload = assertInstanceOf(MomentumOp.class, payloads.getFirst());
-        assertEquals(2, payload.accelerationInputs().size());
+        assertEquals(1, payloads.size());
+        assertEquals(accelerationMomentum.accelerationInputs(), payload.accelerationInputs());
+        assertEquals(true, payload.accelerationInputs().getFirst().alongFacing());
+    }
+
+    @Test
+    void momentumCanCompileFromOnlyOneDirectMomentumChild() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
+        GroupNode ast = group(outer, group(inner, new SymbolNode(arrow)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        MomentumOp parent = assertInstanceOf(MomentumOp.class, success.value().root());
+        MomentumOp child = assertInstanceOf(MomentumOp.class,
+                assertInstanceOf(OpInput.Op.class, parent.matchedInputs().getFirst()).operator());
+        List<EntityPayload> payloads = new ArrayList<>();
+
+        parent.contributeEntityPayloads(payloads);
+
+        assertEquals(List.of(child), parent.childOps());
+        assertEquals(List.of(), parent.accelerationInputs());
+        MomentumOp payload = assertInstanceOf(MomentumOp.class, payloads.getFirst());
+        assertEquals(1, payloads.size());
+        assertEquals(child.accelerationInputs(), payload.accelerationInputs());
     }
 
     @Test
@@ -412,6 +465,49 @@ class ArrayNodeCompilerTest {
         assertEquals(2, splitOp.emissions().size());
         assertEquals(new Vec3(2.0, 0.0, 0.0), splitOp.emissions().get(0).velocity());
         assertEquals(new Vec3(0.0, 0.0, -2.0), splitOp.emissions().get(1).velocity());
+        assertEquals(0.5F, splitOp.emissions().get(1).sizeScale());
+    }
+
+    @Test
+    void splitEmitTreatsDirectMomentumAsOneEmissionSource() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph momentumBoundary = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
+        PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 4);
+        GroupNode ast = group(circle, new SymbolNode(split),
+                group(momentumBoundary, new SymbolNode(arrow)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        SplitEmitOp splitOp = assertInstanceOf(SplitEmitOp.class, success.value().root());
+
+        assertEquals(1, splitOp.emissions().size());
+        assertEquals(new Vec3(0.2, 0.0, 0.0), splitOp.emissions().getFirst().velocity());
+        assertEquals(0.2, splitOp.emissions().getFirst().motionSum());
+        assertEquals(1.0F, splitOp.emissions().getFirst().sizeScale());
+        assertEquals(true, splitOp.emissions().getFirst().hasMotion());
+    }
+
+    @Test
+    void splitEmitCreatesSeparateEmissionsForArrowAndMomentum() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph momentumBoundary = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
+        PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph directArrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 4);
+        PositionedGlyph momentumArrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 5);
+        GroupNode ast = group(circle, new SymbolNode(split), new SymbolNode(directArrow),
+                group(momentumBoundary, new SymbolNode(momentumArrow)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        SplitEmitOp splitOp = assertInstanceOf(SplitEmitOp.class, success.value().root());
+
+        assertEquals(2, splitOp.emissions().size());
+        assertEquals(new Vec3(2.0, 0.0, 0.0), splitOp.emissions().get(0).velocity());
+        assertEquals(new Vec3(0.2, 0.0, 0.0), splitOp.emissions().get(1).velocity());
+        assertEquals(0.5F, splitOp.emissions().get(0).sizeScale());
         assertEquals(0.5F, splitOp.emissions().get(1).sizeScale());
     }
 

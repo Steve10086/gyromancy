@@ -71,7 +71,14 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
                 emissions.addAll(emitOp.emissions());
             }
         }
-        return hasEmitOp ? List.copyOf(emissions) : List.of(defaultEmission());
+        List<EmitOp.Emission> resolved = hasEmitOp ? List.copyOf(emissions) : List.of(defaultEmission());
+        for (OpInput input : inputs) {
+            if (!(input instanceof OpInput.Op op)) continue;
+            resolved = resolved.stream()
+                    .map(op.operator()::modifyEntityEmission)
+                    .toList();
+        }
+        return resolved;
     }
 
     protected List<EntityPayload> payload(List<? extends EntityPayload> defaults) {
