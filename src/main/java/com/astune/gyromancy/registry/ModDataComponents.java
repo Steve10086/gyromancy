@@ -3,6 +3,8 @@ package com.astune.gyromancy.registry;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.ink.InkType;
 import com.astune.gyromancy.api.ink.PenProperties;
+import com.astune.gyromancy.canvas.CanvasDocument;
+import com.astune.painter.api.CanvasFace;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
@@ -47,6 +49,24 @@ public final class ModDataComponents {
                     DataComponentType.<Integer>builder()
                             .persistent(Codec.INT)
                             .networkSynchronized(ByteBufCodecs.INT)
+                            .build()
+            );
+
+    /** Portable raster, glyph cache, and compiled-array cache for a canvas item. */
+    public static final Supplier<DataComponentType<CanvasDocument>> CANVAS_DOCUMENT =
+            DATA_COMPONENTS.register("canvas_document", () ->
+                    DataComponentType.<CanvasDocument>builder()
+                            .persistent(CanvasDocument.CODEC)
+                            .networkSynchronized(ByteBufCodecs.fromCodec(CanvasDocument.CODEC))
+                            .build()
+            );
+
+    /** Painter canvas face captured by a stamp, including its pixel and effect data. */
+    public static final Supplier<DataComponentType<CanvasFace>> STAMP_FACE =
+            DATA_COMPONENTS.register("stamp_face", () ->
+                    DataComponentType.<CanvasFace>builder()
+                            .persistent(CanvasFace.CODEC)
+                            .networkSynchronized(CanvasFace.STREAM_CODEC)
                             .build()
             );
 }

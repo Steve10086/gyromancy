@@ -3,6 +3,7 @@ package com.astune.gyromancy.symbol;
 import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.canvas.CanvasEntity;
 import com.astune.gyromancy.registry.ModSymbols;
 import com.astune.painter.api.CanvasFace;
 import net.minecraft.server.level.ServerLevel;
@@ -27,6 +28,10 @@ public final class GlyphStrokeValidator {
     }
 
     public static boolean isValid(PositionedGlyph glyph, ServerLevel level) {
+        if (glyph.sourceCanvasId().isPresent()) {
+            return level.getEntity(glyph.sourceCanvasId().get()) instanceof CanvasEntity canvas
+                    && canvas.containsGlyph(glyph.glyphUuid());
+        }
         if (glyph.pixels().isEmpty()) return false;
 
         int expectedSymbolId = ModSymbols.symbolLayerValueFor(glyph.symbolId());

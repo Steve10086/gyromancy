@@ -32,5 +32,23 @@ public final class ModNetwork {
                 SyncArrayPacket.STREAM_CODEC,
                 SyncArrayPacket::handleClient
         );
+
+        registrar.playToClient(
+                CanvasSnapshotPacket.TYPE,
+                CanvasSnapshotPacket.STREAM_CODEC,
+                CanvasSnapshotPacket::handleClient
+        );
+
+        registrar.playToServer(
+                SubmitCanvasEditPacket.TYPE,
+                SubmitCanvasEditPacket.STREAM_CODEC,
+                SubmitCanvasEditPacket::handleServer
+        );
+
+        registrar.playToServer(
+                SubmitCanvasInventoryPacket.TYPE,
+                SubmitCanvasInventoryPacket.STREAM_CODEC,
+                SubmitCanvasInventoryPacket::handleServer
+        );
     }
 }

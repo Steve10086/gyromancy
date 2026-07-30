@@ -17,17 +17,31 @@ import com.astune.gyromancy.symbol.GlyphStrokeValidator;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 public final class ArrayEffectLifecycle {
     private ArrayEffectLifecycle() {}
 
-    public static Optional<ArrayObject> activateOrReplace(ServerLevel level, PositionedGlyph circleGlyph) {
+    public static Optional<ArrayObject> compileNew(ServerLevel level, PositionedGlyph circleGlyph) {
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
-        GroupNode ast = ArrayAstBuilder.build(circleGlyph, mgr,
+        return compileNew(level, circleGlyph,
                 glyph -> GlyphStrokeValidator.isValidForCollection(glyph, mgr, level));
+    }
+
+    public static Optional<ArrayObject> compileNew(
+            ServerLevel level,
+            PositionedGlyph circleGlyph,
+            Predicate<PositionedGlyph> isValidStroke
+    ) {
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        if (!mgr.claimCircleCompilation(circleGlyph.glyphUuid())) {
+            return Optional.empty();
+        }
+        GroupNode ast = ArrayAstBuilder.build(circleGlyph, mgr, isValidStroke);
         ArrayCompileDebug.printAst(level, ast);
 
         CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(ast, mgr.opDefinitions());
@@ -43,15 +57,16 @@ public final class ArrayEffectLifecycle {
         CompiledArray compiled = success.value();
         if (!(compiled.root() instanceof PersistentOp)) return Optional.empty();
 
-        ArrayObject existing = mgr.getArrayForGlyph(circleGlyph.glyphUuid());
-        if (existing != null) deactivate(level, existing);
-
         RuntimeHandle handle = OpRuntimeDispatcher.activate(compiled, level);
         Map<String, Object> scratchData = new HashMap<>(handle.scratchData());
         scratchData.put("__array_color", compiled.color());
 
-        ArrayObject arr = new ArrayObject(UUID.randomUUID(), compiled.rootCircleGlyph(),
-                compiled.boundGlyphs(), Map.copyOf(scratchData));
+        ArrayObject arr = new ArrayObject(
+                UUID.randomUUID(),
+                compiled.rootCircleGlyph(),
+                compiled.boundGlyphs(),
+                level.getGameTime() + ArrayObject.COMPILATION_EFFECT_TICKS,
+                Map.copyOf(scratchData));
         mgr.registerArrayObj(arr);
         bindPersistentEntities(level, arr.arrayId(), arr.scratchData());
         Gyromancy.LOGGER.info("[MagicArrayDetector] Array activated: root={}, bound={}",
@@ -59,12 +74,37 @@ public final class ArrayEffectLifecycle {
         return Optional.of(arr);
     }
 
+    /**
+     * Kept for source compatibility. Compilation is no longer a replacement
+     * operation and will only run once for a circle glyph lifetime.
+     */
+    @Deprecated(forRemoval = false)
+    public static Optional<ArrayObject> activateOrReplace(
+            ServerLevel level, PositionedGlyph circleGlyph) {
+        return compileNew(level, circleGlyph);
+    }
+
+    @Deprecated(forRemoval = false)
+    public static Optional<ArrayObject> activateOrReplace(
+            ServerLevel level,
+            PositionedGlyph circleGlyph,
+            Predicate<PositionedGlyph> isValidStroke
+    ) {
+        return compileNew(level, circleGlyph, isValidStroke);
+    }
+
     public static boolean deactivateForGlyph(ServerLevel level, PositionedGlyph glyph) {
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
-        ArrayObject arr = mgr.getArrayForGlyph(glyph.glyphUuid());
-        if (arr == null) return false;
-        deactivate(level, arr);
-        return true;
+        List<ArrayObject> arrays = mgr.getArrayObjsForGlyph(glyph.glyphUuid());
+        arrays.forEach(array -> deactivate(level, array));
+        return !arrays.isEmpty();
+    }
+
+    public static boolean deactivateForRootGlyph(ServerLevel level, UUID rootGlyphId) {
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        List<ArrayObject> arrays = mgr.getArrayObjsForRoot(rootGlyphId);
+        arrays.forEach(array -> deactivate(level, array));
+        return !arrays.isEmpty();
     }
 
     public static void deactivate(ServerLevel level, ArrayObject array) {

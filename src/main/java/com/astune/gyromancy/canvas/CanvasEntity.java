@@ -1,0 +1,442 @@
+package com.astune.gyromancy.canvas;
+
+import com.astune.gyromancy.api.symbol.PixelPos;
+import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.network.CanvasSnapshotPacket;
+import com.astune.gyromancy.registry.ModDataComponents;
+import com.astune.gyromancy.registry.ModEntities;
+import com.astune.gyromancy.registry.ModItems;
+import com.mojang.serialization.DataResult;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerEntity;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.decoration.BlockAttachedEntity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.DiodeBlock;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.network.PacketDistributor;
+
+import javax.annotation.Nullable;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+import java.util.Optional;
+import java.util.Objects;
+
+/**
+ * A portable, editable hanging canvas. Its collision box is always 1/16 block
+ * thick while width and height come from the stored document.
+ */
+public final class CanvasEntity extends BlockAttachedEntity {
+    public static final float DEPTH = 1.0F / 16.0F;
+    private static final String DOCUMENT_TAG = "CanvasDocument";
+
+    private static final EntityDataAccessor<Integer> DATA_WIDTH =
+            SynchedEntityData.defineId(CanvasEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_HEIGHT =
+            SynchedEntityData.defineId(CanvasEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_SCALE =
+            SynchedEntityData.defineId(CanvasEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_REVISION =
+            SynchedEntityData.defineId(CanvasEntity.class, EntityDataSerializers.INT);
+
+    private CanvasDocument document = CanvasDocument.blank(1, 1);
+    private int revision;
+    private Direction direction = Direction.SOUTH;
+
+    public CanvasEntity(EntityType<? extends CanvasEntity> type, Level level) {
+        super(type, level);
+    }
+
+    private CanvasEntity(Level level, BlockPos pos) {
+        super(ModEntities.CANVAS.get(), level, pos);
+    }
+
+    public static CanvasEntity create(Level level, BlockPos pos, Direction direction,
+                                      CanvasDocument document) {
+        CanvasEntity canvas = new CanvasEntity(level, pos);
+        canvas.setDocumentInternal(document, false);
+        canvas.setDirection(direction);
+        return canvas;
+    }
+
+    public void setDirection(Direction direction) {
+        this.direction = Objects.requireNonNull(direction);
+        if (direction.getAxis().isHorizontal()) {
+            setYRot(direction.get2DDataValue() * 90.0F);
+        } else {
+            setYRot(0.0F);
+        }
+        yRotO = getYRot();
+        recalculateBoundingBox();
+    }
+
+    @Override
+    public Direction getDirection() {
+        return direction;
+    }
+
+    @Override
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(DATA_WIDTH, 1);
+        builder.define(DATA_HEIGHT, 1);
+        builder.define(DATA_SCALE, 1);
+        builder.define(DATA_REVISION, 0);
+    }
+
+    @Override
+    public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
+        if (DATA_WIDTH.equals(key) || DATA_HEIGHT.equals(key)) {
+            recalculateBoundingBox();
+        }
+        super.onSyncedDataUpdated(key);
+    }
+
+    @Override
+    protected void recalculateBoundingBox() {
+        if (direction == null) return;
+        AABB bounds = calculateBoundingBox(pos, direction);
+        Vec3 center = bounds.getCenter();
+        setPosRaw(center.x, center.y, center.z);
+        setBoundingBox(bounds);
+    }
+
+    private AABB calculateBoundingBox(BlockPos pos, Direction facing) {
+        double width = syncedWidth();
+        double height = syncedHeight();
+        Vec3 base = Vec3.atCenterOf(pos).relative(facing, -0.46875);
+        double horizontalOffset = ((int) width & 1) == 0 ? 0.5 : 0.0;
+        double verticalOffset = ((int) height & 1) == 0 ? 0.5 : 0.0;
+        Vec3 widthAxis = CanvasOrientation.widthAxis(facing);
+        Vec3 heightAxis = CanvasOrientation.heightAxis(facing);
+        Vec3 normal = Vec3.atLowerCornerOf(facing.getNormal());
+        Vec3 center = base.add(widthAxis.scale(horizontalOffset))
+                .add(heightAxis.scale(verticalOffset));
+        double sizeX = Math.abs(widthAxis.x) * width
+                + Math.abs(heightAxis.x) * height + Math.abs(normal.x) * DEPTH;
+        double sizeY = Math.abs(widthAxis.y) * width
+                + Math.abs(heightAxis.y) * height + Math.abs(normal.y) * DEPTH;
+        double sizeZ = Math.abs(widthAxis.z) * width
+                + Math.abs(heightAxis.z) * height + Math.abs(normal.z) * DEPTH;
+        return AABB.ofSize(center, sizeX, sizeY, sizeZ);
+    }
+
+    @Override
+    public boolean survives() {
+        if (!level().noCollision(this)) return false;
+
+        AABB supportBox = getBoundingBox()
+                .move(Vec3.atLowerCornerOf(direction.getNormal()).scale(-0.5))
+                .deflate(1.0E-7);
+        boolean supported = BlockPos.betweenClosedStream(supportBox).allMatch(supportPos -> {
+            var state = level().getBlockState(supportPos);
+            return state.isSolid()
+                    || DiodeBlock.isDiode(state)
+                    || Block.canSupportCenter(level(), supportPos, direction);
+        });
+        return supported && level().getEntities(
+                this, getBoundingBox(), entity -> entity instanceof BlockAttachedEntity).isEmpty();
+    }
+
+    public CanvasDocument document() {
+        return document;
+    }
+
+    public int revision() {
+        return revision;
+    }
+
+    public int syncedWidth() {
+        return entityData.get(DATA_WIDTH);
+    }
+
+    public int syncedHeight() {
+        return entityData.get(DATA_HEIGHT);
+    }
+
+    public int syncedScale() {
+        return entityData.get(DATA_SCALE);
+    }
+
+    public void replaceDocument(CanvasDocument next, boolean incrementRevision) {
+        setDocumentInternal(next, incrementRevision);
+    }
+
+    private void setDocumentInternal(CanvasDocument next, boolean incrementRevision) {
+        document = next;
+        if (incrementRevision) revision++;
+        entityData.set(DATA_WIDTH, next.physicalWidth());
+        entityData.set(DATA_HEIGHT, next.physicalHeight());
+        entityData.set(DATA_SCALE, next.resolutionScale());
+        entityData.set(DATA_REVISION, revision);
+        recalculateBoundingBox();
+    }
+
+    public boolean containsGlyph(UUID glyphUuid) {
+        return document.glyphs().stream().anyMatch(glyph -> glyph.glyphUuid().equals(glyphUuid));
+    }
+
+    public Optional<CanvasGlyph> localGlyph(UUID glyphUuid) {
+        return document.glyphs().stream()
+                .filter(glyph -> glyph.glyphUuid().equals(glyphUuid))
+                .findFirst();
+    }
+
+    public PositionedGlyph worldGlyph(CanvasGlyph local, int glyphId) {
+        int rasterWidth = document.resolutionWidth();
+        int rasterHeight = document.resolutionHeight();
+        BlockPos supportPos = getPos().relative(getDirection().getOpposite());
+        Set<PixelPos> pixels = new HashSet<>();
+        for (int cell : local.rawCells()) {
+            if (cell < 0 || cell >= document.rawColors().length) continue;
+            int x = cell % rasterWidth;
+            int y = cell / rasterWidth;
+            pixels.add(new PixelPos(
+                    supportPos, getDirection(), x, y, document.rawColors()[cell]));
+        }
+
+        Vec3[] corners = {
+                localToWorld(local.minX(), local.minY()),
+                localToWorld(local.maxX(), local.minY()),
+                localToWorld(local.minX(), local.maxY()),
+                localToWorld(local.maxX(), local.maxY())
+        };
+        double minWorldX = Double.POSITIVE_INFINITY;
+        double maxWorldX = Double.NEGATIVE_INFINITY;
+        double minWorldY = Double.POSITIVE_INFINITY;
+        double maxWorldY = Double.NEGATIVE_INFINITY;
+        for (Vec3 corner : corners) {
+            double[] flat = flatten(corner);
+            minWorldX = Math.min(minWorldX, flat[0]);
+            maxWorldX = Math.max(maxWorldX, flat[0]);
+            minWorldY = Math.min(minWorldY, flat[1]);
+            maxWorldY = Math.max(maxWorldY, flat[1]);
+        }
+
+        Vec3 widthAxis = CanvasOrientation.widthAxis(direction);
+        Vec3 heightAxis = CanvasOrientation.heightAxis(direction);
+        Vec3 physicalFront = widthAxis.scale(local.frontX() * document.physicalWidth())
+                .add(heightAxis.scale(-local.frontY() * document.physicalHeight()));
+        Vec3 front = physicalFront.lengthSqr() > 1.0E-12
+                ? physicalFront.normalize() : Vec3.ZERO;
+        Vec3 right = Vec3.atLowerCornerOf(getDirection().getNormal()).cross(front);
+        double[] extents = projectedGlyphExtents(
+                local, rasterWidth, rasterHeight, front, right, corners);
+
+        return new PositionedGlyph(
+                local.glyphUuid(), glyphId, local.symbolId(), local.confidence(), local.role(),
+                front, extents[0], extents[1], getPos(),
+                minWorldX, maxWorldX, minWorldY, maxWorldY,
+                Set.copyOf(pixels), java.util.Optional.of(getUUID()));
+    }
+
+    public Vec3 localToWorld(double normalizedX, double normalizedY) {
+        return position()
+                .add(CanvasOrientation.widthAxis(direction)
+                        .scale((normalizedX - 0.5) * document.physicalWidth()))
+                .add(CanvasOrientation.heightAxis(direction)
+                        .scale((0.5 - normalizedY) * document.physicalHeight()));
+    }
+
+    private double[] flatten(Vec3 world) {
+        return switch (getDirection()) {
+            case NORTH, SOUTH -> new double[]{world.x, world.y};
+            case EAST, WEST -> new double[]{world.z, world.y};
+            case UP, DOWN -> new double[]{world.x, world.z};
+        };
+    }
+
+    private static double[] projectedExtents(Vec3[] corners, Vec3 front, Vec3 right) {
+        if (front.lengthSqr() < 1.0E-12 || right.lengthSqr() < 1.0E-12) {
+            return new double[]{0.0, 0.0};
+        }
+        double minFront = Double.POSITIVE_INFINITY;
+        double maxFront = Double.NEGATIVE_INFINITY;
+        double minRight = Double.POSITIVE_INFINITY;
+        double maxRight = Double.NEGATIVE_INFINITY;
+        for (Vec3 corner : corners) {
+            double along = corner.dot(front);
+            double across = corner.dot(right);
+            minFront = Math.min(minFront, along);
+            maxFront = Math.max(maxFront, along);
+            minRight = Math.min(minRight, across);
+            maxRight = Math.max(maxRight, across);
+        }
+        return new double[]{maxFront - minFront, maxRight - minRight};
+    }
+
+    private double[] projectedGlyphExtents(CanvasGlyph glyph,
+                                           int rasterWidth,
+                                           int rasterHeight,
+                                           Vec3 front,
+                                           Vec3 right,
+                                           Vec3[] fallbackCorners) {
+        if (front.lengthSqr() < 1.0E-12 || right.lengthSqr() < 1.0E-12) {
+            return new double[]{0.0, 0.0};
+        }
+        int[] cells = glyph.rawCells();
+        if (cells.length == 0) return projectedExtents(fallbackCorners, front, right);
+
+        double minFront = Double.POSITIVE_INFINITY;
+        double maxFront = Double.NEGATIVE_INFINITY;
+        double minRight = Double.POSITIVE_INFINITY;
+        double maxRight = Double.NEGATIVE_INFINITY;
+        for (int cell : cells) {
+            if (cell < 0 || cell >= rasterWidth * rasterHeight) continue;
+            int x = cell % rasterWidth;
+            int y = cell / rasterWidth;
+            Vec3 point = localToWorld(
+                    (x + 0.5) / rasterWidth,
+                    (y + 0.5) / rasterHeight);
+            double along = point.dot(front);
+            double across = point.dot(right);
+            minFront = Math.min(minFront, along);
+            maxFront = Math.max(maxFront, along);
+            minRight = Math.min(minRight, across);
+            maxRight = Math.max(maxRight, across);
+        }
+        if (!Double.isFinite(minFront)) {
+            return projectedExtents(fallbackCorners, front, right);
+        }
+        return new double[]{maxFront - minFront, maxRight - minRight};
+    }
+
+    public void sendSnapshot(ServerPlayer player, boolean openEditor) {
+        PacketDistributor.sendToPlayer(player,
+                new CanvasSnapshotPacket(getId(), revision, document, openEditor));
+    }
+
+    public void broadcastSnapshot() {
+        if (!level().isClientSide) {
+            PacketDistributor.sendToPlayersTrackingEntity(
+                    this, new CanvasSnapshotPacket(getId(), revision, document, false));
+        }
+    }
+
+    @Override
+    public InteractionResult interact(Player player, InteractionHand hand) {
+        if (hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
+        if (!level().isClientSide && player instanceof ServerPlayer serverPlayer
+                && player.distanceToSqr(this) <= 64.0) {
+            sendSnapshot(serverPlayer, true);
+        }
+        return InteractionResult.sidedSuccess(level().isClientSide);
+    }
+
+    @Override
+    public void onAddedToLevel() {
+        super.onAddedToLevel();
+        if (level() instanceof ServerLevel serverLevel) {
+            CanvasCompileService.onPlaced(serverLevel, this);
+        }
+    }
+
+    @Override
+    public void onRemovedFromLevel() {
+        RemovalReason reason = getRemovalReason();
+        if (reason != null && reason.shouldDestroy()
+                && level() instanceof ServerLevel serverLevel) {
+            CanvasCompileService.onRemoved(serverLevel, this);
+        }
+        super.onRemovedFromLevel();
+    }
+
+    @Override
+    public void addAdditionalSaveData(CompoundTag compound) {
+        super.addAdditionalSaveData(compound);
+        compound.putByte("facing_3d", (byte) direction.get3DDataValue());
+        compound.putInt("revision", revision);
+        DataResult<net.minecraft.nbt.Tag> encoded =
+                CanvasDocument.CODEC.encodeStart(NbtOps.INSTANCE, document);
+        encoded.resultOrPartial(message -> {
+        }).ifPresent(tag -> compound.put(DOCUMENT_TAG, tag));
+    }
+
+    @Override
+    public void readAdditionalSaveData(CompoundTag compound) {
+        super.readAdditionalSaveData(compound);
+        revision = Math.max(0, compound.getInt("revision"));
+        if (compound.contains(DOCUMENT_TAG)) {
+            CanvasDocument.CODEC.parse(NbtOps.INSTANCE, compound.get(DOCUMENT_TAG))
+                    .result().ifPresent(value -> document = value);
+        }
+        direction = compound.contains("facing_3d")
+                ? Direction.from3DDataValue(compound.getByte("facing_3d"))
+                : Direction.from2DDataValue(compound.getByte("facing"));
+        setDocumentInternal(document, false);
+        setDirection(direction);
+    }
+
+    @Override
+    public void dropItem(@Nullable Entity brokenEntity) {
+        if (!level().getGameRules().getBoolean(GameRules.RULE_DOENTITYDROPS)) return;
+        playSound(SoundEvents.PAINTING_BREAK, 1.0F, 1.0F);
+        if (brokenEntity instanceof Player player && player.hasInfiniteMaterials()) return;
+        ItemStack stack = new ItemStack(ModItems.CANVAS.get());
+        stack.set(ModDataComponents.CANVAS_DOCUMENT.get(), document);
+        spawnAtLocation(stack);
+    }
+
+    @Override
+    public ItemEntity spawnAtLocation(ItemStack stack, float offsetY) {
+        return super.spawnAtLocation(stack, offsetY);
+    }
+
+    public void playPlacementSound() {
+        playSound(SoundEvents.PAINTING_PLACE, 1.0F, 1.0F);
+    }
+
+    @Override
+    public void moveTo(double x, double y, double z, float yaw, float pitch) {
+        setPos(x, y, z);
+    }
+
+    @Override
+    public void lerpTo(double x, double y, double z, float yaw, float pitch, int steps) {
+        setPos(x, y, z);
+    }
+
+    @Override
+    public Vec3 trackingPosition() {
+        return Vec3.atLowerCornerOf(pos);
+    }
+
+    @Override
+    public Packet<ClientGamePacketListener> getAddEntityPacket(ServerEntity entity) {
+        return new ClientboundAddEntityPacket(this, direction.get3DDataValue(), getPos());
+    }
+
+    @Override
+    public void recreateFromPacket(ClientboundAddEntityPacket packet) {
+        super.recreateFromPacket(packet);
+        setDirection(Direction.from3DDataValue(packet.getData()));
+    }
+
+    @Override
+    public ItemStack getPickResult() {
+        ItemStack stack = new ItemStack(ModItems.CANVAS.get());
+        stack.set(ModDataComponents.CANVAS_DOCUMENT.get(), document);
+        return stack;
+    }
+}

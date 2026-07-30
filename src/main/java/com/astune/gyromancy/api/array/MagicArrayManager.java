@@ -36,6 +36,7 @@ public class MagicArrayManager {
     private final Map<Integer, UUID> glyphIdIndex = new HashMap<>();
     private final Map<UUID, UUID> parentCircleByGlyph = new HashMap<>();
     private final Map<UUID, List<PositionedGlyph>> directChildrenByCircle = new HashMap<>();
+    private final Set<UUID> claimedCircleCompilations = new HashSet<>();
     private final List<OpDefinition> opDefinitions;
     private int nextGlyphId = 1;
 
@@ -58,6 +59,7 @@ public class MagicArrayManager {
             for (PositionedGlyph glyph : arr.allBoundGlyphs()) {
                 mgr.registerGlyph(glyph);
             }
+            mgr.claimedCircleCompilations.add(arr.rootCircleGlyph().glyphUuid());
         }
         return mgr;
     }
@@ -74,6 +76,15 @@ public class MagicArrayManager {
             }
         }
         mgr.restoreParentRelations(data.parentRelations());
+        for (UUID circleId : data.claimedCircleCompilations()) {
+            PositionedGlyph circle = mgr.getGlyph(circleId);
+            if (circle != null && circle.role() == SymbolRole.OUTER_CIRCLE) {
+                mgr.claimedCircleCompilations.add(circleId);
+            }
+        }
+        for (ArrayObject array : data.arrays()) {
+            mgr.claimedCircleCompilations.add(array.rootCircleGlyph().glyphUuid());
+        }
         return mgr;
     }
 
@@ -85,7 +96,10 @@ public class MagicArrayManager {
         return new PersistentData(
                 List.copyOf(activeArrays.values()),
                 List.copyOf(glyphIndex.values()),
-                relations);
+                relations,
+                claimedCircleCompilations.stream()
+                        .sorted(Comparator.comparing(UUID::toString))
+                        .toList());
     }
 
     private void restoreParentRelations(List<ParentRelation> relations) {
@@ -157,9 +171,38 @@ public class MagicArrayManager {
     }
 
     public void registerGlyph(PositionedGlyph glyph) {
+        PositionedGlyph previous = glyphIndex.get(glyph.glyphUuid());
+        if (previous != null && previous.glyphId() != glyph.glyphId()) {
+            glyphIdIndex.remove(previous.glyphId());
+        }
         glyphIndex.put(glyph.glyphUuid(), glyph);
         glyphIdIndex.put(glyph.glyphId(), glyph.glyphUuid());
         rebuildHierarchyFromGeometry();
+    }
+
+    /**
+     * Replaces a glyph's geometry without tearing down an already running
+     * array. Used when a canvas changes raster resolution while retaining the
+     * exact same normalized strokes.
+     */
+    public void refreshGlyph(PositionedGlyph glyph) {
+        registerGlyph(glyph);
+        for (Map.Entry<UUID, ArrayObject> entry : new ArrayList<>(activeArrays.entrySet())) {
+            ArrayObject array = entry.getValue();
+            boolean changed = array.rootCircleGlyph().glyphUuid().equals(glyph.glyphUuid())
+                    || array.boundGlyphs().stream()
+                    .anyMatch(bound -> bound.glyphUuid().equals(glyph.glyphUuid()));
+            if (!changed) continue;
+
+            PositionedGlyph root = array.rootCircleGlyph().glyphUuid().equals(glyph.glyphUuid())
+                    ? glyph : array.rootCircleGlyph();
+            List<PositionedGlyph> bound = array.boundGlyphs().stream()
+                    .map(existing -> existing.glyphUuid().equals(glyph.glyphUuid()) ? glyph : existing)
+                    .toList();
+            activeArrays.put(entry.getKey(), new ArrayObject(
+                    array.arrayId(), root, bound,
+                    array.compilationEffectEndTick(), array.scratchData()));
+        }
     }
 
     public PositionedGlyph restoreGlyph(PositionedGlyph stored) {
@@ -186,6 +229,9 @@ public class MagicArrayManager {
     public PositionedGlyph unregisterGlyph(int id) {
         UUID uuid = glyphIdIndex.remove(id);
         PositionedGlyph removed = uuid == null ? null : glyphIndex.remove(uuid);
+        if (removed != null && removed.role() == SymbolRole.OUTER_CIRCLE) {
+            claimedCircleCompilations.remove(removed.glyphUuid());
+        }
         if (removed != null) detachGlyph(removed);
         return removed;
     }
@@ -193,8 +239,25 @@ public class MagicArrayManager {
     public PositionedGlyph unregisterGlyph(UUID uuid) {
         PositionedGlyph glyph = glyphIndex.remove(uuid);
         if (glyph != null) glyphIdIndex.remove(glyph.glyphId());
+        if (glyph != null && glyph.role() == SymbolRole.OUTER_CIRCLE) {
+            claimedCircleCompilations.remove(glyph.glyphUuid());
+        }
         if (glyph != null) detachGlyph(glyph);
         return glyph;
+    }
+
+    /**
+     * Claims the single compilation opportunity belonging to this circle
+     * glyph's current lifetime.
+     */
+    public boolean claimCircleCompilation(UUID circleGlyphId) {
+        PositionedGlyph glyph = glyphIndex.get(circleGlyphId);
+        if (glyph == null || glyph.role() != SymbolRole.OUTER_CIRCLE) return false;
+        return claimedCircleCompilations.add(circleGlyphId);
+    }
+
+    public boolean hasClaimedCircleCompilation(UUID circleGlyphId) {
+        return claimedCircleCompilations.contains(circleGlyphId);
     }
 
     public Collection<PositionedGlyph> getAllGlyphs() {
@@ -339,7 +402,13 @@ public class MagicArrayManager {
     // ═══════════════════ phrase5 array objects ═══════════════════
 
     public void registerArrayObj(ArrayObject arr) {
-        activeArrays.put(arr.arrayId(), arr);
+        claimedCircleCompilations.add(arr.rootCircleGlyph().glyphUuid());
+        ArrayObject previous = activeArrays.put(arr.arrayId(), arr);
+        if (previous != null) {
+            for (PositionedGlyph pg : previous.allBoundGlyphs()) {
+                glyphToArray.remove(pg.glyphUuid(), arr.arrayId());
+            }
+        }
         for (PositionedGlyph pg : arr.allBoundGlyphs()) {
             glyphToArray.put(pg.glyphUuid(), arr.arrayId());
         }
@@ -349,7 +418,7 @@ public class MagicArrayManager {
         ArrayObject arr = activeArrays.remove(arrayId);
         if (arr != null) {
             for (PositionedGlyph pg : arr.allBoundGlyphs()) {
-                glyphToArray.remove(pg.glyphUuid());
+                glyphToArray.remove(pg.glyphUuid(), arrayId);
             }
         }
     }
@@ -363,11 +432,46 @@ public class MagicArrayManager {
         return Collections.unmodifiableCollection(activeArrays.values());
     }
 
+    public List<ArrayObject> getArrayObjsForGlyph(UUID glyphUuid) {
+        return activeArrays.values().stream()
+                .filter(array -> array.allBoundGlyphs().stream()
+                        .anyMatch(glyph -> glyph.glyphUuid().equals(glyphUuid)))
+                .toList();
+    }
+
+    public List<ArrayObject> getArrayObjsForRoot(UUID rootGlyphUuid) {
+        return activeArrays.values().stream()
+                .filter(array -> array.rootCircleGlyph().glyphUuid().equals(rootGlyphUuid))
+                .toList();
+    }
+
+    /**
+     * Finds every active array which depends on a glyph supplied by a canvas.
+     * This deliberately does not use the single-value glyph index because an
+     * interrupted save can preserve more than one runtime for the same glyph.
+     */
+    public List<ArrayObject> getArrayObjsForCanvas(UUID canvasId) {
+        return activeArrays.values().stream()
+                .filter(array -> array.allBoundGlyphs().stream()
+                        .anyMatch(glyph -> glyph.sourceCanvasId()
+                                .filter(canvasId::equals).isPresent()))
+                .toList();
+    }
+
+    /** Finds registered world glyphs owned by a canvas without consulting its document cache. */
+    public List<PositionedGlyph> getGlyphsForCanvas(UUID canvasId) {
+        return glyphIndex.values().stream()
+                .filter(glyph -> glyph.sourceCanvasId()
+                        .filter(canvasId::equals).isPresent())
+                .toList();
+    }
+
     public void setArrayScratchData(UUID arrayId, Map<String, Object> data) {
         ArrayObject existing = activeArrays.get(arrayId);
         if (existing != null) {
             activeArrays.put(arrayId, new ArrayObject(
-                    existing.arrayId(), existing.rootCircleGlyph(), existing.boundGlyphs(), data));
+                    existing.arrayId(), existing.rootCircleGlyph(), existing.boundGlyphs(),
+                    existing.compilationEffectEndTick(), data));
         }
     }
 
@@ -391,14 +495,18 @@ public class MagicArrayManager {
     private record PersistentData(
             List<ArrayObject> arrays,
             List<PositionedGlyph> glyphs,
-            List<ParentRelation> parentRelations
+            List<ParentRelation> parentRelations,
+            List<UUID> claimedCircleCompilations
     ) {
         private static final Codec<PersistentData> CODEC = RecordCodecBuilder.create(instance ->
                 instance.group(
                                 ArrayObject.CODEC.listOf().fieldOf("arrays").forGetter(PersistentData::arrays),
                                 PositionedGlyph.CODEC.listOf().fieldOf("glyphs").forGetter(PersistentData::glyphs),
                                 ParentRelation.CODEC.listOf().fieldOf("parent_relations")
-                                        .forGetter(PersistentData::parentRelations))
+                                        .forGetter(PersistentData::parentRelations),
+                                UUID_CODEC.listOf().optionalFieldOf(
+                                                "claimed_circle_compilations", List.of())
+                                        .forGetter(PersistentData::claimedCircleCompilations))
                         .apply(instance, PersistentData::new));
     }
 }

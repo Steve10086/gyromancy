@@ -28,6 +28,8 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.DEBUG_BRUSH.get());
                         output.accept(ModItems.PEN.get());
                         output.accept(ModItems.INK_BOTTLE.get());
+                        output.accept(ModItems.CANVAS.get());
+                        output.accept(ModItems.STAMP.get());
                     })
                     .build());
 }

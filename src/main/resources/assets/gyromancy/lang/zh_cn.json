@@ -1,0 +1,20 @@
+{
+  "item.gyromancy.canvas": "画布",
+  "item.gyromancy.canvas.dimensions": "尺寸：%s x %s 格",
+  "item.gyromancy.canvas.resolution": "分辨率：%s x %s",
+  "key.categories.gyromancy": "旋术",
+  "key.gyromancy.canvas_view_modifier": "画布平移/缩放修饰键",
+  "screen.gyromancy.canvas": "画布",
+  "screen.gyromancy.canvas.resolution": "%s x %s（%s 倍）",
+  "screen.gyromancy.canvas.inventory": "物品栏",
+  "screen.gyromancy.canvas.undo": "撤销",
+  "screen.gyromancy.canvas.redo": "重做",
+  "screen.gyromancy.canvas.clear": "清除",
+  "screen.gyromancy.canvas.view_zoom": "视图：%s%%",
+  "item.gyromancy.stamp": "奥术印章",
+  "item.gyromancy.stamp.mode": "模式：%s",
+  "item.gyromancy.stamp.mode.default": "盖印",
+  "item.gyromancy.stamp.has_data": "图案：%s x %s 像素",
+  "item.gyromancy.stamp.empty": "尚未记录图案",
+  "item.gyromancy.stamp.help": "使用以绘制已记录的图案"
+}

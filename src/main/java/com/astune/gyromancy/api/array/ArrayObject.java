@@ -27,8 +27,10 @@ public record ArrayObject(
         UUID arrayId,
         PositionedGlyph rootCircleGlyph,
         List<PositionedGlyph> boundGlyphs,
+        long compilationEffectEndTick,
         Map<String, Object> scratchData
 ) {
+    public static final int COMPILATION_EFFECT_TICKS = 200;
     private static final Codec<UUID> UUID_CODEC = Codec.STRING.xmap(UUID::fromString, UUID::toString);
     private static final Codec<Map<String, Object>> SCRATCH_CODEC = ScratchEntry.CODEC.listOf()
             .xmap(ArrayObject::decodeScratchData, ArrayObject::encodeScratchData);
@@ -37,12 +39,27 @@ public record ArrayObject(
             i.group(UUID_CODEC.fieldOf("array_id").forGetter(ArrayObject::arrayId),
                     PositionedGlyph.CODEC.fieldOf("root_circle_glyph").forGetter(ArrayObject::rootCircleGlyph),
                     PositionedGlyph.CODEC.listOf().fieldOf("bound_glyphs").forGetter(ArrayObject::boundGlyphs),
+                    Codec.LONG.optionalFieldOf("compilation_effect_end_tick", 0L)
+                            .forGetter(ArrayObject::compilationEffectEndTick),
                     SCRATCH_CODEC.optionalFieldOf("scratch_data", Map.of()).forGetter(ArrayObject::scratchData))
              .apply(i, ArrayObject::new));
+
+    /** Legacy/convenience constructor for arrays without a live compilation effect. */
+    public ArrayObject(UUID arrayId,
+                       PositionedGlyph rootCircleGlyph,
+                       List<PositionedGlyph> boundGlyphs,
+                       Map<String, Object> scratchData) {
+        this(arrayId, rootCircleGlyph, boundGlyphs, 0L, scratchData);
+    }
 
     /** All glyphs bound to this array. */
     public List<PositionedGlyph> allBoundGlyphs() {
         return boundGlyphs;
+    }
+
+    public int remainingCompilationEffectTicks(long gameTime) {
+        long remaining = compilationEffectEndTick - gameTime;
+        return (int) Math.clamp(remaining, 0L, COMPILATION_EFFECT_TICKS);
     }
 
     public record EntityRef(UUID uuid, ResourceLocation entityType) {

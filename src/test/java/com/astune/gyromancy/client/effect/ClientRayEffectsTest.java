@@ -1,13 +1,45 @@
 package com.astune.gyromancy.client.effect;
 
 import org.junit.jupiter.api.Test;
+import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClientRayEffectsTest {
+
+    @Test
+    void compilationEffectsAtSameGeometryRemainOwnedByTheirArrayLifecycle() {
+        ClientRayEffects.clearAll();
+        UUID first = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID second = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        Vec3 center = new Vec3(1.0, 2.0, 3.0);
+        byte[] mask = {1};
+
+        ClientRayEffects.spawnForLifecycle(
+                first, 0, center, Direction.UP, new Vec3(0.0, 1.0, 0.0),
+                new Vec3(1.0, 0.0, 0.0), new Vec3(0.0, 0.0, 1.0),
+                mask, 1, 1, ignored -> 0xFFFFFFFF,
+                0xFFFFFFFF, 200, 1.0);
+        ClientRayEffects.spawnForLifecycle(
+                second, 0, center, Direction.UP, new Vec3(0.0, 1.0, 0.0),
+                new Vec3(1.0, 0.0, 0.0), new Vec3(0.0, 0.0, 1.0),
+                mask, 1, 1, ignored -> 0xFFFFFFFF,
+                0xFFFFFFFF, 200, 1.0);
+
+        assertEquals(1, ClientRayEffects.activeLifecycleEffectCount(first));
+        assertEquals(1, ClientRayEffects.activeLifecycleEffectCount(second));
+
+        ClientRayEffects.stopLifecycle(first);
+
+        assertEquals(0, ClientRayEffects.activeLifecycleEffectCount(first));
+        assertEquals(1, ClientRayEffects.activeLifecycleEffectCount(second));
+        ClientRayEffects.clearAll();
+    }
 
     @Test
     void compactMeshReturnsSharedEmptyForBlankLayer() {

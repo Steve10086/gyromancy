@@ -6,6 +6,7 @@ import com.astune.gyromancy.client.entity.ManaballRenderer;
 import com.astune.gyromancy.client.entity.OldFireballRenderer;
 import com.astune.gyromancy.client.entity.ElementBallRenderer;
 import com.astune.gyromancy.client.entity.WaterBallRenderer;
+import com.astune.gyromancy.client.canvas.CanvasEntityRenderer;
 import com.astune.gyromancy.client.glyph.GlyphImageProvider;
 import com.astune.gyromancy.client.glyph.GlyphRenderer;
 import com.astune.gyromancy.registry.ModEntities;
@@ -39,5 +40,6 @@ public final class ClientSetup {
         event.registerEntityRenderer(ModEntities.WATER_BALL.get(), WaterBallRenderer::new);
         event.registerEntityRenderer(ModEntities.ICE_BALL.get(), context -> new ElementBallRenderer<>(context, "frozen_core", 0xFFD8F4FF));
         event.registerEntityRenderer(ModEntities.DRY_BALL.get(), context -> new ElementBallRenderer<>(context, "mana_ball", 0xFFD8B36A));
+        event.registerEntityRenderer(ModEntities.CANVAS.get(), CanvasEntityRenderer::new);
     }
 }

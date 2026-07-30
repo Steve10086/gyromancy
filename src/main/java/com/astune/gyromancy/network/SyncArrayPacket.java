@@ -17,7 +17,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPayload {
-    private static final int LIFETIME = 200;
     private static final double BEAM_HEIGHT = 1.0;
     private static final Set<UUID> knownArrays = ConcurrentHashMap.newKeySet();
 
@@ -32,6 +31,7 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
             for (int i = 0; i < count; i++) {
                 UUID id = new UUID(buf.readLong(), buf.readLong());
                 int color = buf.readInt();
+                int compilationEffectTicks = buf.readInt();
                 int partCount = buf.readInt();
                 java.util.ArrayList<BlockData> parts = new java.util.ArrayList<>(partCount);
                 for (int j = 0; j < partCount; j++) {
@@ -45,7 +45,7 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                     buf.readBytes(mask);
                     parts.add(new BlockData(center, face, sourceU, sourceV, width, height, mask));
                 }
-                arrays.add(new ArrayData(id, color, parts));
+                arrays.add(new ArrayData(id, color, compilationEffectTicks, parts));
             }
             return new SyncArrayPacket(arrays);
         }
@@ -57,6 +57,7 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                 buf.writeLong(array.id().getMostSignificantBits());
                 buf.writeLong(array.id().getLeastSignificantBits());
                 buf.writeInt(array.color());
+                buf.writeInt(array.compilationEffectTicks());
                 buf.writeInt(array.parts().size());
                 for (BlockData part : array.parts()) {
                     writeVec3(buf, part.center());
@@ -77,14 +78,22 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
             Set<UUID> next = new HashSet<>();
             for (ArrayData array : packet.arrays()) {
                 next.add(array.id());
-                if (!knownArrays.add(array.id())) continue;
-                for (BlockData part : array.parts()) {
+                boolean firstSeen = knownArrays.add(array.id());
+                if (!firstSeen || array.compilationEffectTicks() <= 0) continue;
+                for (int partIndex = 0; partIndex < array.parts().size(); partIndex++) {
+                    BlockData part = array.parts().get(partIndex);
                     Vec3 rayDir = Vec3.atLowerCornerOf(part.face().getNormal());
-                    ClientRayEffects.spawnOrRefresh(part.center(), part.face(), rayDir,
+                    ClientRayEffects.spawnForLifecycle(
+                            array.id(), partIndex,
+                            part.center(), part.face(), rayDir,
                             part.sourceU(), part.sourceV(), part.mask(), part.width(), part.height(),
-                            ignored -> 0xFFFFFFFF, array.color(), LIFETIME, BEAM_HEIGHT);
+                            ignored -> 0xFFFFFFFF, array.color(),
+                            array.compilationEffectTicks(), BEAM_HEIGHT);
                 }
             }
+            Set<UUID> removed = new HashSet<>(knownArrays);
+            removed.removeAll(next);
+            removed.forEach(ClientRayEffects::stopLifecycle);
             knownArrays.retainAll(next);
         });
     }
@@ -92,6 +101,10 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
     @Override
     public Type<? extends CustomPacketPayload> type() {
         return TYPE;
+    }
+
+    public static void resetClientState() {
+        knownArrays.clear();
     }
 
     private static Vec3 readVec3(ByteBuf buf) {
@@ -104,7 +117,12 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
         buf.writeDouble(vec.z);
     }
 
-    public record ArrayData(UUID id, int color, List<BlockData> parts) {}
+    public record ArrayData(
+            UUID id,
+            int color,
+            int compilationEffectTicks,
+            List<BlockData> parts
+    ) {}
 
     public record BlockData(Vec3 center, Direction face, Vec3 sourceU, Vec3 sourceV,
                             int width, int height, byte[] mask) {}

@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -132,6 +133,87 @@ class MagicArrayManagerHierarchyTest {
                 decoded.getArrayForGlyph(fire.glyphUuid()).arrayId());
     }
 
+    @Test
+    void unregisteringStaleArrayDoesNotEraseReplacementGlyphHandle() {
+        MagicArrayManager manager = new MagicArrayManager();
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2, 1.0, 4.0);
+        UUID staleId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        UUID replacementId = UUID.fromString("00000000-0000-0000-0000-000000000011");
+        ArrayObject stale = new ArrayObject(staleId, circle, List.of(circle), Map.of());
+        ArrayObject replacement = new ArrayObject(
+                replacementId, circle, List.of(circle), Map.of());
+
+        manager.registerArrayObj(stale);
+        manager.registerArrayObj(replacement);
+        manager.unregisterArrayObj(staleId);
+
+        assertEquals(replacementId,
+                manager.getArrayForGlyph(circle.glyphUuid()).arrayId());
+    }
+
+    @Test
+    void canvasRuntimeLookupDoesNotDependOnGlyphHandleIndex() {
+        MagicArrayManager manager = new MagicArrayManager();
+        UUID canvasId = UUID.fromString("00000000-0000-0000-0000-000000000020");
+        PositionedGlyph local = withSourceCanvas(
+                glyph("fire", SymbolRole.CENTER_SYMBOL, 1, 2.0, 3.0), canvasId);
+        PositionedGlyph externalCircle =
+                glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2, 1.0, 4.0);
+        ArrayObject first = new ArrayObject(
+                UUID.fromString("00000000-0000-0000-0000-000000000010"),
+                externalCircle, List.of(externalCircle, local), Map.of());
+        ArrayObject second = new ArrayObject(
+                UUID.fromString("00000000-0000-0000-0000-000000000011"),
+                externalCircle, List.of(externalCircle, local), Map.of());
+
+        manager.registerArrayObj(first);
+        manager.registerArrayObj(second);
+
+        assertEquals(Set.of(first.arrayId(), second.arrayId()),
+                manager.getArrayObjsForCanvas(canvasId).stream()
+                        .map(ArrayObject::arrayId)
+                        .collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Test
+    void circleCompilationOpportunityIsSingleUseAndPersistent() {
+        MagicArrayManager manager = new MagicArrayManager();
+        PositionedGlyph circle =
+                glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2, 1.0, 4.0);
+        manager.registerGlyph(circle);
+
+        assertTrue(manager.claimCircleCompilation(circle.glyphUuid()));
+        assertFalse(manager.claimCircleCompilation(circle.glyphUuid()));
+
+        var encoded =
+                MagicArrayManager.CODEC.encodeStart(JsonOps.INSTANCE, manager).getOrThrow();
+        MagicArrayManager decoded =
+                MagicArrayManager.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow();
+
+        assertTrue(decoded.hasClaimedCircleCompilation(circle.glyphUuid()));
+        assertFalse(decoded.claimCircleCompilation(circle.glyphUuid()));
+    }
+
+    @Test
+    void removingCircleStartsANewCompilationLifecycleButRemovingArrayDoesNot() {
+        MagicArrayManager manager = new MagicArrayManager();
+        PositionedGlyph circle =
+                glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2, 1.0, 4.0);
+        manager.registerGlyph(circle);
+        assertTrue(manager.claimCircleCompilation(circle.glyphUuid()));
+
+        ArrayObject array = new ArrayObject(
+                UUID.fromString("00000000-0000-0000-0000-000000000010"),
+                circle, List.of(circle), Map.of());
+        manager.registerArrayObj(array);
+        manager.unregisterArrayObj(array.arrayId());
+        assertFalse(manager.claimCircleCompilation(circle.glyphUuid()));
+
+        manager.unregisterGlyph(circle.glyphUuid());
+        manager.registerGlyph(circle);
+        assertTrue(manager.claimCircleCompilation(circle.glyphUuid()));
+    }
+
     private static OpDefinition effect(String id, String symbol) {
         return new OpDefinition() {
             @Override
@@ -172,5 +254,13 @@ class MagicArrayManagerHierarchyTest {
                 min, max, min, max,
                 Set.of(new PixelPos(pos, Direction.NORTH, id, id, 0xFF00AA00))
         );
+    }
+
+    private static PositionedGlyph withSourceCanvas(PositionedGlyph glyph, UUID canvasId) {
+        return new PositionedGlyph(
+                glyph.glyphUuid(), glyph.glyphId(), glyph.symbolId(), glyph.confidence(),
+                glyph.role(), glyph.front(), glyph.length(), glyph.width(), glyph.worldPos(),
+                glyph.minWorldX(), glyph.maxWorldX(), glyph.minWorldY(), glyph.maxWorldY(),
+                glyph.pixels(), java.util.Optional.of(canvasId));
     }
 }

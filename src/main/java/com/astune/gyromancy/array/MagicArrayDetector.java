@@ -8,6 +8,7 @@ import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolRole;
+import com.astune.gyromancy.canvas.CanvasEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.registry.ModSymbols;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
@@ -81,6 +82,7 @@ public final class MagicArrayDetector {
         if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) return;
 
         PacketDistributor.sendToPlayer(player, buildGlyphPacket(level));
+        PacketDistributor.sendToPlayer(player, buildArrayPacket(level));
     }
 
     @SubscribeEvent
@@ -168,7 +170,6 @@ public final class MagicArrayDetector {
             PositionedGlyph glyph = mgr.getGlyph(glyphId);
             if (glyph != null) glyphs.add(glyph);
         }
-        glyphs.addAll(GlyphChunkStorage.touching(level.getChunkAt(pos), pos));
         invalidateGlyphs(level, glyphs, newData, pos);
     }
 
@@ -184,10 +185,13 @@ public final class MagicArrayDetector {
             glyph = Optional.ofNullable(mgr.getGlyph(glyph.glyphUuid())).orElse(glyph);
             if (glyph == null) continue;
 
-            // Array teardown: if this glyph is bound to an active array, destroy it
-            ArrayObject arr = mgr.getArrayForGlyph(glyph.glyphUuid());
-            if (arr != null && tornDownArrays.add(arr.arrayId())) {
-                ArrayEffectLifecycle.deactivate(level, arr);
+            // Destroy every array lifecycle which captured this glyph. A glyph
+            // may be shared by nested arrays, so the single-value index is not
+            // sufficient here.
+            for (ArrayObject arr : mgr.getArrayObjsForGlyph(glyph.glyphUuid())) {
+                if (tornDownArrays.add(arr.arrayId())) {
+                    ArrayEffectLifecycle.deactivate(level, arr);
+                }
             }
 
             mgr.unregisterGlyph(glyph.glyphUuid());
@@ -345,7 +349,7 @@ public final class MagicArrayDetector {
 
         mgr.registerGlyph(pg);
         GlyphChunkStorage.store(level, pg);
-        tryCompileAffected(level, pg);
+        invalidateCompiledAncestors(level, pg);
         syncGlyphs(level);
 
         Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} ACCEPTED - glyph #{} stored",
@@ -369,26 +373,22 @@ public final class MagicArrayDetector {
         );
         mgr.registerGlyph(circleGlyph);
         GlyphChunkStorage.store(level, circleGlyph);
-        tryCompileAffected(level, circleGlyph);
+        invalidateCompiledAncestors(level, circleGlyph);
+        ArrayEffectLifecycle.compileNew(level, circleGlyph);
         syncGlyphs(level);
         Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle {} stored as glyph #{}",
                 best.symbolId(), circleId);
     }
 
-    private static void tryCompileAffected(ServerLevel level, PositionedGlyph glyph) {
+    private static void invalidateCompiledAncestors(
+            ServerLevel level, PositionedGlyph glyph) {
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
-        if (glyph.role() == SymbolRole.OUTER_CIRCLE) {
-            tryCompileCircle(level, glyph);
-            PositionedGlyph parent = mgr.parentCircle(glyph);
-            if (parent != null) tryCompileCircle(level, parent);
-        } else {
-            PositionedGlyph parent = mgr.parentCircle(glyph);
-            if (parent != null) tryCompileCircle(level, parent);
+        PositionedGlyph parent = mgr.parentCircle(glyph);
+        while (parent != null) {
+            ArrayEffectLifecycle.deactivateForRootGlyph(
+                    level, parent.glyphUuid());
+            parent = mgr.parentCircle(parent);
         }
-    }
-
-    private static void tryCompileCircle(ServerLevel level, PositionedGlyph circleGlyph) {
-        ArrayEffectLifecycle.activateOrReplace(level, circleGlyph);
     }
 
     private static void syncAffectedCanvases(ExtractedGlyph glyph, ServerLevel level) {
@@ -423,6 +423,11 @@ public final class MagicArrayDetector {
         PacketDistributor.sendToAllPlayers(buildArrayPacket(level));
     }
 
+    /** Publishes glyph and array snapshots after an entity-backed canvas changes. */
+    public static void syncWorldState(ServerLevel level) {
+        syncGlyphs(level);
+    }
+
     private static SyncArrayPacket buildArrayPacket(ServerLevel level) {
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
         List<SyncArrayPacket.ArrayData> arrays = new ArrayList<>();
@@ -435,21 +440,39 @@ public final class MagicArrayDetector {
 
     private static SyncArrayPacket.ArrayData arrayData(ServerLevel level, ArrayObject arr) {
         Map<BlockFace, List<PixelPos>> pixelsByFace = new HashMap<>();
+        Map<UUID, List<PixelPos>> pixelsByCanvas = new HashMap<>();
         for (PositionedGlyph glyph : arr.allBoundGlyphs()) {
             for (PixelPos pixel : glyph.pixels()) {
-                pixelsByFace.computeIfAbsent(new BlockFace(pixel.pos(), pixel.face()), ignored -> new ArrayList<>())
-                        .add(pixel);
+                if (glyph.sourceCanvasId().isPresent()) {
+                    pixelsByCanvas.computeIfAbsent(glyph.sourceCanvasId().get(), ignored -> new ArrayList<>())
+                            .add(pixel);
+                } else {
+                    pixelsByFace.computeIfAbsent(
+                                    new BlockFace(pixel.pos(), pixel.face()), ignored -> new ArrayList<>())
+                            .add(pixel);
+                }
             }
         }
 
-        List<SyncArrayPacket.BlockData> parts = new ArrayList<>(pixelsByFace.size());
+        List<SyncArrayPacket.BlockData> parts =
+                new ArrayList<>(pixelsByFace.size() + pixelsByCanvas.size());
         for (Map.Entry<BlockFace, List<PixelPos>> entry : pixelsByFace.entrySet()) {
             SyncArrayPacket.BlockData part = blockData(level, entry.getKey(), entry.getValue());
             if (part != null) parts.add(part);
         }
+        for (Map.Entry<UUID, List<PixelPos>> entry : pixelsByCanvas.entrySet()) {
+            if (level.getEntity(entry.getKey()) instanceof CanvasEntity canvas) {
+                SyncArrayPacket.BlockData part = canvasBlockData(canvas, entry.getValue());
+                if (part != null) parts.add(part);
+            }
+        }
         if (parts.isEmpty()) return null;
         int color = arr.scratchData().get("__array_color") instanceof Integer c ? c : 0xFFFFFFFF;
-        return new SyncArrayPacket.ArrayData(arr.arrayId(), color, parts);
+        return new SyncArrayPacket.ArrayData(
+                arr.arrayId(),
+                color,
+                arr.remainingCompilationEffectTicks(level.getGameTime()),
+                parts);
     }
 
     private static SyncArrayPacket.BlockData blockData(ServerLevel level, BlockFace key, List<PixelPos> pixels) {
@@ -473,6 +496,26 @@ public final class MagicArrayDetector {
         return new SyncArrayPacket.BlockData(center, key.face, sourceU, sourceV, width, height, mask);
     }
 
+    private static SyncArrayPacket.BlockData canvasBlockData(
+            CanvasEntity canvas, List<PixelPos> pixels) {
+        int width = canvas.document().resolutionWidth();
+        int height = canvas.document().resolutionHeight();
+        byte[] mask = new byte[width * height];
+        for (PixelPos pixel : pixels) {
+            if (pixel.x() >= 0 && pixel.x() < width
+                    && pixel.y() >= 0 && pixel.y() < height) {
+                mask[pixel.y() * width + pixel.x()] = 1;
+            }
+        }
+        Vec3 center = canvas.localToWorld(0.5, 0.5);
+        Vec3 sourceU = canvas.localToWorld(1.0, 0.5)
+                .subtract(canvas.localToWorld(0.0, 0.5));
+        Vec3 sourceV = canvas.localToWorld(0.5, 0.0)
+                .subtract(canvas.localToWorld(0.5, 1.0));
+        return new SyncArrayPacket.BlockData(
+                center, canvas.getDirection(), sourceU, sourceV, width, height, mask);
+    }
+
     private record BlockFace(BlockPos pos, Direction face) {}
 
     private static SyncGlyphPacket buildGlyphPacket(ServerLevel level) {
@@ -482,15 +525,25 @@ public final class MagicArrayDetector {
             PixelPos sample = glyph.pixels().isEmpty() ? null : glyph.pixels().iterator().next();
             if (sample == null) continue;
 
+            Vec3 center = glyph.sourceCanvasId()
+                    .flatMap(id -> level.getEntity(id) instanceof CanvasEntity canvas
+                            ? canvas.localGlyph(glyph.glyphUuid()).map(local ->
+                                    canvas.localToWorld(
+                                            (local.minX() + local.maxX()) * 0.5,
+                                            (local.minY() + local.maxY()) * 0.5))
+                            : Optional.empty())
+                    .orElseGet(() -> FloodFillExtractor.worldCenter(level, glyph.pixels(),
+                                    glyph.minWorldX(), glyph.maxWorldX(),
+                                    glyph.minWorldY(), glyph.maxWorldY())
+                            .orElseGet(() -> Vec3.atCenterOf(glyph.worldPos())));
+
             glyphs.add(new SyncGlyphPacket.GlyphData(
                     glyph.glyphId(),
                     glyph.symbolId(),
                     glyph.confidence(),
                     sample.pos(),
                     sample.face(),
-                    FloodFillExtractor.worldCenter(level, glyph.pixels(),
-                                    glyph.minWorldX(), glyph.maxWorldX(), glyph.minWorldY(), glyph.maxWorldY())
-                            .orElseGet(() -> Vec3.atCenterOf(glyph.worldPos())),
+                    center,
                     glyph.front(),
                     glyph.length(),
                     glyph.width(),

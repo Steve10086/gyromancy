@@ -4,6 +4,9 @@ import javax.annotation.Nullable;
 
 import com.astune.gyromancy.client.ElementDebugRenderer;
 import com.astune.gyromancy.client.PaintCameraController;
+import com.astune.gyromancy.client.array.ArrayClientState;
+import com.astune.gyromancy.client.canvas.CanvasClientState;
+import com.astune.gyromancy.client.canvas.CanvasEditorKeyMappings;
 import com.astune.gyromancy.client.effect.ClientRayEffects;
 import com.astune.gyromancy.client.effect.FlipbookEffect;
 import com.astune.gyromancy.client.effect.VortexOrbitEffect;
@@ -36,6 +39,7 @@ public class GyromancyClient {
     public GyromancyClient(IEventBus modEventBus, ModContainer container) {
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
         modEventBus.addListener(PaintCameraController::registerKeyMappings);
+        modEventBus.addListener(CanvasEditorKeyMappings::register);
 
         // ── Client commands — /gyromancy debug ──
         NeoForge.EVENT_BUS.<RegisterClientCommandsEvent>addListener(event -> {
@@ -103,6 +107,9 @@ public class GyromancyClient {
                 (RenderFrameEvent.Pre e) -> PaintCameraController.onRenderFramePre(e));
         NeoForge.EVENT_BUS.<ClientTickEvent.Post>addListener(
                 PaintCameraController::onClientTick);
+        NeoForge.EVENT_BUS.addListener(CanvasClientState::onEntityLeave);
+        NeoForge.EVENT_BUS.addListener(CanvasClientState::onLogout);
+        NeoForge.EVENT_BUS.addListener(ArrayClientState::onLogout);
         NeoForge.EVENT_BUS.<ViewportEvent.ComputeCameraAngles>addListener(
                 PaintCameraController::onComputeCameraAngles);
         NeoForge.EVENT_BUS.<ViewportEvent.ComputeFov>addListener(

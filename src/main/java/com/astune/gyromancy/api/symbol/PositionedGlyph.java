@@ -7,6 +7,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -26,8 +27,11 @@ public record PositionedGlyph(
         BlockPos worldPos,
         double minWorldX, double maxWorldX,
         double minWorldY, double maxWorldY,
-        Set<PixelPos> pixels
+        Set<PixelPos> pixels,
+        Optional<UUID> sourceCanvasId
 ) {
+    private static final Codec<UUID> UUID_CODEC =
+            Codec.STRING.xmap(UUID::fromString, UUID::toString);
     private static final Codec<Vec3> VEC3_CODEC = RecordCodecBuilder.create(i ->
             i.group(Codec.DOUBLE.fieldOf("x").forGetter(v -> v.x),
                     Codec.DOUBLE.fieldOf("y").forGetter(v -> v.y),
@@ -35,7 +39,7 @@ public record PositionedGlyph(
              .apply(i, Vec3::new));
 
     public static final Codec<PositionedGlyph> CODEC = RecordCodecBuilder.create(i ->
-            i.group(Codec.STRING.xmap(UUID::fromString, UUID::toString).fieldOf("uuid").forGetter(PositionedGlyph::glyphUuid),
+            i.group(UUID_CODEC.fieldOf("uuid").forGetter(PositionedGlyph::glyphUuid),
                     Codec.INT.fieldOf("glyph_id").forGetter(PositionedGlyph::glyphId),
                     ResourceLocation.CODEC.fieldOf("symbol_id").forGetter(PositionedGlyph::symbolId),
                     Codec.FLOAT.fieldOf("confidence").forGetter(PositionedGlyph::confidence),
@@ -48,13 +52,32 @@ public record PositionedGlyph(
                     Codec.DOUBLE.fieldOf("max_world_x").forGetter(PositionedGlyph::maxWorldX),
                     Codec.DOUBLE.fieldOf("min_world_y").forGetter(PositionedGlyph::minWorldY),
                     Codec.DOUBLE.fieldOf("max_world_y").forGetter(PositionedGlyph::maxWorldY),
-                    PixelPos.CODEC.listOf().xmap(Set::copyOf, java.util.List::copyOf).fieldOf("pixels").forGetter(PositionedGlyph::pixels))
+                    PixelPos.CODEC.listOf().xmap(Set::copyOf, java.util.List::copyOf).fieldOf("pixels").forGetter(PositionedGlyph::pixels),
+                    UUID_CODEC.optionalFieldOf("source_canvas").forGetter(PositionedGlyph::sourceCanvasId))
              .apply(i, PositionedGlyph::new));
+
+    public PositionedGlyph(
+            UUID glyphUuid,
+            int glyphId,
+            ResourceLocation symbolId,
+            float confidence,
+            SymbolRole role,
+            Vec3 front,
+            double length,
+            double width,
+            BlockPos worldPos,
+            double minWorldX, double maxWorldX,
+            double minWorldY, double maxWorldY,
+            Set<PixelPos> pixels
+    ) {
+        this(glyphUuid, glyphId, symbolId, confidence, role, front, length, width,
+                worldPos, minWorldX, maxWorldX, minWorldY, maxWorldY, pixels, Optional.empty());
+    }
 
     public PositionedGlyph withGlyphId(int newGlyphId) {
         return new PositionedGlyph(glyphUuid, newGlyphId, symbolId, confidence, role,
                 front, length, width, worldPos,
-                minWorldX, maxWorldX, minWorldY, maxWorldY, pixels);
+                minWorldX, maxWorldX, minWorldY, maxWorldY, pixels, sourceCanvasId);
     }
 
     public record Entry(UUID uuid, PositionedGlyph glyph) {

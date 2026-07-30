@@ -18,6 +18,7 @@ public final class GlyphChunkStorage {
     private GlyphChunkStorage() {}
 
     public static void store(ServerLevel level, PositionedGlyph glyph) {
+        if (glyph.sourceCanvasId().isPresent()) return;
         for (ChunkPos pos : touchedChunks(glyph)) {
             LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
             if (chunk == null) continue;
@@ -36,6 +37,7 @@ public final class GlyphChunkStorage {
     }
 
     public static void remove(ServerLevel level, PositionedGlyph glyph) {
+        if (glyph.sourceCanvasId().isPresent()) return;
         for (ChunkPos pos : touchedChunks(glyph)) {
             LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
             if (chunk == null) continue;

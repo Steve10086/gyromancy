@@ -1,5 +1,6 @@
 package com.astune.gyromancy.item;
 
+import com.astune.gyromancy.api.canvas.CanvasPenTool;
 import com.astune.painter.api.*;
 import com.astune.painter.registry.ModDataComponents;
 import net.minecraft.core.BlockPos;
@@ -12,6 +13,7 @@ import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * A debug brush that paints single-pixel mana dots (effect value 10).
@@ -29,8 +31,9 @@ import java.util.Map;
  *   <li>Mana value: 10</li>
  * </ul>
  */
-public class DebugBrushItem extends Item implements IPaintProvider {
-
+public class DebugBrushItem extends Item implements IPaintProvider, CanvasPenTool {
+    private static final int DEFAULT_CANVAS_COLOR = 0xFF24132F;
+    private static final int DEFAULT_CANVAS_EFFECT = 1;
     private static final int WHITE = 0xFFFFFFFF;
     private static final double BRUSH_DIAMETER = 1.0 / 16.0; // 1 pixel
     private static final double BRUSH_RADIUS = BRUSH_DIAMETER / 2.0;
@@ -58,6 +61,11 @@ public class DebugBrushItem extends Item implements IPaintProvider {
     public Integer getColor(ItemStack stack, Player player, Level level,
                             BlockPos pos, CanvasFace face, int pixelX, int pixelY) {
         return WHITE;
+    }
+
+    @Override
+    public Optional<Stroke> canvasStroke(ItemStack stack, Player player) {
+        return Optional.of(new Stroke(DEFAULT_CANVAS_COLOR, DEFAULT_CANVAS_EFFECT));
     }
 
     @Nullable

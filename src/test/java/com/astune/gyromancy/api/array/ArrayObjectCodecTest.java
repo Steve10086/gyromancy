@@ -64,6 +64,27 @@ class ArrayObjectCodecTest {
         assertEquals(array.scratchData(), decoded.scratchData());
     }
 
+    @Test
+    void compilationEffectWindowPersistsAndExpiresAtItsOwnEndTick() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph center = glyph("fire", SymbolRole.CENTER_SYMBOL, 2);
+        ArrayObject array = new ArrayObject(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                circle,
+                List.of(circle, center),
+                1_200L,
+                Map.of());
+
+        var json = ArrayObject.CODEC.encodeStart(JsonOps.INSTANCE, array).getOrThrow();
+        ArrayObject decoded = ArrayObject.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+
+        assertEquals(1_200L, decoded.compilationEffectEndTick());
+        assertEquals(200, decoded.remainingCompilationEffectTicks(1_000L));
+        assertEquals(75, decoded.remainingCompilationEffectTicks(1_125L));
+        assertEquals(0, decoded.remainingCompilationEffectTicks(1_200L));
+        assertEquals(0, decoded.remainingCompilationEffectTicks(5_000L));
+    }
+
     private static PositionedGlyph glyph(String name, SymbolRole role, int id) {
         BlockPos pos = new BlockPos(id, id + 1, id + 2);
         return new PositionedGlyph(

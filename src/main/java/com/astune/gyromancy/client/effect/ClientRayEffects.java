@@ -42,7 +42,7 @@ public final class ClientRayEffects {
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "ray_composite");
     private static final ResourceLocation RAY_COMPOSITE_SHADER =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "ray_composite");
-    private static final Map<Long, Effect> effects = new LinkedHashMap<>();
+    private static final Map<EffectKey, Effect> effects = new LinkedHashMap<>();
     private static final MeshVertex[] NO_MESH_VERTICES = new MeshVertex[0];
     private static MeshBeamRenderer meshRenderer;
     private static AdvancedFbo rayCompositeFbo;
@@ -50,6 +50,10 @@ public final class ClientRayEffects {
     private static int rayCompositeHeight = -1;
     private static boolean warnedMissingMeshShader;
     private static boolean warnedMissingCompositeShader;
+
+    public static void clearAll() {
+        effects.clear();
+    }
 
     public static void spawnOrRefresh(Vec3 center, Direction face, Vec3 worldRayDir,
                                        Vec3 sourceU, Vec3 sourceV,
@@ -90,7 +94,61 @@ public final class ClientRayEffects {
                                        int sourceWidth, int sourceHeight,
                                        IntUnaryOperator colorBySymbolValue,
                                        int color, int lifetime, double beamHeight, int fadeInTicks) {
-        long key = key(center, face);
+        spawnOrRefresh(EffectKey.forGeometry(center, face),
+                center, face, worldRayDir, sourceU, sourceV, maskTexture,
+                symbolLayer, sourceWidth, sourceHeight, colorBySymbolValue,
+                color, lifetime, beamHeight, fadeInTicks);
+    }
+
+    public static void spawnForLifecycle(
+            UUID lifecycleId,
+            int partIndex,
+            Vec3 center,
+            Direction face,
+            Vec3 worldRayDir,
+            Vec3 sourceU,
+            Vec3 sourceV,
+            byte[] symbolLayer,
+            int sourceWidth,
+            int sourceHeight,
+            IntUnaryOperator colorBySymbolValue,
+            int color,
+            int lifetime,
+            double beamHeight
+    ) {
+        spawnOrRefresh(EffectKey.forLifecycle(lifecycleId, partIndex),
+                center, face, worldRayDir, sourceU, sourceV, null,
+                symbolLayer, sourceWidth, sourceHeight, colorBySymbolValue,
+                color, lifetime, beamHeight, DEFAULT_FADE_IN_TICKS);
+    }
+
+    public static void stopLifecycle(UUID lifecycleId) {
+        effects.keySet().removeIf(key -> lifecycleId.equals(key.lifecycleId()));
+    }
+
+    static long activeLifecycleEffectCount(UUID lifecycleId) {
+        return effects.keySet().stream()
+                .filter(key -> lifecycleId.equals(key.lifecycleId()))
+                .count();
+    }
+
+    private static void spawnOrRefresh(
+            EffectKey key,
+            Vec3 center,
+            Direction face,
+            Vec3 worldRayDir,
+            Vec3 sourceU,
+            Vec3 sourceV,
+            ResourceLocation maskTexture,
+            byte[] symbolLayer,
+            int sourceWidth,
+            int sourceHeight,
+            IntUnaryOperator colorBySymbolValue,
+            int color,
+            int lifetime,
+            double beamHeight,
+            int fadeInTicks
+    ) {
         Effect existing = effects.get(key);
         if (existing != null) {
             if (existing.isFadingIn()) {
@@ -189,6 +247,16 @@ public final class ClientRayEffects {
         return h ^ (long) face.ordinal() << 56;
     }
 
+    private record EffectKey(UUID lifecycleId, int partIndex, long geometryKey) {
+        private static EffectKey forGeometry(Vec3 center, Direction face) {
+            return new EffectKey(null, 0, key(center, face));
+        }
+
+        private static EffectKey forLifecycle(UUID lifecycleId, int partIndex) {
+            return new EffectKey(Objects.requireNonNull(lifecycleId), partIndex, 0L);
+        }
+    }
+
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) return;
         if (effects.isEmpty()) return;
@@ -203,7 +271,7 @@ public final class ClientRayEffects {
         Vec3 camPos = camera.getPosition();
         boolean needsComposite = false;
 
-        Iterator<Map.Entry<Long, Effect>> it = effects.entrySet().iterator();
+        Iterator<Map.Entry<EffectKey, Effect>> it = effects.entrySet().iterator();
         while (it.hasNext()) {
             Effect e = it.next().getValue();
             e.age++;

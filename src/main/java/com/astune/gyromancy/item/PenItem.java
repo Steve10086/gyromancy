@@ -1,5 +1,6 @@
 package com.astune.gyromancy.item;
 
+import com.astune.gyromancy.api.canvas.CanvasPenTool;
 import com.astune.gyromancy.api.ink.InkType;
 import com.astune.gyromancy.api.ink.PenProperties;
 import com.astune.gyromancy.registry.GyromancyRegistries;
@@ -18,6 +19,7 @@ import net.minecraft.world.phys.Vec3;
 import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * A pen that reads ink from the offhand {@link InkBottleItem} and paints on canvas blocks.
@@ -29,8 +31,10 @@ import java.util.Map;
  * <p>Each successful paint action decrements {@code INK_REMAINING} on the offhand bottle.
  * When the bottle runs out, painting stops until a fresh bottle is provided.
  */
-public class PenItem extends Item implements IPaintProvider {
+public class PenItem extends Item implements IPaintProvider, CanvasPenTool {
 
+    private static final int DEFAULT_CANVAS_COLOR = 0xFF24132F;
+    private static final int DEFAULT_CANVAS_EFFECT = 1;
     private static final double DEFAULT_BRUSH_DIAMETER = 1.0 / 32.0;
     private static final double STEP = 0.02;
     private static final String MANA_KEY = ManaPixelDetector.MANA_EFFECT_KEY;
@@ -46,6 +50,15 @@ public class PenItem extends Item implements IPaintProvider {
                 .component(com.astune.painter.registry.ModDataComponents.BLEND_MODE.get(), BlendMode.OVERWRITE.name())
                 .component(com.astune.painter.registry.ModDataComponents.STEP_SIZE.get(), STEP));
         PaintProviders.register(this, this);
+    }
+
+    /**
+     * Freehand behavior used by the entity canvas editor. Subclasses can
+     * override this independently from Painter's world-canvas provider.
+     */
+    @Override
+    public Optional<Stroke> canvasStroke(ItemStack stack, Player player) {
+        return Optional.of(new Stroke(DEFAULT_CANVAS_COLOR, DEFAULT_CANVAS_EFFECT));
     }
 
     // ═══════════════════════════════════════════════════════════════
