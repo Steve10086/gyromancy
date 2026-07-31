@@ -224,18 +224,7 @@ public abstract class MagicBallEntity extends MagicEntity {
     }
 
     protected long consumeElement(List<BlockPos> positions, ElementType type, long amount) {
-        long consumed = 0L;
-        for (BlockPos pos : positions) {
-            if (consumed >= amount) break;
-            var current = ElementStorageManager.INSTANCE.get(level(), pos);
-            long available = Math.max(0L, current.get(type));
-            long taken = Math.min(available, amount - consumed);
-            if (taken == 0L) continue;
-            consumed += taken;
-            ElementStorageManager.INSTANCE.set(level(), pos,
-                    current.withValue(type, current.get(type) - taken));
-        }
-        return consumed;
+        return ElementStorageManager.INSTANCE.consume(level(), positions, type, amount);
     }
 
     protected void reduceElementWithMana(ElementType type, long manaCost) {
@@ -243,17 +232,8 @@ public abstract class MagicBallEntity extends MagicEntity {
     }
 
     private void reduceElementWithMana(List<BlockPos> positions, ElementType type, long manaCost) {
-        if (manaCost <= 0L) return;
-        for (BlockPos pos : positions) {
-            var current = ElementStorageManager.INSTANCE.get(level(), pos);
-            long mana = Math.max(0L, current.get(ElementType.MANA));
-            long element = Math.max(0L, current.get(type));
-            long removed = Math.min(element, mana / manaCost);
-            if (removed == 0L) continue;
-            ElementStorageManager.INSTANCE.set(level(), pos, current
-                    .withValue(type, element - removed)
-                    .withValue(ElementType.MANA, mana - removed * manaCost));
-        }
+        ElementStorageManager.INSTANCE.reduceWithMana(
+                level(), positions, type, manaCost);
     }
 
 }

@@ -2,6 +2,7 @@ package com.astune.gyromancy.element;
 
 import com.astune.gyromancy.Config;
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.network.SyncDebugElementPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -11,6 +12,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public final class ElementTickProcessor {
 
@@ -29,27 +31,39 @@ public final class ElementTickProcessor {
         // Full snapshot sync every 10 ticks — collect across ALL levels,
         // then send once so clients don't get overwritten by empty levels.
         if (tick % 10 == 0) {
-            var poses = new ArrayList<BlockPos>();
-            var vals = new ArrayList<Long>();
-            var derivs = new ArrayList<Long>();
+            List<DebugChunk> debugChunks = new ArrayList<>();
+            int cellCount = 0;
 
             for (ServerLevel level : event.getServer().getAllLevels()) {
                 for (ChunkPos cp : ElementChunkEventHandler.getActiveChunkPositions(level.dimension())) {
                     LevelChunk chunk = level.getChunk(cp.x, cp.z);
-                    if (chunk instanceof IElementChunkAccessor a && a.gyromancy$hasElementOverrides()) {
-                        for (var e : a.gyromancy$getElementOverrides().entrySet()) {
-                            poses.add(e.getKey());
-                            for (long v : e.getValue().values()) vals.add(v);
-                            for (long d : e.getValue().derivatives()) derivs.add(d);
-                        }
+                    if (chunk instanceof IElementChunkAccessor a && a.gyromancy$hasElementData()) {
+                        ElementChunkData data = a.gyromancy$getElementData();
+                        if (data == null) continue;
+                        debugChunks.add(new DebugChunk(cp, data));
+                        cellCount += data.activeCellCount();
                     }
                 }
             }
 
-            long[] flatVals = new long[vals.size()];
-            long[] flatDerivs = new long[derivs.size()];
-            for (int i = 0; i < vals.size(); i++) flatVals[i] = vals.get(i);
-            for (int i = 0; i < derivs.size(); i++) flatDerivs[i] = derivs.get(i);
+            var poses = new ArrayList<BlockPos>(cellCount);
+            long[] flatVals = new long[cellCount * ElementType.COUNT];
+            long[] flatDerivs = new long[cellCount * ElementType.COUNT];
+            int[] valueIndex = {0};
+            for (DebugChunk debugChunk : debugChunks) {
+                debugChunk.data().forEach(debugChunk.chunkPos(), (pos, concentrations) -> {
+                    poses.add(pos);
+                    for (long value : concentrations.values()) {
+                        flatVals[valueIndex[0]] = value;
+                        valueIndex[0]++;
+                    }
+                    int derivativeStart = valueIndex[0] - ElementType.COUNT;
+                    for (int element = 0; element < ElementType.COUNT; element++) {
+                        flatDerivs[derivativeStart + element] =
+                                concentrations.derivatives()[element];
+                    }
+                });
+            }
             PacketDistributor.sendToAllPlayers(
                     new SyncDebugElementPacket(poses, flatVals, flatDerivs));
         }
@@ -58,16 +72,11 @@ public final class ElementTickProcessor {
     private static int process(ServerLevel level) {
         if(!Config.ENABLE_ELEMENT_TICK.get()) return 0;
 
-        int n = 0;
-        if (tick % 10 == 0) {
-            for (ChunkPos cp : ElementChunkEventHandler.getActiveChunkPositions(level.dimension())) {
-                LevelChunk chunk = level.getChunk(cp.x, cp.z);
-                if (chunk instanceof IElementChunkAccessor a && a.gyromancy$hasElementOverrides()) {
-                    ElementChunkProcessor.processChunk(chunk, level);
-                    n++;
-                }
-            }
-        }
-        return n;
+        if (tick % 10 != 0) return 0;
+        return ElementChunkProcessor.processLevel(
+                level,
+                ElementChunkEventHandler.getActiveChunkPositions(level.dimension()));
     }
+
+    private record DebugChunk(ChunkPos chunkPos, ElementChunkData data) {}
 }

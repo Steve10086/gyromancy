@@ -1,23 +1,23 @@
 package com.astune.gyromancy.element;
 
-import com.astune.gyromancy.api.element.ElementConcentrations;
-import net.minecraft.core.BlockPos;
-
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * Accessor interface implemented on LevelChunk via mixin.
- * Provides direct access to the element override map for efficient processing.
+ * Provides direct access to dense element tile data.
  */
 public interface IElementChunkAccessor {
 
-    /** Returns the element override map for this chunk (never null). */
-    Map<BlockPos, ElementConcentrations> gyromancy$getElementOverrides();
+    /** Returns existing tile data, or null when the chunk is inactive. */
+    ElementChunkData gyromancy$getElementData();
 
-    /** Sets the element override map. */
-    void gyromancy$setElementOverrides(Map<BlockPos, ElementConcentrations> overrides);
+    /** Returns tile data, creating the attachment when necessary. */
+    ElementChunkData gyromancy$getOrCreateElementData();
 
-    /** Returns true if this chunk has any element overrides. */
-    boolean gyromancy$hasElementOverrides();
+    /** Removes all element tile data from this chunk. */
+    void gyromancy$clearElementData();
+
+    /** Marks the chunk attachment dirty after an in-place tile mutation. */
+    void gyromancy$markElementDataDirty();
+
+    /** Returns true if this chunk has non-empty element tile data. */
+    boolean gyromancy$hasElementData();
 }

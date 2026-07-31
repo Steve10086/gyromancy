@@ -79,6 +79,20 @@ public record ElementConcentrations(long[] values, long[] derivatives) {
         return new ElementConcentrations(nv, nd);
     }
 
+    /** Advances one scalar element value by the same decay/recovery rule. */
+    public static long decayValue(long current, long target) {
+        if (current > target) return clamp(current - bellDecay(current - target));
+        if (current < target) return clamp(current + (target - current) / 4);
+        return current;
+    }
+
+    /** Scalar form of {@link #isCloseToDefault(ElementConcentrations)}. */
+    public static boolean isCloseValue(long value, long defaultValue) {
+        long diff = Math.abs(value - defaultValue);
+        long threshold = Math.max(10L, defaultValue / 10);
+        return diff < threshold;
+    }
+
     public boolean isCloseToDefault(ElementConcentrations defaults) {
         for (int i = 0; i < SIZE; i++) {
             long diff = Math.abs(values[i] - defaults.values[i]);

@@ -102,6 +102,22 @@ public final class ElementEventBus {
 
     // ── Fire methods (called from ElementChunkProcessor) ──
 
+    public static boolean hasThresholdListeners(ElementType element) {
+        return !thresholdListeners.get(element).isEmpty();
+    }
+
+    public static boolean hasChangeListeners(ElementType element) {
+        return !changeListeners.get(element).isEmpty();
+    }
+
+    public static boolean hasActivationListeners() {
+        return !activationListeners.isEmpty();
+    }
+
+    public static boolean hasCleanupListeners() {
+        return !cleanupListeners.isEmpty();
+    }
+
     /** Fires threshold events if any thresholds were crossed. */
     public static void checkAndFireThreshold(ServerLevel level, ElementThresholdEvent event) {
         for (ThresholdEntry entry : thresholdListeners.get(event.element())) {

@@ -155,32 +155,29 @@ public final class ElementOp extends OnEntityTickOp implements CompiledOp {
         float target = ctx.targetSize();
         double radius = target / 2.0;
 
-        BlockPos.betweenClosedStream(ctx.bounds().inflate(target)).map(BlockPos::immutable)
+        List<BlockPos> absorbPositions = BlockPos.betweenClosedStream(ctx.bounds().inflate(target))
+                .map(BlockPos::immutable)
                 .filter(pos -> !inSphere(ctx, pos, radius) && inSphere(ctx, pos, 1.5 * radius))
-                .forEach(pos -> absorbElement(ctx, pos));
+                .toList();
+        storedMana += ctx.elementStorage().drainAll(
+                ctx.level(), absorbPositions, absorbedElement);
 
         if (storedMana == 0.0F) return;
 
-        long releaseBlockCount = max(1, BlockPos.betweenClosedStream(ctx.bounds()).map(BlockPos::immutable)
+        List<BlockPos> releasePositions = BlockPos.betweenClosedStream(ctx.bounds())
+                .map(BlockPos::immutable)
                 .filter(pos -> inSphere(ctx, pos, radius))
-                .count());
+                .toList();
+        long releaseBlockCount = max(1, releasePositions.size());
         float manaPerBlock = storedMana / releaseBlockCount;
 
-        BlockPos.betweenClosedStream(ctx.bounds()).map(BlockPos::immutable)
-                .filter(pos -> inSphere(ctx, pos, radius))
-                .forEach(pos -> releaseMana(ctx, pos, manaPerBlock));
+        ctx.elementStorage().addAndScaleEach(
+                ctx.level(), releasePositions, RELEASE_ELEMENT,
+                manaPerBlock, manaExpendFactor);
+        storedMana -= manaPerBlock * releasePositions.size();
 
         if (storedMana > 0.0F) releaseMana(ctx, BlockPos.containing(ctx.position()), manaPerBlock);
         storedMana = 0.0F;
-    }
-
-    private void absorbElement(EntityTickContext ctx, BlockPos pos) {
-        var current = ctx.elementStorage().get(ctx.level(), pos);
-        long absorbed = current.get(absorbedElement);
-        if (absorbed == 0L) return;
-
-        storedMana += absorbed;
-        ctx.elementStorage().set(ctx.level(), pos, current.withValue(absorbedElement, 0L));
     }
 
     private void releaseMana(EntityTickContext ctx, BlockPos pos, float manaPerBlock) {

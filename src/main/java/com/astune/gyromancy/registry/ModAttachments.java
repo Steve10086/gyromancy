@@ -1,10 +1,9 @@
 package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
-import com.astune.gyromancy.api.element.ElementConcentrations;
 import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
-import net.minecraft.core.BlockPos;
+import com.astune.gyromancy.element.ElementChunkData;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
@@ -30,10 +29,10 @@ public final class ModAttachments {
      * Only positions that have been explicitly modified by magical effects are stored here.
      * Unmodified positions return their biome-default concentrations.
      */
-    public static final Supplier<AttachmentType<HashMap<BlockPos, ElementConcentrations>>>
+    public static final Supplier<AttachmentType<ElementChunkData>>
             ELEMENT_OVERRIDES = ATTACHMENTS.register("element_overrides",
-            () -> AttachmentType.builder(() -> new HashMap<BlockPos, ElementConcentrations>())
-                    .serialize(ElementConcentrations.mapCodec())
+            () -> AttachmentType.builder(ElementChunkData::new)
+                    .serialize(ElementChunkData.CODEC)
                     .build()
     );
 

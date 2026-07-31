@@ -1,7 +1,8 @@
 package com.astune.gyromancy.mixin;
 
 import com.astune.gyromancy.array.MagicArrayDetector;
-import com.astune.gyromancy.api.element.ElementConcentrations;
+import com.astune.gyromancy.element.ElementChunkData;
+import com.astune.gyromancy.element.ElementStorageManager;
 import com.astune.gyromancy.element.IElementChunkAccessor;
 import com.astune.gyromancy.registry.ModAttachments;
 import net.minecraft.core.BlockPos;
@@ -12,9 +13,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.Mixin;
-
-import java.util.HashMap;
-import java.util.Map;
 
 @Mixin(LevelChunk.class)
 public abstract class LevelChunkMixin implements IElementChunkAccessor {
@@ -28,31 +26,40 @@ public abstract class LevelChunkMixin implements IElementChunkAccessor {
         LevelChunk self = (LevelChunk) (Object) this;
         if (self.getLevel() instanceof ServerLevel level) {
             MagicArrayDetector.onBlockReplaced(level, self, pos, oldState, state);
+            ElementStorageManager.INSTANCE.onBlockChanged(level, pos);
         }
     }
 
     @Override
-    public Map<BlockPos, ElementConcentrations> gyromancy$getElementOverrides() {
+    public ElementChunkData gyromancy$getElementData() {
         LevelChunk self = (LevelChunk) (Object) this;
-        if (!self.hasData(ModAttachments.ELEMENT_OVERRIDES.get())) {
-            return new HashMap<>();
-        }
-        return new HashMap<>(self.getData(ModAttachments.ELEMENT_OVERRIDES.get()));
+        if (!self.hasData(ModAttachments.ELEMENT_OVERRIDES.get())) return null;
+        ElementChunkData data = self.getData(ModAttachments.ELEMENT_OVERRIDES.get());
+        return data.isEmpty() ? null : data;
     }
 
     @Override
-    public void gyromancy$setElementOverrides(Map<BlockPos, ElementConcentrations> overrides) {
+    public ElementChunkData gyromancy$getOrCreateElementData() {
         LevelChunk self = (LevelChunk) (Object) this;
-        if (overrides == null || overrides.isEmpty()) {
-            self.removeData(ModAttachments.ELEMENT_OVERRIDES.get());
-        } else {
-            self.setData(ModAttachments.ELEMENT_OVERRIDES.get(), new HashMap<>(overrides));
-        }
+        return self.getData(ModAttachments.ELEMENT_OVERRIDES.get());
     }
 
     @Override
-    public boolean gyromancy$hasElementOverrides() {
+    public void gyromancy$clearElementData() {
         LevelChunk self = (LevelChunk) (Object) this;
-        return self.hasData(ModAttachments.ELEMENT_OVERRIDES.get());
+        self.removeData(ModAttachments.ELEMENT_OVERRIDES.get());
+        self.setUnsaved(true);
+    }
+
+    @Override
+    public void gyromancy$markElementDataDirty() {
+        ((LevelChunk) (Object) this).setUnsaved(true);
+    }
+
+    @Override
+    public boolean gyromancy$hasElementData() {
+        LevelChunk self = (LevelChunk) (Object) this;
+        return self.hasData(ModAttachments.ELEMENT_OVERRIDES.get())
+                && !self.getData(ModAttachments.ELEMENT_OVERRIDES.get()).isEmpty();
     }
 }

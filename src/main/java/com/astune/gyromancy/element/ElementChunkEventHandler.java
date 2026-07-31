@@ -25,7 +25,10 @@ public final class ElementChunkEventHandler {
 
     public static void onChunkLoad(ChunkEvent.Load event) {
         if (!(event.getChunk() instanceof LevelChunk chunk)) return;
-        if (chunk instanceof IElementChunkAccessor accessor && accessor.gyromancy$hasElementOverrides()) {
+        if (chunk.getLevel() instanceof ServerLevel level) {
+            ElementStorageManager.INSTANCE.onChunkLoaded(level, chunk);
+        }
+        if (chunk instanceof IElementChunkAccessor accessor && accessor.gyromancy$hasElementData()) {
             if (chunk.getLevel() instanceof ServerLevel sl) {
                 activeChunks.computeIfAbsent(sl.dimension(), k -> ConcurrentHashMap.newKeySet())
                         .add(chunk.getPos());

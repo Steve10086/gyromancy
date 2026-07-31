@@ -57,23 +57,13 @@ public final class ElementConversionOp extends OnEntityTickOp {
         long elementPerBlock = (long)Math.floor(convertedElement / positions.size());
         if (elementPerBlock <= 0L) return;
 
-        for (BlockPos pos : positions) {
-            var current = ctx.elementStorage().get(ctx.level(), pos);
-            ctx.elementStorage().set(ctx.level(), pos,
-                    current.withValue(element, current.get(element) + elementPerBlock));
-        }
+        ctx.elementStorage().addToEach(
+                ctx.level(), positions, element, elementPerBlock);
         ctx.setAverageElementLevel(ctx.averageElementLevel() + elementPerBlock);
     }
 
     private static long drainMana(EntityTickContext ctx, List<BlockPos> positions) {
-        long drained = 0L;
-        for (BlockPos pos : positions) {
-            var current = ctx.elementStorage().get(ctx.level(), pos);
-            long currentMana = Math.max(0L, current.get(ElementType.MANA));
-            if (currentMana == 0L) continue;
-            drained += currentMana;
-            ctx.elementStorage().set(ctx.level(), pos, current.withValue(ElementType.MANA, 0L));
-        }
-        return drained;
+        return ctx.elementStorage().drainPositive(
+                ctx.level(), positions, ElementType.MANA);
     }
 }

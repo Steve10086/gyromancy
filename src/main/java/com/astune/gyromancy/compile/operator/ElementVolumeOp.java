@@ -87,10 +87,8 @@ public final class ElementVolumeOp extends OnEntityTickOp {
         if (positions.isEmpty()) return;
 
         double volume = MagicBallGeometry.volume(ctx.targetSize());
-        double average = positions.stream()
-                .mapToLong(pos -> ctx.elementStorage().get(ctx.level(), pos).get(element))
-                .average()
-                .orElse(0.0);
+        double average = (double) ctx.elementStorage().sum(
+                ctx.level(), positions, element) / positions.size();
 
         double lostVolume = lostVolume(volume, average);
         volume -= lostVolume;
@@ -140,17 +138,7 @@ public final class ElementVolumeOp extends OnEntityTickOp {
     }
 
     private static long drainMana(EntityTickContext ctx, List<BlockPos> positions, long needed) {
-        long drained = 0L;
-        for (BlockPos pos : positions) {
-            if (drained >= needed) break;
-            var current = ctx.elementStorage().get(ctx.level(), pos);
-            long currentMana = Math.max(0L, current.get(ElementType.MANA));
-            long absorbed = Math.min(currentMana, needed - drained);
-            if (absorbed == 0L) continue;
-            drained += absorbed;
-            ctx.elementStorage().set(ctx.level(), pos,
-                    current.withValue(ElementType.MANA, currentMana - absorbed));
-        }
-        return drained;
+        return ctx.elementStorage().consume(
+                ctx.level(), positions, ElementType.MANA, needed);
     }
 }

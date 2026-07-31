@@ -28,13 +28,14 @@ public class DryBallEntity extends ResistantBallEntity {
     protected void tickAfterPayload() {
         if (level().isClientSide || tickCount % EFFECT_INTERVAL != 0) return;
         List<BlockPos> positions = containedPositions(getTargetSize());
+        long availableMana = ElementStorageManager.INSTANCE.sumPositive(
+                level(), positions, ElementType.MANA);
         for (BlockPos pos : positions) {
             if (!level().getBlockState(pos).is(Blocks.WATER)) continue;
-            long availableMana = positions.stream()
-                    .mapToLong(p -> Math.max(0L, ElementStorageManager.INSTANCE.get(level(), p).get(ElementType.MANA)))
-                    .sum();
             if (availableMana >= WATER_BLOCK_MANA_COST) {
-                consumeElement(positions, ElementType.MANA, WATER_BLOCK_MANA_COST);
+                long consumed = consumeElement(
+                        positions, ElementType.MANA, WATER_BLOCK_MANA_COST);
+                availableMana -= consumed;
                 level().setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
             }
         }

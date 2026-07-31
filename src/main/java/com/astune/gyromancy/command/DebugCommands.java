@@ -145,10 +145,11 @@ public final class DebugCommands {
 
     private static int clearLoadedElementOverrides(ServerLevel level) {
         int cleared = 0;
-        for (ChunkPos cp : ElementChunkEventHandler.getActiveChunkPositions(level.dimension())) {
+        for (ChunkPos cp : List.copyOf(
+                ElementChunkEventHandler.getActiveChunkPositions(level.dimension()))) {
             LevelChunk chunk = level.getChunk(cp.x, cp.z);
-            if (chunk instanceof IElementChunkAccessor a && a.gyromancy$hasElementOverrides()) {
-                a.gyromancy$setElementOverrides(null);
+            if (chunk instanceof IElementChunkAccessor a && a.gyromancy$hasElementData()) {
+                a.gyromancy$clearElementData();
                 ElementChunkEventHandler.markInactive(chunk);
                 cleared++;
             }
