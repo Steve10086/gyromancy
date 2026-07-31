@@ -122,7 +122,7 @@ public final class ManaProjectileOp extends EntityEffectOp {
     }
 
     private static List<EntityPayload> payloadFor(ManaProjectileOp node) {
-        return node.payload(List.of());
+        return node.payload(List.of(ElementVolumeOp.stability(ElementType.MANA)));
     }
 
     private static List<ParameterRune> toRuneParams(List<OpInput> inputs) {

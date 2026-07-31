@@ -2,7 +2,9 @@ package com.astune.gyromancy.entity.ball;
 
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.EntityTickContext;
+import com.astune.gyromancy.compile.operator.ElementVolumeOp;
 import com.astune.gyromancy.element.ElementStorageManager;
 import com.astune.gyromancy.entity.MagicEntity;
 import com.astune.gyromancy.registry.ModAttachments;
@@ -32,8 +34,6 @@ public abstract class MagicBallEntity extends MagicEntity {
             SynchedEntityData.defineId(MagicBallEntity.class, EntityDataSerializers.FLOAT);
     protected static final float SPAWN_SIZE = 0.1F;
     private static final int GROWTH_RATE = 2;
-    private static final double VOLUME_LOSS_PER_TICK = 0.01;
-    private static final double ELEMENT_EQUILIBRIUM = 100.0;
     private UUID boundArrayId;
     private final ElementType targetElement;
     private double averageElementLevel;
@@ -61,7 +61,6 @@ public abstract class MagicBallEntity extends MagicEntity {
         impactThisTick = blockHit.getType() != HitResult.Type.MISS || hitLivingEntity(velocityThisTick);
 
         setDeltaMovement(velocityThisTick.add(acceleration));
-        updateSizeFromElementConcentration();
         return true;
 
     }
@@ -69,6 +68,11 @@ public abstract class MagicBallEntity extends MagicEntity {
     @Override
     protected EntityTickContext payloadContext(Map<String, Object> runtimeData) {
         return EntityTickContext.from(this, runtimeData, payloadAcceleration());
+    }
+
+    @Override
+    protected List<? extends EntityPayload> defaultPayload() {
+        return List.of(ElementVolumeOp.stability(targetElement));
     }
 
     protected Vec3 payloadAcceleration() {
@@ -115,6 +119,12 @@ public abstract class MagicBallEntity extends MagicEntity {
         setTargetSize(size);
     }
 
+    public void setTargetVolume(double volume) {
+        Vec3 velocity = getDeltaMovement();
+        setTargetSize((float)MagicBallGeometry.sizeForVolume(volume, SPAWN_SIZE));
+        setDeltaMovement(velocity);
+    }
+
     protected void setTargetSize(float size) {
         float targetSize = Math.max(SPAWN_SIZE, size);
         entityData.set(DATA_TARGET_SIZE, targetSize);
@@ -149,32 +159,12 @@ public abstract class MagicBallEntity extends MagicEntity {
         return averageElementLevel;
     }
 
-    public ElementType elementType() {
-        return targetElement;
+    public void setAverageElementLevel(double averageElementLevel) {
+        this.averageElementLevel = averageElementLevel;
     }
 
-    private void updateSizeFromElementConcentration() {
-        if (level().isClientSide) return;
-
-        float size = getTargetSize();
-        List<BlockPos> positions = containedPositions(size);
-        if (positions.isEmpty()) return;
-
-        double volume = MagicBallGeometry.volume(size);
-        double average = positions.stream()
-                .mapToLong(pos -> ElementStorageManager.INSTANCE.get(level(), pos).get(targetElement))
-                .average()
-                .orElse(0.0);
-        averageElementLevel = average;
-
-        if (average >= ELEMENT_EQUILIBRIUM * volume) return;
-        double lost = Math.min(volume * 0.005 + VOLUME_LOSS_PER_TICK,
-                volume - MagicBallGeometry.volume(SPAWN_SIZE));
-        if (lost > 0.0) {
-            Vec3 velocity = getDeltaMovement();
-            setTargetSize((float) MagicBallGeometry.sizeForVolume(volume - lost, SPAWN_SIZE));
-            setDeltaMovement(velocity);
-        }
+    public ElementType elementType() {
+        return targetElement;
     }
 
     protected Vec3 launchVelocity(Vec3 velocity, double arrowSizeSum, double liftDirection) {

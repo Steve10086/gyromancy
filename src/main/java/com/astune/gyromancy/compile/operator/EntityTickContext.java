@@ -1,5 +1,6 @@
 package com.astune.gyromancy.compile.operator;
 
+import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.element.ElementStorageManager;
 import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import net.minecraft.world.entity.Entity;
@@ -7,9 +8,11 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.DoubleConsumer;
 
 public final class EntityTickContext {
     private final Entity owner;
@@ -26,18 +29,22 @@ public final class EntityTickContext {
     private final boolean impact;
     private final float size;
     private final float targetSize;
-    private final double averageElementLevel;
+    private double averageElementLevel;
     private final Map<String, Object> data;
     private final Runnable discard;
     private final Consumer<Entity> addFreshEntity;
     private final BiConsumer<MagicBallEntity, String> bindGeneratedEntity;
+    private final DoubleConsumer setTargetVolume;
+    private final DoubleConsumer setAverageElementLevel;
+    private final Map<ElementType, Double> pendingElementConversions = new EnumMap<>(ElementType.class);
 
     public EntityTickContext(Entity owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
                              Vec3 facing, Vec3 acceleration, AABB bounds, boolean clientSide, boolean alive,
                              boolean fullyGrown, boolean impact, float size, float targetSize,
                              double averageElementLevel, Map<String, Object> data,
                              Runnable discard, Consumer<Entity> addFreshEntity,
-                             BiConsumer<MagicBallEntity, String> bindGeneratedEntity) {
+                             BiConsumer<MagicBallEntity, String> bindGeneratedEntity,
+                             DoubleConsumer setTargetVolume, DoubleConsumer setAverageElementLevel) {
         this.owner = owner;
         this.level = level;
         this.tickCount = tickCount;
@@ -57,6 +64,8 @@ public final class EntityTickContext {
         this.discard = discard;
         this.addFreshEntity = addFreshEntity;
         this.bindGeneratedEntity = bindGeneratedEntity;
+        this.setTargetVolume = setTargetVolume;
+        this.setAverageElementLevel = setAverageElementLevel;
     }
 
     public static EntityTickContext from(MagicBallEntity entity, Map<String, Object> data, Vec3 acceleration) {
@@ -65,7 +74,8 @@ public final class EntityTickContext {
                 entity.level().isClientSide,
                 entity.isAlive(), entity.isFullyGrown(), entity.hasImpactThisTick(), entity.getBallSize(),
                 entity.getTargetSize(), entity.getAverageElementLevel(), data,
-                entity::discard, entity.level()::addFreshEntity, entity::bindGeneratedEntity);
+                entity::discard, entity.level()::addFreshEntity, entity::bindGeneratedEntity,
+                entity::setTargetVolume, entity::setAverageElementLevel);
     }
 
     public Entity owner() { return owner; }
@@ -99,6 +109,24 @@ public final class EntityTickContext {
     public double averageElementLevel() { return averageElementLevel; }
 
     public ElementStorageManager elementStorage() { return ElementStorageManager.INSTANCE; }
+
+    public void setTargetVolume(double volume) {
+        setTargetVolume.accept(volume);
+    }
+
+    public void setAverageElementLevel(double averageElementLevel) {
+        this.averageElementLevel = averageElementLevel;
+        setAverageElementLevel.accept(averageElementLevel);
+    }
+
+    public void addPendingElementConversion(ElementType element, double amount) {
+        if (amount > 0.0) pendingElementConversions.merge(element, amount, Double::sum);
+    }
+
+    public double consumePendingElementConversion(ElementType element) {
+        Double amount = pendingElementConversions.remove(element);
+        return amount == null ? 0.0 : amount;
+    }
 
     public void discard() { discard.run(); }
 

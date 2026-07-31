@@ -2,6 +2,7 @@ package com.astune.gyromancy.entity.ball;
 
 import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.ElementConversionOp;
+import com.astune.gyromancy.compile.operator.ElementVolumeOp;
 import com.astune.gyromancy.compile.operator.FireProjectileOp;
 import com.astune.gyromancy.compile.operator.SmeltOp;
 import com.astune.gyromancy.registry.ModEntities;
@@ -46,9 +47,10 @@ public class OldFireballEntity extends MagicBallEntity {
     @Override
     protected List<? extends EntityPayload> defaultPayload() {
         return List.of(
-            new ElementConversionOp(ElementType.FIRE, FireProjectileOp.STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
+            new ElementVolumeOp(ElementType.FIRE, FireProjectileOp.STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
                     FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL, FIRE_PER_VOLUME,
                     FIRE_CONVERSION_COST, MANA_TO_VOLUME),
+            new ElementConversionOp(ElementType.FIRE, ELEMENT_EXCHANGE_INTERVAL),
             new SmeltOp());
     }
 

@@ -25,6 +25,14 @@ import java.util.Map;
 
 @RegisteredOp
 public final class FireProjectileOp extends EntityEffectOp {
+    private static final int ELEMENT_EXCHANGE_INTERVAL = 10;
+    private static final double FIRE_VOLUME_LOSS = 0.1;
+    private static final double FIRE_EQUILIBRIUM = 100.0;
+    private static final double MAX_VOLUME_FIRE_LEVEL = 2000.0;
+    private static final double FIRE_PER_VOLUME = 1000.0;
+    private static final double FIRE_CONVERSION_COST = 100.0;
+    private static final double MANA_TO_VOLUME = 0.01;
+
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fireball");
     public static final OpDefinition DEFINITION = new OpDefinition() {
         @Override
@@ -71,12 +79,17 @@ public final class FireProjectileOp extends EntityEffectOp {
     public static FireballEntity create(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
                                         double liftDirection, Vec3 acceleration, float size) {
         FireballEntity entity = new FireballEntity(level, pos, velocity, arrowSizeSum, liftDirection, acceleration, size);
-        entity.setPayload(List.of());
+        entity.setPayload(defaultPayload());
         return entity;
     }
 
     public static List<EntityPayload> defaultPayload() {
-        return List.of();
+        return List.of(
+                new ExplosionOp(),
+                new ElementVolumeOp(ElementType.FIRE, STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
+                        FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL,
+                        FIRE_PER_VOLUME, FIRE_CONVERSION_COST, MANA_TO_VOLUME),
+                new ElementConversionOp(ElementType.FIRE, ELEMENT_EXCHANGE_INTERVAL));
     }
 
     @Override
@@ -108,7 +121,7 @@ public final class FireProjectileOp extends EntityEffectOp {
     }
 
     private static List<EntityPayload> payloadFor(FireProjectileOp node) {
-        return node.payload(List.of(new ExplosionOp()));
+        return node.payload(defaultPayload());
     }
 
     private PositionedGlyph primaryRune() {

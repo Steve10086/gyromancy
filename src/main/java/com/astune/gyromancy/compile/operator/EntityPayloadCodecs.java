@@ -7,16 +7,17 @@ import java.util.Map;
 import java.util.Optional;
 
 final class EntityPayloadCodecs {
-    private static final Map<ResourceLocation, Codec<? extends EntityPayload>> CODECS = Map.of(
-            ExplosionOp.ID, ExplosionOp.CODEC,
-            SmeltOp.ID, SmeltOp.CODEC,
-            ElementConversionOp.ID, ElementConversionOp.CODEC,
-            ElementOp.ID, ElementOp.CODEC,
-            CarryItemsOp.ID, CarryItemsOp.CODEC,
-            WaterBurstOp.ID, WaterBurstOp.CODEC,
-            BrewingOp.ID, BrewingOp.CODEC,
-            MomentumOp.ID, MomentumOp.CODEC,
-            RotationOp.ID, RotationOp.CODEC
+    private static final Map<ResourceLocation, Codec<? extends EntityPayload>> CODECS = Map.ofEntries(
+            Map.entry(ExplosionOp.ID, ExplosionOp.CODEC),
+            Map.entry(SmeltOp.ID, SmeltOp.CODEC),
+            Map.entry(ElementVolumeOp.ID, ElementVolumeOp.CODEC),
+            Map.entry(ElementConversionOp.ID, ElementConversionOp.CODEC),
+            Map.entry(ElementOp.ID, ElementOp.CODEC),
+            Map.entry(CarryItemsOp.ID, CarryItemsOp.CODEC),
+            Map.entry(WaterBurstOp.ID, WaterBurstOp.CODEC),
+            Map.entry(BrewingOp.ID, BrewingOp.CODEC),
+            Map.entry(MomentumOp.ID, MomentumOp.CODEC),
+            Map.entry(RotationOp.ID, RotationOp.CODEC)
     );
 
     private EntityPayloadCodecs() {}

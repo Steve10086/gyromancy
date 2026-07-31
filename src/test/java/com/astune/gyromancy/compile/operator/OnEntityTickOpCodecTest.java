@@ -24,8 +24,9 @@ class OnEntityTickOpCodecTest {
                         new MomentumOp.AccelerationInput(net.minecraft.world.phys.Vec3.ZERO, 5.0, true))),
                 new RotationOp(-3.0),
                 new ElementOp(ElementType.WATER),
-                new ElementConversionOp(ElementType.FIRE, "storedMana", 10,
-                        0.1, 1000.0, 200.0, 1000.0, 10.0, 0.05));
+                new ElementVolumeOp(ElementType.FIRE, "storedMana", 10,
+                        0.1, 1000.0, 200.0, 1000.0, 10.0, 0.05),
+                new ElementConversionOp(ElementType.FIRE, 10));
 
         CompoundTag tag = new CompoundTag();
         tag.put("Payload", EntityPayload.savePayloadList(payload));
@@ -45,9 +46,12 @@ class OnEntityTickOpCodecTest {
         assertEquals(-3.0, rotation.rotationSpeed());
         ElementOp elementPayload = assertInstanceOf(ElementOp.class, loaded.get(7));
         assertEquals(ElementType.WATER, elementPayload.absorbedElement());
-        ElementConversionOp conversion = assertInstanceOf(ElementConversionOp.class, loaded.get(8));
+        ElementVolumeOp volume = assertInstanceOf(ElementVolumeOp.class, loaded.get(8));
+        assertEquals(ElementType.FIRE, volume.element());
+        assertEquals("storedMana", volume.storedManaKey());
+        assertEquals(10, volume.interval());
+        ElementConversionOp conversion = assertInstanceOf(ElementConversionOp.class, loaded.get(9));
         assertEquals(ElementType.FIRE, conversion.element());
-        assertEquals("storedMana", conversion.storedManaKey());
         assertEquals(10, conversion.interval());
     }
 }

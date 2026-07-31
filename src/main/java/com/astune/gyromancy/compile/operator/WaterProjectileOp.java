@@ -27,6 +27,15 @@ import java.util.Map;
 
 @RegisteredOp
 public final class WaterProjectileOp extends EntityEffectOp {
+    private static final int ELEMENT_EXCHANGE_INTERVAL = 10;
+    private static final double VOLUME_LOSS = 0.1;
+    private static final double EQUILIBRIUM = 1000.0;
+    private static final double MAX_VOLUME_LEVEL = 200.0;
+    private static final double ELEMENT_PER_VOLUME = 1000.0;
+    private static final double ELEMENT_CONVERSION_COST = 10.0;
+    private static final double MANA_TO_VOLUME = 0.05;
+    public static final String STORED_MANA_KEY = "storedMana";
+
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "water_projectile");
     public static final OpDefinition DEFINITION = new OpDefinition() {
         @Override
@@ -81,7 +90,11 @@ public final class WaterProjectileOp extends EntityEffectOp {
     public static List<EntityPayload> defaultPayload() {
         return List.of(
                 new WaterBurstOp(),
-                new CarryItemsOp()
+                new CarryItemsOp(),
+                new ElementVolumeOp(ElementType.WATER, STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
+                        VOLUME_LOSS, EQUILIBRIUM, MAX_VOLUME_LEVEL,
+                        ELEMENT_PER_VOLUME, ELEMENT_CONVERSION_COST, MANA_TO_VOLUME),
+                new ElementConversionOp(ElementType.WATER, ELEMENT_EXCHANGE_INTERVAL)
         );
     }
 
