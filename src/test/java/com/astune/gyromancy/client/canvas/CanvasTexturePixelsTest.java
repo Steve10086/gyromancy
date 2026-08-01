@@ -28,6 +28,42 @@ class CanvasTexturePixelsTest {
     }
 
     @Test
+    void materialAndStrokesAreCompositedBeforeRendering() {
+        int[] material = {0xFF112233, 0xFF445566};
+        int[] strokes = {0, 0xFFFF0000};
+
+        assertArrayEquals(
+                new int[]{0xFF112233, 0xFFFF0000},
+                CanvasTexturePixels.composeOverBackground(
+                        2, 1, strokes, material, false));
+    }
+
+    @Test
+    void nearestResizeNeverIntroducesIntermediateColors() {
+        int[] source = {
+                0xFFFF0000, 0xFF00FF00,
+                0xFF0000FF, 0xFFFFFFFF
+        };
+
+        assertArrayEquals(
+                new int[]{
+                        0xFFFF0000, 0xFFFF0000, 0xFF00FF00, 0xFF00FF00,
+                        0xFFFF0000, 0xFFFF0000, 0xFF00FF00, 0xFF00FF00,
+                        0xFF0000FF, 0xFF0000FF, 0xFFFFFFFF, 0xFFFFFFFF,
+                        0xFF0000FF, 0xFF0000FF, 0xFFFFFFFF, 0xFFFFFFFF
+                },
+                CanvasTexturePixels.resizeNearest(source, 2, 2, 4, 4));
+    }
+
+    @Test
+    void translucentStrokeCompositesOverMaterial() {
+        assertEquals(
+                0xFF80007F,
+                CanvasTexturePixels.compositeOver(
+                        0x80FF0000, 0xFF0000FF));
+    }
+
+    @Test
     void compositionCanMirrorOnlyTheTextureXAxis() {
         int[] colors = {0xFFFF0000, 0, 0xFF0000FF};
 

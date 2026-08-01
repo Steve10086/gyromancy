@@ -50,5 +50,17 @@ public final class ModNetwork {
                 SubmitCanvasInventoryPacket.STREAM_CODEC,
                 SubmitCanvasInventoryPacket::handleServer
         );
+
+        registrar.playToClient(
+                StampEditorSnapshotPacket.TYPE,
+                StampEditorSnapshotPacket.STREAM_CODEC,
+                StampEditorSnapshotPacket::handleClient
+        );
+
+        registrar.playToServer(
+                SubmitStampCarvingPacket.TYPE,
+                SubmitStampCarvingPacket.STREAM_CODEC,
+                SubmitStampCarvingPacket::handleServer
+        );
     }
 }

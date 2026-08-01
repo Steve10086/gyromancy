@@ -7,6 +7,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.Resource;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
 
 /**
  * One registered GPU texture containing both the canvas paper and its strokes.
@@ -21,6 +26,7 @@ final class CanvasDynamicTexture implements AutoCloseable {
     private final int width;
     private final int height;
     private final boolean mirrorX;
+    private final int[] background;
     private boolean dirty;
     private boolean closed;
 
@@ -28,20 +34,24 @@ final class CanvasDynamicTexture implements AutoCloseable {
                                  int width,
                                  int height,
                                  int[] colors,
-                                 boolean mirrorX) {
+                                 boolean mirrorX,
+                                 int[] background) {
         this.textureManager = Minecraft.getInstance().getTextureManager();
         this.width = width;
         this.height = height;
         this.mirrorX = mirrorX;
+        this.background = background;
 
         NativeImage image = new NativeImage(width, height, true);
         writeAll(image, colors);
         this.texture = new DynamicTexture(image);
-        this.texture.setFilter(false, false);
         this.location = ResourceLocation.fromNamespaceAndPath(
                 Gyromancy.MODID,
                 "dynamic/canvas/" + name);
         textureManager.register(location, texture);
+        // Registration may reapply the texture's default sampler state.
+        // Set nearest-neighbour filtering only after it is registered.
+        enforceNearestFilter();
     }
 
     static CanvasDynamicTexture create(String name,
@@ -52,7 +62,8 @@ final class CanvasDynamicTexture implements AutoCloseable {
                 document.resolutionWidth(),
                 document.resolutionHeight(),
                 document.colors(),
-                mirrorX);
+                mirrorX,
+                null);
     }
 
     static CanvasDynamicTexture create(String name,
@@ -60,7 +71,22 @@ final class CanvasDynamicTexture implements AutoCloseable {
                                        int[] colors,
                                        boolean mirrorX) {
         int size = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        return new CanvasDynamicTexture(name, size, size, colors, mirrorX);
+        return new CanvasDynamicTexture(name, size, size, colors, mirrorX, null);
+    }
+
+    static CanvasDynamicTexture createWithMaterial(String name,
+                                                   int scale,
+                                                   int[] colors,
+                                                   boolean mirrorX,
+                                                   ResourceLocation material) {
+        int size = CanvasDocument.PIXELS_PER_BLOCK * scale;
+        return new CanvasDynamicTexture(
+                name,
+                size,
+                size,
+                colors,
+                mirrorX,
+                loadMaterialPixels(material, size, size));
     }
 
     ResourceLocation location() {
@@ -78,11 +104,12 @@ final class CanvasDynamicTexture implements AutoCloseable {
     void setCanvasPixel(int matrixX, int y, int strokeArgb) {
         NativeImage image = pixels();
         int textureX = CanvasTexturePixels.textureX(matrixX, width, mirrorX);
+        int displayedArgb = background == null
+                ? CanvasTexturePixels.compositeOverPaper(strokeArgb)
+                : CanvasTexturePixels.compositeOver(
+                        strokeArgb, background[y * width + matrixX]);
         image.setPixelRGBA(
-                textureX,
-                y,
-                CanvasTexturePixels.argbToAbgr(
-                        CanvasTexturePixels.compositeOverPaper(strokeArgb)));
+                textureX, y, CanvasTexturePixels.argbToAbgr(displayedArgb));
         dirty = true;
     }
 
@@ -94,12 +121,20 @@ final class CanvasDynamicTexture implements AutoCloseable {
     void uploadIfDirty() {
         if (!closed && dirty) {
             texture.upload();
+            enforceNearestFilter();
             dirty = false;
         }
     }
 
+    void enforceNearestFilter() {
+        if (!closed) texture.setFilter(false, false);
+    }
+
     private void writeAll(NativeImage image, int[] colors) {
-        int[] composed = CanvasTexturePixels.compose(width, height, colors, mirrorX);
+        int[] composed = background == null
+                ? CanvasTexturePixels.compose(width, height, colors, mirrorX)
+                : CanvasTexturePixels.composeOverBackground(
+                        width, height, colors, background, mirrorX);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 image.setPixelRGBA(
@@ -107,6 +142,50 @@ final class CanvasDynamicTexture implements AutoCloseable {
                         y,
                         CanvasTexturePixels.argbToAbgr(composed[y * width + x]));
             }
+        }
+    }
+
+    private static int[] loadMaterialPixels(ResourceLocation material,
+                                            int targetWidth,
+                                            int targetHeight) {
+        int[] fallback = new int[targetWidth * targetHeight];
+        Arrays.fill(fallback, CanvasTexturePixels.PAPER_ARGB);
+        try {
+            Resource resource = Minecraft.getInstance()
+                    .getResourceManager()
+                    .getResource(material)
+                    .orElse(null);
+            if (resource == null) {
+                Gyromancy.LOGGER.warn(
+                        "Stamp canvas material texture {} was not found",
+                        material);
+                return fallback;
+            }
+            try (InputStream stream = resource.open();
+                 NativeImage source = NativeImage.read(stream)) {
+                int sourceWidth = source.getWidth();
+                int sourceHeight = source.getHeight();
+                int[] sourcePixels = new int[sourceWidth * sourceHeight];
+                for (int y = 0; y < sourceHeight; y++) {
+                    for (int x = 0; x < sourceWidth; x++) {
+                        sourcePixels[y * sourceWidth + x] =
+                                CanvasTexturePixels.argbToAbgr(
+                                        source.getPixelRGBA(x, y));
+                    }
+                }
+                return CanvasTexturePixels.resizeNearest(
+                        sourcePixels,
+                        sourceWidth,
+                        sourceHeight,
+                        targetWidth,
+                        targetHeight);
+            }
+        } catch (IOException exception) {
+            Gyromancy.LOGGER.warn(
+                    "Could not load stamp canvas material texture {}",
+                    material,
+                    exception);
+            return fallback;
         }
     }
 

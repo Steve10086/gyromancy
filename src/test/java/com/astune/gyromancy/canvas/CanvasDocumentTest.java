@@ -26,6 +26,23 @@ class CanvasDocumentTest {
     }
 
     @Test
+    void exportsColorsForBottomOriginPatternCoordinates() {
+        CanvasDocument blank = CanvasDocument.blank(1, 1);
+        int[] colors = blank.colors();
+        colors[1 * 16 + 2] = 0xFF112233;
+        colors[14 * 16 + 3] = 0xFF445566;
+        CanvasDocument document = blank.withRaster(
+                colors, blank.strokeEffects());
+
+        int[] bottomToTop = document.colorsBottomToTop();
+
+        assertEquals(0xFF112233, bottomToTop[14 * 16 + 2]);
+        assertEquals(0xFF445566, bottomToTop[1 * 16 + 3]);
+        assertEquals(0xFF112233, document.colorAt(2, 1));
+        assertEquals(0xFF445566, document.colorAt(3, 14));
+    }
+
+    @Test
     void increasingScaleReplicatesBothRasterMatricesAndGlyphOwnership() {
         CanvasDocument blank = CanvasDocument.blank(1, 1);
         int[] colors = blank.colors();

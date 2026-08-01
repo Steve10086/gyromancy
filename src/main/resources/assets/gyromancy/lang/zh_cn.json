@@ -13,8 +13,10 @@
   "screen.gyromancy.canvas.view_zoom": "视图：%s%%",
   "item.gyromancy.stamp": "奥术印章",
   "item.gyromancy.stamp.mode": "模式：%s",
-  "item.gyromancy.stamp.mode.default": "盖印",
+  "item.gyromancy.stamp.mode.default": "雕刻",
   "item.gyromancy.stamp.has_data": "图案：%s x %s 像素",
   "item.gyromancy.stamp.empty": "尚未记录图案",
-  "item.gyromancy.stamp.help": "使用以绘制已记录的图案"
+  "item.gyromancy.stamp.help": "Shift+右键雕刻；使用以绘制已记录的图案",
+  "screen.gyromancy.stamp_carving": "印章雕刻",
+  "screen.gyromancy.stamp_carving.controls": "左键雕刻 / 右键擦除 / Shift 平移与缩放"
 }

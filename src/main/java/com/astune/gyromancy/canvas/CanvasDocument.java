@@ -86,6 +86,26 @@ public record CanvasDocument(
         return colors.clone();
     }
 
+    /**
+     * Returns the color raster for coordinate systems whose vertical origin
+     * is at the bottom. The document itself remains top-origin so editor and
+     * recognizer coordinates are unchanged.
+     */
+    public int[] colorsBottomToTop() {
+        int width = resolutionWidth();
+        int height = resolutionHeight();
+        int[] result = new int[colors.length];
+        for (int y = 0; y < height; y++) {
+            System.arraycopy(
+                    colors,
+                    y * width,
+                    result,
+                    (height - 1 - y) * width,
+                    width);
+        }
+        return result;
+    }
+
     int[] rawColors() {
         return colors;
     }

@@ -1,6 +1,7 @@
 package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.canvas.StampCanvasMaterial;
 import com.astune.gyromancy.api.ink.InkType;
 import com.astune.gyromancy.api.ink.PenProperties;
 import com.astune.gyromancy.canvas.CanvasDocument;
@@ -67,6 +68,33 @@ public final class ModDataComponents {
                     DataComponentType.<CanvasFace>builder()
                             .persistent(CanvasFace.CODEC)
                             .networkSynchronized(CanvasFace.STREAM_CODEC)
+                            .build()
+            );
+
+    /** Entity-independent canvas stored inside a stamp. */
+    public static final Supplier<DataComponentType<CanvasDocument>> STAMP_CANVAS =
+            DATA_COMPONENTS.register("stamp_canvas", () ->
+                    DataComponentType.<CanvasDocument>builder()
+                            .persistent(CanvasDocument.CODEC)
+                            .networkSynchronized(ByteBufCodecs.fromCodec(CanvasDocument.CODEC))
+                            .build()
+            );
+
+    /** Externally supplied surface texture and engraving mark properties. */
+    public static final Supplier<DataComponentType<StampCanvasMaterial>> STAMP_MATERIAL =
+            DATA_COMPONENTS.register("stamp_material", () ->
+                    DataComponentType.<StampCanvasMaterial>builder()
+                            .persistent(StampCanvasMaterial.CODEC)
+                            .networkSynchronized(ByteBufCodecs.fromCodec(StampCanvasMaterial.CODEC))
+                            .build()
+            );
+
+    /** Optimistic concurrency revision for stamp carving submissions. */
+    public static final Supplier<DataComponentType<Integer>> STAMP_REVISION =
+            DATA_COMPONENTS.register("stamp_revision", () ->
+                    DataComponentType.<Integer>builder()
+                            .persistent(Codec.INT)
+                            .networkSynchronized(ByteBufCodecs.INT)
                             .build()
             );
 }

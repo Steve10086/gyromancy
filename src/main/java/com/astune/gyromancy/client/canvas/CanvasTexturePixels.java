@@ -20,6 +20,52 @@ final class CanvasTexturePixels {
         return pixels;
     }
 
+    static int[] composeOverBackground(int width,
+                                       int height,
+                                       int[] colors,
+                                       int[] background,
+                                       boolean mirrorX) {
+        if (colors.length != width * height
+                || background.length != width * height) {
+            throw new IllegalArgumentException(
+                    "Canvas and background dimensions do not match");
+        }
+        int[] pixels = new int[colors.length];
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int index = y * width + x;
+                int textureX = textureX(x, width, mirrorX);
+                pixels[y * width + textureX] =
+                        compositeOver(colors[index], background[index]);
+            }
+        }
+        return pixels;
+    }
+
+    static int[] resizeNearest(int[] source,
+                               int sourceWidth,
+                               int sourceHeight,
+                               int targetWidth,
+                               int targetHeight) {
+        if (source.length != sourceWidth * sourceHeight
+                || sourceWidth <= 0
+                || sourceHeight <= 0
+                || targetWidth <= 0
+                || targetHeight <= 0) {
+            throw new IllegalArgumentException("Invalid image dimensions");
+        }
+        int[] result = new int[targetWidth * targetHeight];
+        for (int y = 0; y < targetHeight; y++) {
+            int sourceY = y * sourceHeight / targetHeight;
+            for (int x = 0; x < targetWidth; x++) {
+                int sourceX = x * sourceWidth / targetWidth;
+                result[y * targetWidth + x] =
+                        source[sourceY * sourceWidth + sourceX];
+            }
+        }
+        return result;
+    }
+
     static int textureX(int matrixX, int width, boolean mirrorX) {
         return mirrorX
                 ? CanvasEditorCoordinates.screenColumnForMatrixColumn(matrixX, width)
@@ -27,15 +73,44 @@ final class CanvasTexturePixels {
     }
 
     static int compositeOverPaper(int strokeArgb) {
-        int alpha = strokeArgb >>> 24;
-        if (alpha == 0) return PAPER_ARGB;
-        if (alpha == 0xFF) return strokeArgb;
+        return compositeOver(strokeArgb, PAPER_ARGB);
+    }
 
-        int inverseAlpha = 0xFF - alpha;
-        int red = blendChannel(strokeArgb >> 16, PAPER_ARGB >> 16, alpha, inverseAlpha);
-        int green = blendChannel(strokeArgb >> 8, PAPER_ARGB >> 8, alpha, inverseAlpha);
-        int blue = blendChannel(strokeArgb, PAPER_ARGB, alpha, inverseAlpha);
-        return 0xFF000000 | red << 16 | green << 8 | blue;
+    static int compositeOver(int foregroundArgb, int backgroundArgb) {
+        int foregroundAlpha = foregroundArgb >>> 24;
+        if (foregroundAlpha == 0) return backgroundArgb;
+        if (foregroundAlpha == 0xFF) return foregroundArgb;
+
+        int backgroundAlpha = backgroundArgb >>> 24;
+        int inverseAlpha = 0xFF - foregroundAlpha;
+        long outputAlphaNumerator =
+                (long) foregroundAlpha * 0xFF
+                        + (long) backgroundAlpha * inverseAlpha;
+        if (outputAlphaNumerator == 0) return 0;
+
+        int outputAlpha = (int) ((outputAlphaNumerator + 127) / 255);
+        int red = compositeChannel(
+                foregroundArgb >> 16,
+                backgroundArgb >> 16,
+                foregroundAlpha,
+                backgroundAlpha,
+                inverseAlpha,
+                outputAlphaNumerator);
+        int green = compositeChannel(
+                foregroundArgb >> 8,
+                backgroundArgb >> 8,
+                foregroundAlpha,
+                backgroundAlpha,
+                inverseAlpha,
+                outputAlphaNumerator);
+        int blue = compositeChannel(
+                foregroundArgb,
+                backgroundArgb,
+                foregroundAlpha,
+                backgroundAlpha,
+                inverseAlpha,
+                outputAlphaNumerator);
+        return outputAlpha << 24 | red << 16 | green << 8 | blue;
     }
 
     static int argbToAbgr(int argb) {
@@ -46,12 +121,17 @@ final class CanvasTexturePixels {
         return alpha | blue << 16 | green | red;
     }
 
-    private static int blendChannel(int foreground,
-                                    int background,
-                                    int alpha,
-                                    int inverseAlpha) {
-        return (((foreground & 0xFF) * alpha)
-                + ((background & 0xFF) * inverseAlpha)
-                + 127) / 255;
+    private static int compositeChannel(int foreground,
+                                        int background,
+                                        int foregroundAlpha,
+                                        int backgroundAlpha,
+                                        int inverseAlpha,
+                                        long outputAlphaNumerator) {
+        long numerator =
+                (long) (foreground & 0xFF) * foregroundAlpha * 0xFF
+                        + (long) (background & 0xFF)
+                        * backgroundAlpha * inverseAlpha;
+        return (int) ((numerator + outputAlphaNumerator / 2)
+                / outputAlphaNumerator);
     }
 }

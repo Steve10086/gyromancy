@@ -31,8 +31,10 @@
   "screen.gyromancy.canvas.view_zoom": "View: %s%%",
   "item.gyromancy.stamp": "Arcane Stamp",
   "item.gyromancy.stamp.mode": "Mode: %s",
-  "item.gyromancy.stamp.mode.default": "Stamp",
+  "item.gyromancy.stamp.mode.default": "Carving",
   "item.gyromancy.stamp.has_data": "Pattern: %s x %s pixels",
   "item.gyromancy.stamp.empty": "No pattern captured",
-  "item.gyromancy.stamp.help": "Use to apply the stored pattern"
+  "item.gyromancy.stamp.help": "Shift-right-click to carve; use to apply the stored pattern",
+  "screen.gyromancy.stamp_carving": "Stamp Carving",
+  "screen.gyromancy.stamp_carving.controls": "Left: carve / Right: erase / Shift: pan and zoom"
 }
