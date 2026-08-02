@@ -11,6 +11,7 @@
   "screen.gyromancy.canvas.redo": "重做",
   "screen.gyromancy.canvas.clear": "清除",
   "screen.gyromancy.canvas.view_zoom": "视图：%s%%",
+  "screen.gyromancy.canvas.stamp_transform": "印章：%s° / %s%%（R 旋转，X + 拖动缩放）",
   "item.gyromancy.stamp": "奥术印章",
   "item.gyromancy.stamp.mode": "模式：%s",
   "item.gyromancy.stamp.mode.default": "雕刻",

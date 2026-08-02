@@ -29,6 +29,7 @@
   "screen.gyromancy.canvas.redo": "Redo",
   "screen.gyromancy.canvas.clear": "Clear",
   "screen.gyromancy.canvas.view_zoom": "View: %s%%",
+  "screen.gyromancy.canvas.stamp_transform": "Stamp: %s° / %s%%  (R: rotate, X + drag: resize)",
   "item.gyromancy.stamp": "Arcane Stamp",
   "item.gyromancy.stamp.mode": "Mode: %s",
   "item.gyromancy.stamp.mode.default": "Carving",

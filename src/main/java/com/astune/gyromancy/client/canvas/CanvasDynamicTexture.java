@@ -27,6 +27,7 @@ final class CanvasDynamicTexture implements AutoCloseable {
     private final int height;
     private final boolean mirrorX;
     private final int[] background;
+    private final boolean transparentBackground;
     private boolean dirty;
     private boolean closed;
 
@@ -35,12 +36,14 @@ final class CanvasDynamicTexture implements AutoCloseable {
                                  int height,
                                  int[] colors,
                                  boolean mirrorX,
-                                 int[] background) {
+                                 int[] background,
+                                 boolean transparentBackground) {
         this.textureManager = Minecraft.getInstance().getTextureManager();
         this.width = width;
         this.height = height;
         this.mirrorX = mirrorX;
         this.background = background;
+        this.transparentBackground = transparentBackground;
 
         NativeImage image = new NativeImage(width, height, true);
         writeAll(image, colors);
@@ -63,7 +66,8 @@ final class CanvasDynamicTexture implements AutoCloseable {
                 document.resolutionHeight(),
                 document.colors(),
                 mirrorX,
-                null);
+                null,
+                false);
     }
 
     static CanvasDynamicTexture create(String name,
@@ -71,7 +75,8 @@ final class CanvasDynamicTexture implements AutoCloseable {
                                        int[] colors,
                                        boolean mirrorX) {
         int size = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        return new CanvasDynamicTexture(name, size, size, colors, mirrorX, null);
+        return new CanvasDynamicTexture(
+                name, size, size, colors, mirrorX, null, false);
     }
 
     static CanvasDynamicTexture createWithMaterial(String name,
@@ -86,7 +91,17 @@ final class CanvasDynamicTexture implements AutoCloseable {
                 size,
                 colors,
                 mirrorX,
-                loadMaterialPixels(material, size, size));
+                loadMaterialPixels(material, size, size),
+                false);
+    }
+
+    static CanvasDynamicTexture createOverlay(String name,
+                                              int width,
+                                              int height,
+                                              int[] colors,
+                                              boolean mirrorX) {
+        return new CanvasDynamicTexture(
+                name, width, height, colors, mirrorX, null, true);
     }
 
     ResourceLocation location() {
@@ -104,7 +119,9 @@ final class CanvasDynamicTexture implements AutoCloseable {
     void setCanvasPixel(int matrixX, int y, int strokeArgb) {
         NativeImage image = pixels();
         int textureX = CanvasTexturePixels.textureX(matrixX, width, mirrorX);
-        int displayedArgb = background == null
+        int displayedArgb = transparentBackground
+                ? strokeArgb
+                : background == null
                 ? CanvasTexturePixels.compositeOverPaper(strokeArgb)
                 : CanvasTexturePixels.compositeOver(
                         strokeArgb, background[y * width + matrixX]);
@@ -131,7 +148,9 @@ final class CanvasDynamicTexture implements AutoCloseable {
     }
 
     private void writeAll(NativeImage image, int[] colors) {
-        int[] composed = background == null
+        int[] composed = transparentBackground
+                ? transparentPixels(colors)
+                : background == null
                 ? CanvasTexturePixels.compose(width, height, colors, mirrorX)
                 : CanvasTexturePixels.composeOverBackground(
                         width, height, colors, background, mirrorX);
@@ -143,6 +162,22 @@ final class CanvasDynamicTexture implements AutoCloseable {
                         CanvasTexturePixels.argbToAbgr(composed[y * width + x]));
             }
         }
+    }
+
+    private int[] transparentPixels(int[] colors) {
+        if (colors.length != width * height) {
+            throw new IllegalArgumentException(
+                    "Canvas color matrix dimensions do not match");
+        }
+        int[] result = new int[colors.length];
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int textureX = CanvasTexturePixels.textureX(
+                        x, width, mirrorX);
+                result[y * width + textureX] = colors[y * width + x];
+            }
+        }
+        return result;
     }
 
     private static int[] loadMaterialPixels(ResourceLocation material,

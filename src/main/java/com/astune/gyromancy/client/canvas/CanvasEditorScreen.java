@@ -1,6 +1,7 @@
 package com.astune.gyromancy.client.canvas;
 
 import com.astune.gyromancy.api.canvas.CanvasPenTool;
+import com.astune.gyromancy.api.canvas.CanvasStampTool;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.network.SubmitCanvasEditPacket;
 import com.astune.gyromancy.network.SubmitCanvasInventoryPacket;
@@ -16,6 +17,7 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,6 +37,9 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private static final int EXPANDED_INVENTORY_HEIGHT =
             HOTBAR_HEIGHT * EXPANDED_INVENTORY_ROWS;
     private static final int INVENTORY_TOGGLE_SIZE = 6;
+    private static final double MIN_STAMP_SIZE = 0.125;
+    private static final double MAX_STAMP_SIZE = 8.0;
+    private static final double STAMP_RESIZE_PIXELS_PER_DOUBLING = 96.0;
     private static final ResourceLocation HOTBAR_SPRITE =
             ResourceLocation.withDefaultNamespace("hud/hotbar");
     private static final ResourceLocation HOTBAR_SELECTION_SPRITE =
@@ -52,6 +57,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private final CanvasViewState viewState = new CanvasViewState();
     private final CanvasHotbarScroll hotbarScroll = new CanvasHotbarScroll();
     private CanvasDynamicTexture canvasTexture;
+    private CanvasDynamicTexture stampPreviewTexture;
     private int scale;
     private int[] colors;
     private int[] effects;
@@ -63,6 +69,14 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private int lastStrokeY = -1;
     private boolean panning;
     private boolean viewModifierHeld;
+    private boolean stampRotateKeyHeld;
+    private boolean stampResizeModifierHeld;
+    private boolean stampResizing;
+    private boolean stampErasePreview;
+    private double stampRotationDegrees;
+    private double stampSizeMultiplier = 1.0;
+    private double stampResizeAnchorMouseX;
+    private double stampResizeAnchorSize;
     private boolean inventoryExpanded;
     private boolean sessionSubmitted;
     private int panelX;
@@ -226,7 +240,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                             float partialTick,
                             int mouseX,
                             int mouseY) {
-        renderCanvas(graphics);
+        renderCanvas(graphics, mouseX, mouseY);
         renderInventoryBackground(graphics);
         renderInventoryToggle(graphics);
     }
@@ -256,9 +270,20 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 viewportX + viewportWidth - font.width(zoomLabel) - leftPos,
                 viewportY + viewportHeight + 5 - topPos,
                 0xFFBFBFBF);
+        if (hasSelectedStampTool()) {
+            graphics.drawString(
+                    font,
+                    Component.translatable(
+                            "screen.gyromancy.canvas.stamp_transform",
+                            Math.round(stampRotationDegrees),
+                            Math.round(stampSizeMultiplier * 100.0)),
+                    viewportX - leftPos,
+                    viewportY + viewportHeight + 16 - topPos,
+                    0xFFD7C79A);
+        }
     }
 
-    private void renderCanvas(GuiGraphics graphics) {
+    private void renderCanvas(GuiGraphics graphics, int mouseX, int mouseY) {
         ensureCanvasTexture();
         CanvasViewState.DisplayRect display = displayRect();
         int canvasLeft = (int) Math.floor(display.x());
@@ -284,13 +309,103 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 canvasTexture.height(),
                 canvasTexture.width(),
                 canvasTexture.height());
+        renderStampPreview(
+                graphics, mouseX, mouseY,
+                canvasLeft, canvasTop,
+                canvasRight - canvasLeft,
+                canvasBottom - canvasTop);
         graphics.disableScissor();
+    }
+
+    private void renderStampPreview(GuiGraphics graphics,
+                                    double mouseX,
+                                    double mouseY,
+                                    int canvasLeft,
+                                    int canvasTop,
+                                    int canvasWidth,
+                                    int canvasHeight) {
+        CanvasDocument stamp = selectedStamp();
+        if (stamp == null || !isOverCanvas(mouseX, mouseY)) return;
+
+        int rasterWidth = CanvasDocument.PIXELS_PER_BLOCK * scale;
+        int rasterHeight = CanvasDocument.PIXELS_PER_BLOCK * scale;
+        int[] center = canvasPixelAt(mouseX, mouseY, rasterWidth, rasterHeight);
+        int[] preview = new int[rasterWidth * rasterHeight];
+        CanvasStampRaster.visit(
+                stamp,
+                physicalWidth,
+                physicalHeight,
+                rasterWidth,
+                rasterHeight,
+                center[0],
+                center[1],
+                stampRotationDegrees,
+                stampSizeMultiplier,
+                (x, y, color, effect) -> preview[y * rasterWidth + x] =
+                        stampPreviewColor(color, effect, stampErasePreview));
+
+        ensureStampPreviewTexture(rasterWidth, rasterHeight, preview);
+        stampPreviewTexture.uploadIfDirty();
+        graphics.blit(
+                stampPreviewTexture.location(),
+                canvasLeft,
+                canvasTop,
+                canvasWidth,
+                canvasHeight,
+                0.0F,
+                0.0F,
+                rasterWidth,
+                rasterHeight,
+                rasterWidth,
+                rasterHeight);
+    }
+
+    private void ensureStampPreviewTexture(int width,
+                                           int height,
+                                           int[] preview) {
+        if (stampPreviewTexture == null
+                || stampPreviewTexture.width() != width
+                || stampPreviewTexture.height() != height) {
+            closeStampPreviewTexture();
+            stampPreviewTexture = CanvasDynamicTexture.createOverlay(
+                    "editor_preview/" + entityId,
+                    width,
+                    height,
+                    preview,
+                    false);
+            return;
+        }
+        stampPreviewTexture.replacePixels(preview);
+    }
+
+    private static int stampPreviewColor(int color,
+                                         int effect,
+                                         boolean erasing) {
+        int sourceAlpha = color >>> 24;
+        if (sourceAlpha == 0 && effect != 0) sourceAlpha = 0xFF;
+        int alpha = Math.max(40, Math.min(128,
+                (int) Math.round(sourceAlpha * 0.45)));
+        int rgb = erasing
+                ? 0x00FF5555
+                : (sourceAlpha == 0 ? 0x00FFFFFF : color & 0x00FFFFFF);
+        return alpha << 24 | rgb;
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0 && isOverInventoryToggle(mouseX, mouseY)) {
             toggleInventory();
+            return true;
+        }
+        if (menu.getCarried().isEmpty()
+                && button == 0
+                && stampResizeModifierHeld
+                && selectedStamp() != null
+                && isOverCanvas(mouseX, mouseY)) {
+            finishStroke();
+            stampResizing = true;
+            stampResizeAnchorMouseX = mouseX;
+            stampResizeAnchorSize = stampSizeMultiplier;
             return true;
         }
         if (menu.getCarried().isEmpty()
@@ -305,12 +420,19 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 && (button == 0 || button == 1)) {
             finishStroke();
             CanvasPenTool.Stroke selectedStroke = selectedPenStroke();
-            if (selectedStroke == null) return true;
-            history.beginAction();
-            strokeActive = true;
-            activeStroke = selectedStroke;
-            strokeButton = button;
-            paint(mouseX, mouseY, button);
+            if (selectedStroke != null) {
+                history.beginAction();
+                strokeActive = true;
+                activeStroke = selectedStroke;
+                strokeButton = button;
+                paint(mouseX, mouseY, button);
+            } else {
+                CanvasDocument stamp = selectedStamp();
+                if (stamp != null) {
+                    stampErasePreview = button == 1;
+                    applyStamp(mouseX, mouseY, button, stamp);
+                }
+            }
             updateActionButtons();
             return true;
         }
@@ -320,6 +442,10 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button,
                                 double dragX, double dragY) {
+        if (stampResizing && button == 0) {
+            updateStampSize(mouseX);
+            return true;
+        }
         if (panning && button == 0) {
             viewState.panBy(dragX, dragY, fittedCanvasRect(), viewportRect());
             return true;
@@ -333,6 +459,12 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (stampResizing && button == 0) {
+            updateStampSize(mouseX);
+            stampResizing = false;
+            return true;
+        }
+        if (button == 1) stampErasePreview = false;
         if (panning && button == 0) {
             panning = false;
             return true;
@@ -418,6 +550,83 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         return pen.canvasStroke(selected, minecraft.player).orElse(null);
     }
 
+    private CanvasDocument selectedStamp() {
+        if (minecraft == null || minecraft.player == null) return null;
+        ItemStack selected = minecraft.player.getMainHandItem();
+        if (!(selected.getItem() instanceof CanvasStampTool stamp)) return null;
+        return stamp.canvasStamp(selected, minecraft.player).orElse(null);
+    }
+
+    private void applyStamp(double mouseX,
+                            double mouseY,
+                            int button,
+                            CanvasDocument stamp) {
+        int rasterWidth = CanvasDocument.PIXELS_PER_BLOCK * scale;
+        int rasterHeight = CanvasDocument.PIXELS_PER_BLOCK * scale;
+        int[] center = canvasPixelAt(
+                mouseX, mouseY, rasterWidth, rasterHeight);
+
+        history.beginAction();
+        CanvasStampRaster.visit(
+                stamp,
+                physicalWidth,
+                physicalHeight,
+                rasterWidth,
+                rasterHeight,
+                center[0],
+                center[1],
+                stampRotationDegrees,
+                stampSizeMultiplier,
+                (x, y, color, effect) -> applyStampPixel(
+                        x, y, rasterWidth, button, color, effect));
+        history.commitAction();
+        updateChanged();
+    }
+
+    private void applyStampPixel(int x,
+                                 int y,
+                                 int rasterWidth,
+                                 int button,
+                                 int stampColor,
+                                 int stampEffect) {
+        int index = y * rasterWidth + x;
+        int nextColor = button == 0 ? stampColor : 0;
+        int nextEffect = button == 0 ? stampEffect : 0;
+        if (colors[index] == nextColor && effects[index] == nextEffect) return;
+        history.recordChange(
+                index, colors[index], effects[index], nextColor, nextEffect);
+        colors[index] = nextColor;
+        effects[index] = nextEffect;
+        if (canvasTexture != null) {
+            canvasTexture.setCanvasPixel(x, y, nextColor);
+        }
+    }
+
+    private int[] canvasPixelAt(double mouseX,
+                                double mouseY,
+                                int rasterWidth,
+                                int rasterHeight) {
+        CanvasViewState.DisplayRect display = displayRect();
+        int screenX = Math.min(rasterWidth - 1,
+                Math.max(0, (int) ((mouseX - display.x())
+                        * rasterWidth / display.width())));
+        int matrixX = CanvasEditorCoordinates.matrixColumnForScreenColumn(
+                screenX, rasterWidth);
+        int y = Math.min(rasterHeight - 1,
+                Math.max(0, (int) ((mouseY - display.y())
+                        * rasterHeight / display.height())));
+        return new int[]{matrixX, y};
+    }
+
+    private void updateStampSize(double mouseX) {
+        double exponent = (mouseX - stampResizeAnchorMouseX)
+                / STAMP_RESIZE_PIXELS_PER_DOUBLING;
+        stampSizeMultiplier = Math.max(
+                MIN_STAMP_SIZE,
+                Math.min(MAX_STAMP_SIZE,
+                        stampResizeAnchorSize * Math.pow(2.0, exponent)));
+    }
+
     private boolean isOverCanvas(double mouseX, double mouseY) {
         return isOverViewport(mouseX, mouseY) && displayRect().contains(mouseX, mouseY);
     }
@@ -463,6 +672,20 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         if (CanvasEditorKeyMappings.matchesViewModifier(keyCode, scanCode)) {
             viewModifierHeld = true;
         }
+        if (hasSelectedStampTool() && keyCode == GLFW.GLFW_KEY_R) {
+            if (!stampRotateKeyHeld) {
+                double direction = (modifiers & GLFW.GLFW_MOD_SHIFT) != 0
+                        ? -45.0 : 45.0;
+                stampRotationDegrees = normalizeDegrees(
+                        stampRotationDegrees + direction);
+                stampRotateKeyHeld = true;
+            }
+            return true;
+        }
+        if (hasSelectedStampTool() && keyCode == GLFW.GLFW_KEY_X) {
+            stampResizeModifierHeld = true;
+            return true;
+        }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
@@ -471,7 +694,27 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         if (CanvasEditorKeyMappings.matchesViewModifier(keyCode, scanCode)) {
             viewModifierHeld = false;
         }
+        if (keyCode == GLFW.GLFW_KEY_R && stampRotateKeyHeld) {
+            stampRotateKeyHeld = false;
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_X && stampResizeModifierHeld) {
+            stampResizeModifierHeld = false;
+            return true;
+        }
         return super.keyReleased(keyCode, scanCode, modifiers);
+    }
+
+    private boolean hasSelectedStampTool() {
+        return minecraft != null
+                && minecraft.player != null
+                && minecraft.player.getMainHandItem().getItem()
+                instanceof CanvasStampTool;
+    }
+
+    private static double normalizeDegrees(double degrees) {
+        double normalized = degrees % 360.0;
+        return normalized < 0.0 ? normalized + 360.0 : normalized;
     }
 
     @Override
@@ -648,11 +891,19 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         if (canvasTexture != null) {
             canvasTexture.close();
         }
+        closeStampPreviewTexture();
         canvasTexture = CanvasDynamicTexture.create(
                 "editor/" + entityId,
                 scale,
                 colors,
                 false);
+    }
+
+    private void closeStampPreviewTexture() {
+        if (stampPreviewTexture != null) {
+            stampPreviewTexture.close();
+            stampPreviewTexture = null;
+        }
     }
 
     private CanvasViewState.Rect fittedCanvasRect() {
@@ -718,6 +969,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
             canvasTexture.close();
             canvasTexture = null;
         }
+        closeStampPreviewTexture();
         super.removed();
     }
 

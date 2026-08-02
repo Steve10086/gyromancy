@@ -1,5 +1,6 @@
 package com.astune.gyromancy.item;
 
+import com.astune.gyromancy.api.canvas.CanvasStampTool;
 import com.astune.gyromancy.api.canvas.StampCanvasMaterial;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.network.StampEditorSnapshotPacket;
@@ -23,8 +24,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
-public class StampItem extends Item implements IPaintProvider {
+public class StampItem extends Item implements IPaintProvider, CanvasStampTool {
     private static final String MANA_KEY = "gyromancy:mana";
     private static final int MANA_VALUE = 10;
 
@@ -56,6 +58,20 @@ public class StampItem extends Item implements IPaintProvider {
     }
 
     private static Vec3 lastHitLoc = null;
+
+    @Override
+    public Optional<CanvasDocument> canvasStamp(ItemStack stack, Player player) {
+        CanvasDocument document = stack.get(ModDataComponents.STAMP_CANVAS.get());
+        if (document == null) return Optional.empty();
+        int[] colors = document.colors();
+        int[] effects = document.strokeEffects();
+        for (int index = 0; index < colors.length; index++) {
+            if ((colors[index] >>> 24) != 0 || effects[index] != 0) {
+                return Optional.of(document);
+            }
+        }
+        return Optional.empty();
+    }
 
     @Override
     public boolean shouldPaint(Player player, BlockHitResult result){
