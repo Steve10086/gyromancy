@@ -34,6 +34,8 @@ public final class FloodFillScheduler {
     private static PendingTask activeContinuation = null;
 
     private static final List<BiConsumer<ServerLevel, ExtractedGlyph>> completionCallbacks = new ArrayList<>();
+    private static final List<BiConsumer<ServerLevel, List<ExtractedGlyph>>> batchCompletionCallbacks =
+            new ArrayList<>();
 
     static {
         FloodFillExtractor.setAllSeedsRef(allSeeds);
@@ -60,6 +62,12 @@ public final class FloodFillScheduler {
 
     public static void onGlyphExtracted(BiConsumer<ServerLevel, ExtractedGlyph> callback) {
         completionCallbacks.add(callback);
+    }
+
+    /** Runs after every disconnected component in one submitted update has been extracted. */
+    public static void onBatchExtracted(
+            BiConsumer<ServerLevel, List<ExtractedGlyph>> callback) {
+        batchCompletionCallbacks.add(callback);
     }
 
     static int getPendingCount() {
@@ -100,7 +108,7 @@ public final class FloodFillScheduler {
 
     private static PendingTask handleResult(ServerLevel level, ExtractionResult result, FloodFillState state) {
         if (result.glyph() != null) {
-            fireCompletion(level, result.glyph());
+            state.completedGlyphs.add(result.glyph());
         }
 
         if (result.continuation() != null) {
@@ -109,6 +117,7 @@ public final class FloodFillScheduler {
 
         // Fully done — remove from global list
         allSeeds.remove(state.stateId);
+        fireBatchCompletion(level, state.completedGlyphs);
         Gyromancy.LOGGER.debug("[FloodFillScheduler] State #{} completed and removed", state.stateId);
         return null;
     }
@@ -118,6 +127,17 @@ public final class FloodFillScheduler {
             try { callback.accept(level, glyph); }
             catch (Exception e) { Gyromancy.LOGGER.error("[FloodFillScheduler] Callback error", e); }
         }
+    }
+
+    private static void fireBatchCompletion(ServerLevel level, List<ExtractedGlyph> glyphs) {
+        if (glyphs.isEmpty()) return;
+
+        List<ExtractedGlyph> completed = List.copyOf(glyphs);
+        for (BiConsumer<ServerLevel, List<ExtractedGlyph>> callback : batchCompletionCallbacks) {
+            try { callback.accept(level, completed); }
+            catch (Exception e) { Gyromancy.LOGGER.error("[FloodFillScheduler] Batch callback error", e); }
+        }
+        for (ExtractedGlyph glyph : completed) fireCompletion(level, glyph);
     }
 
     // ═══════════════════════════════════════════════════════════════

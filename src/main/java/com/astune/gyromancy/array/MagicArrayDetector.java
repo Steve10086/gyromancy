@@ -62,7 +62,7 @@ public final class MagicArrayDetector {
     private MagicArrayDetector() {}
 
     static {
-        FloodFillScheduler.onGlyphExtracted(MagicArrayDetector::onGlyphExtracted);
+        FloodFillScheduler.onBatchExtracted(MagicArrayDetector::onGlyphBatchExtracted);
     }
 
     @SubscribeEvent
@@ -162,6 +162,7 @@ public final class MagicArrayDetector {
     private static void invalidateChangedGlyphs(ServerLevel level, BlockPos pos,
                                                 CanvasData oldData, CanvasData newData) {
         Set<Integer> invalidGlyphIds = changedGlyphIds(oldData, newData);
+        restoreRetainedGlyphMarks(oldData, newData, invalidGlyphIds);
         if (invalidGlyphIds.isEmpty()) return;
 
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
@@ -253,29 +254,79 @@ public final class MagicArrayDetector {
         Set<Integer> changed = new HashSet<>();
         for (CanvasFace oldFace : oldData.faces()) {
             CanvasFace newFace = matchingFace(newData, oldFace);
-            byte[] oldSymbols = oldFace.getEffectLayer(ManaPixelDetector.SYMBOL_ID_KEY);
             byte[] oldGlyphs = oldFace.getEffectLayer(ManaPixelDetector.GLYPH_ID_KEY);
-            if (oldSymbols == null || oldGlyphs == null) continue;
-
-            byte[] newSymbols = newFace != null
-                    ? newFace.getEffectLayer(ManaPixelDetector.SYMBOL_ID_KEY)
-                    : null;
+            if (oldGlyphs == null) continue;
 
             int w = oldFace.pixels().getWidth();
             int h = oldFace.pixels().getHeight();
-            int count = Math.min(w * h, Math.min(oldSymbols.length, oldGlyphs.length));
+            int count = Math.min(w * h, oldGlyphs.length);
+            if (newFace == null) {
+                for (int i = 0; i < count; i++) {
+                    int glyphId = oldGlyphs[i] & 0xFF;
+                    if (glyphId > 0) changed.add(glyphId);
+                }
+                continue;
+            }
+
             for (int i = 0; i < count; i++) {
-                int oldSymbol = oldSymbols[i] & 0xFF;
-                if (oldSymbol == 0) continue;
+                int x = i % w;
+                int y = i / w;
+                int oldMana = oldFace.getEffectValue(ManaPixelDetector.MANA_EFFECT_KEY, x, y);
+                int newMana = newFace.getEffectValue(ManaPixelDetector.MANA_EFFECT_KEY, x, y);
+                if (!manaPresenceChanged(oldMana, newMana)) continue;
 
-                int newSymbol = newSymbols != null && i < newSymbols.length ? newSymbols[i] & 0xFF : 0;
-                if (newSymbol == oldSymbol) continue;
-
-                int glyphId = oldGlyphs[i] & 0xFF;
-                if (glyphId > 0) changed.add(glyphId);
+                // Removing a claimed pixel changes its glyph. Adding a pixel next
+                // to a claimed stroke changes that connected glyph as well.
+                collectNeighborGlyphIds(oldGlyphs, w, h, x, y, changed);
             }
         }
         return changed;
+    }
+
+    static boolean manaPresenceChanged(int oldMana, int newMana) {
+        return (oldMana > 0) != (newMana > 0);
+    }
+
+    private static void collectNeighborGlyphIds(
+            byte[] glyphIds, int width, int height, int centerX, int centerY,
+            Set<Integer> result) {
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int x = centerX + dx;
+                int y = centerY + dy;
+                if (x < 0 || x >= width || y < 0 || y >= height) continue;
+                int index = y * width + x;
+                if (index >= glyphIds.length) continue;
+                int glyphId = glyphIds[index] & 0xFF;
+                if (glyphId > 0) result.add(glyphId);
+            }
+        }
+    }
+
+    private static void restoreRetainedGlyphMarks(
+            CanvasData oldData, CanvasData newData, Set<Integer> invalidGlyphIds) {
+        for (CanvasFace oldFace : oldData.faces()) {
+            CanvasFace newFace = matchingFace(newData, oldFace);
+            if (newFace == null) continue;
+
+            byte[] oldGlyphs = oldFace.getEffectLayer(ManaPixelDetector.GLYPH_ID_KEY);
+            if (oldGlyphs == null) continue;
+            byte[] oldSymbols = oldFace.getEffectLayer(ManaPixelDetector.SYMBOL_ID_KEY);
+            int width = oldFace.pixels().getWidth();
+            int height = oldFace.pixels().getHeight();
+            int count = Math.min(width * height, oldGlyphs.length);
+            for (int i = 0; i < count; i++) {
+                int glyphId = oldGlyphs[i] & 0xFF;
+                if (glyphId == 0 || invalidGlyphIds.contains(glyphId)) continue;
+                int symbolId = oldSymbols != null && i < oldSymbols.length
+                        ? oldSymbols[i] & 0xFF
+                        : 0;
+                int x = i % width;
+                int y = i / width;
+                newFace.setEffectValue(ManaPixelDetector.GLYPH_ID_KEY, x, y, glyphId);
+                newFace.setEffectValue(ManaPixelDetector.SYMBOL_ID_KEY, x, y, symbolId);
+            }
+        }
     }
 
     private static CanvasFace matchingFace(CanvasData data, CanvasFace oldFace) {
@@ -296,89 +347,95 @@ public final class MagicArrayDetector {
         return null;
     }
 
-    private static void onGlyphExtracted(ServerLevel level, ExtractedGlyph glyph) {
-        Gyromancy.LOGGER.debug("[MagicArrayDetector] Glyph extracted: {} pixels across {} blocks",
-                glyph.pixels().size(), glyph.blockCount());
+    private static void onGlyphBatchExtracted(
+            ServerLevel level, List<ExtractedGlyph> extractedBatch) {
+        List<RecognizedGlyph> recognized = new ArrayList<>();
+        for (ExtractedGlyph glyph : extractedBatch) {
+            Gyromancy.LOGGER.debug(
+                    "[MagicArrayDetector] Glyph extracted: {} pixels across {} blocks",
+                    glyph.pixels().size(), glyph.blockCount());
 
-        List<SymbolMatch> matches = SymbolRecognizer.recognize(glyph);
-        if (matches.isEmpty()) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] No match - pixels NOT marked");
-            return;
+            List<SymbolMatch> matches = SymbolRecognizer.recognize(glyph);
+            if (matches.isEmpty()) {
+                Gyromancy.LOGGER.debug("[MagicArrayDetector] No match - pixels NOT marked");
+                continue;
+            }
+
+            SymbolMatch best = matches.getFirst();
+            if (best.role() != SymbolRole.CENTER_SYMBOL
+                    && best.role() != SymbolRole.PARAMETER_RUNE
+                    && best.role() != SymbolRole.OUTER_CIRCLE) {
+                continue;
+            }
+            Gyromancy.LOGGER.debug("[MagicArrayDetector] Best match: {} conf={} role={}",
+                    best.symbolId(), String.format("%.3f", best.confidence()), best.role());
+            recognized.add(new RecognizedGlyph(glyph, best));
+        }
+        if (recognized.isEmpty()) return;
+
+        // Register the full update before any circle is allowed to compile. Circles
+        // are deliberately registered last, but compilation sees every rune and
+        // nested circle produced by this same flood-fill batch.
+        List<RecognizedGlyph> ordered = circlesLast(
+                recognized, candidate -> candidate.match().role() == SymbolRole.OUTER_CIRCLE);
+        List<PositionedGlyph> registered = new ArrayList<>();
+        for (RecognizedGlyph candidate : ordered) {
+            PositionedGlyph glyph = registerMatch(level, candidate);
+            if (glyph != null) registered.add(glyph);
         }
 
-        SymbolMatch best = matches.getFirst();
-        SymbolRole role = best.role();
-        Gyromancy.LOGGER.debug("[MagicArrayDetector] Best match: {} conf={} role={}",
-                best.symbolId(), String.format("%.3f", best.confidence()), role);
-
-        if (role == SymbolRole.CENTER_SYMBOL || role == SymbolRole.PARAMETER_RUNE) {
-            handleRuneMatch(level, glyph, best);
-        } else if (role == SymbolRole.OUTER_CIRCLE) {
-            handleCircleMatch(level, glyph, best);
+        for (PositionedGlyph glyph : registered) {
+            invalidateCompiledAncestors(level, glyph);
         }
+        for (PositionedGlyph glyph : registered) {
+            if (glyph.role() == SymbolRole.OUTER_CIRCLE) {
+                ArrayEffectLifecycle.compileNew(level, glyph);
+            }
+        }
+        syncGlyphs(level);
     }
 
-    private static void handleRuneMatch(ServerLevel level, ExtractedGlyph glyph, SymbolMatch best) {
-        //if (InteriorValidator.hasRawManaInside(glyph, level)) {
-        //    Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} REJECTED: raw mana inside",
-        //            best.symbolId());
-        //    return;
-        //}
+    static <T> List<T> circlesLast(
+            List<T> values, java.util.function.Predicate<T> isCircle) {
+        List<T> ordered = new ArrayList<>(values.size());
+        values.stream().filter(isCircle.negate()).forEach(ordered::add);
+        values.stream().filter(isCircle).forEach(ordered::add);
+        return List.copyOf(ordered);
+    }
 
+    private static PositionedGlyph registerMatch(
+            ServerLevel level, RecognizedGlyph candidate) {
+        ExtractedGlyph glyph = candidate.glyph();
+        SymbolMatch best = candidate.match();
         int symbolLayerValue = ModSymbols.symbolLayerValueFor(best.symbolId());
         if (symbolLayerValue <= 0) {
-            Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} REJECTED: missing symbol registry id",
+            Gyromancy.LOGGER.debug(
+                    "[MagicArrayDetector] Glyph {} REJECTED: missing symbol registry id",
                     best.symbolId());
-            return;
+            return null;
         }
 
-        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
-        int id = mgr.nextGlyphId();
-
+        MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);
+        int id = manager.nextGlyphId();
         GlyphMarker.markConsumed(glyph, id, symbolLayerValue, level);
         syncAffectedCanvases(glyph, level);
 
-        PositionedGlyph pg = new PositionedGlyph(
+        PositionedGlyph positioned = new PositionedGlyph(
                 UUID.randomUUID(), id, best.symbolId(), best.confidence(), best.role(),
                 best.front(), best.length(), best.width(),
                 glyph.pixels().iterator().next().pos(),
                 glyph.minWorldX(), glyph.maxWorldX(),
                 glyph.minWorldY(), glyph.maxWorldY(),
-                Set.copyOf(glyph.pixels())
-        );
-
-        mgr.registerGlyph(pg);
-        GlyphChunkStorage.store(level, pg);
-        invalidateCompiledAncestors(level, pg);
-        syncGlyphs(level);
-
-        Gyromancy.LOGGER.debug("[MagicArrayDetector] Rune {} ACCEPTED - glyph #{} stored",
+                Set.copyOf(glyph.pixels()));
+        manager.registerGlyph(positioned);
+        GlyphChunkStorage.store(level, positioned);
+        Gyromancy.LOGGER.debug("[MagicArrayDetector] {} {} ACCEPTED - glyph #{} stored",
+                best.role() == SymbolRole.OUTER_CIRCLE ? "Circle" : "Rune",
                 best.symbolId(), id);
+        return positioned;
     }
 
-    private static void handleCircleMatch(ServerLevel level, ExtractedGlyph glyph, SymbolMatch best) {
-        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
-        int circleSymbolLayer = ModSymbols.symbolLayerValueFor(best.symbolId());
-        int circleId = mgr.nextGlyphId();
-        GlyphMarker.markConsumed(glyph, circleId, circleSymbolLayer, level);
-        syncAffectedCanvases(glyph, level);
-
-        PositionedGlyph circleGlyph = new PositionedGlyph(
-                UUID.randomUUID(), circleId, best.symbolId(), best.confidence(), best.role(),
-                best.front(), best.length(), best.width(),
-                glyph.pixels().iterator().next().pos(),
-                glyph.minWorldX(), glyph.maxWorldX(),
-                glyph.minWorldY(), glyph.maxWorldY(),
-                Set.copyOf(glyph.pixels())
-        );
-        mgr.registerGlyph(circleGlyph);
-        GlyphChunkStorage.store(level, circleGlyph);
-        invalidateCompiledAncestors(level, circleGlyph);
-        ArrayEffectLifecycle.compileNew(level, circleGlyph);
-        syncGlyphs(level);
-        Gyromancy.LOGGER.debug("[MagicArrayDetector] Circle {} stored as glyph #{}",
-                best.symbolId(), circleId);
-    }
+    private record RecognizedGlyph(ExtractedGlyph glyph, SymbolMatch match) {}
 
     private static void invalidateCompiledAncestors(
             ServerLevel level, PositionedGlyph glyph) {

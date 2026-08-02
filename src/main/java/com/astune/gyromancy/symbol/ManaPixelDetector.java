@@ -42,7 +42,22 @@ public final class ManaPixelDetector {
      * Checks if a pixel has already been consumed (marked as part of a recognized glyph).
      */
     public static boolean isMarked(CanvasFace face, int x, int y) {
-        return face.getEffectValue(SYMBOL_ID_KEY, x, y) > 0;
+        return face.getEffectValue(GLYPH_ID_KEY, x, y) > 0;
+    }
+
+    /**
+     * Returns whether a pixel may start or participate in a new flood fill.
+     * The symbol layer is descriptive metadata and may be refreshed independently,
+     * so only glyph_id decides whether existing mana is already owned.
+     */
+    public static boolean isUnclaimedManaPixel(CanvasFace face, int x, int y) {
+        return isUnclaimedMana(
+                face.getEffectValue(MANA_EFFECT_KEY, x, y),
+                face.getEffectValue(GLYPH_ID_KEY, x, y));
+    }
+
+    static boolean isUnclaimedMana(int mana, int glyphId) {
+        return mana > 0 && glyphId == 0;
     }
 
     /**
@@ -63,7 +78,7 @@ public final class ManaPixelDetector {
 
             for (int y = 0; y < h; y++) {
                 for (int x = 0; x < w; x++) {
-                    if (isManaPixel(face, x, y) && !isMarked(face, x, y)) {
+                    if (isUnclaimedManaPixel(face, x, y)) {
                         int color = pixels.getPixel(x, y);
                         PixelPos seed = new PixelPos(pos, face.primaryFace(), x, y, color);
                         seeds.add(seed);
@@ -94,7 +109,7 @@ public final class ManaPixelDetector {
 
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                if (isManaPixel(face, x, y) && !isMarked(face, x, y)) {
+                if (isUnclaimedManaPixel(face, x, y)) {
                     int color = pixels.getPixel(x, y);
                     seeds.add(new PixelPos(pos, face.primaryFace(), x, y, color));
                 }

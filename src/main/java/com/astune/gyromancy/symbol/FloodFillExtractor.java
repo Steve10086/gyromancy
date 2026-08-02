@@ -46,6 +46,7 @@ public final class FloodFillExtractor {
         public final Set<PixelPos> processed;
         public final Set<BlockPos> involvedBlocks;
         public final Set<PixelPos> initialSeeds;
+        public final List<ExtractedGlyph> completedGlyphs;
         public final List<Double> worldXs = new ArrayList<>();
         public final List<Double> worldYs = new ArrayList<>();
         public Direction dominantFace = null;
@@ -64,6 +65,7 @@ public final class FloodFillExtractor {
             this.involvedBlocks = new HashSet<>();
             this.initialSeeds = new HashSet<>();
             this.initialSeeds.add(origin);
+            this.completedGlyphs = new ArrayList<>();
         }
 
         /** Absorb another state's progress. Used when BFS reaches another state's origin. */
@@ -74,6 +76,7 @@ public final class FloodFillExtractor {
             this.worldYs.addAll(other.worldYs);
             this.involvedBlocks.addAll(other.involvedBlocks);
             this.initialSeeds.addAll(other.initialSeeds);
+            this.completedGlyphs.addAll(other.completedGlyphs);
             this.minWorldX = Math.min(this.minWorldX, other.minWorldX);
             this.maxWorldX = Math.max(this.maxWorldX, other.maxWorldX);
             this.minWorldY = Math.min(this.minWorldY, other.minWorldY);
@@ -187,7 +190,7 @@ public final class FloodFillExtractor {
                 continue;
             }
 
-            if (!ManaPixelDetector.isManaPixel(face, curr.x(), curr.y())) {
+            if (!ManaPixelDetector.isUnclaimedManaPixel(face, curr.x(), curr.y())) {
                 state.processed.add(curr);
                 continue;
             }
@@ -318,7 +321,7 @@ public final class FloodFillExtractor {
 
             CanvasFace face = getFacesAt(level, seed.pos(), seed.face()).stream()
                     .findFirst().orElse(null);
-            if (face == null || !ManaPixelDetector.isManaPixel(face, seed.x(), seed.y())) {
+            if (face == null || !ManaPixelDetector.isUnclaimedManaPixel(face, seed.x(), seed.y())) {
                 state.processed.add(seed);
                 continue;
             }
@@ -342,7 +345,7 @@ public final class FloodFillExtractor {
         for (CanvasFace adjFace : getFacesAt(level, adjPos, face.primaryFace())) {
             PixelPos mapped = pixelFromWorld(worldNeighbor, adjPos, adjFace);
             if (mapped != null
-                    && ManaPixelDetector.isManaPixel(adjFace, mapped.x(), mapped.y())) {
+                    && ManaPixelDetector.isUnclaimedManaPixel(adjFace, mapped.x(), mapped.y())) {
                 results.add(mapped);
             }
         }

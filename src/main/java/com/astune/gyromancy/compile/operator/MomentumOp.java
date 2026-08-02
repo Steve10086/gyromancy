@@ -172,7 +172,7 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
     Vec3 accelerationForTick(Vec3 facingDirection) {
         if (elapsedTicks >= ACTIVE_TICKS) return Vec3.ZERO;
         acceleration = solveVector(facingDirection);
-        Vec3 result = acceleration;
+        Vec3 result = acceleration.scale(MOMENTUM_SCALE);
         elapsedTicks++;
         if (elapsedTicks >= ACTIVE_TICKS) acceleration = Vec3.ZERO;
         return result;
@@ -260,7 +260,7 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
         for (OpInput input : inputs) {
             if (!(input instanceof OpInput.Rune rune)) continue;
             PositionedGlyph glyph = rune.glyph();
-            double magnitude = glyph.length() * MOMENTUM_SCALE;
+            double magnitude = glyph.length();
             switch (rune.symbolName()) {
                 case "arrow" -> result.add(new AccelerationInput(glyph.front(), magnitude, false));
                 case "arrow_up" -> result.add(new AccelerationInput(Vec3.ZERO, magnitude, true));
