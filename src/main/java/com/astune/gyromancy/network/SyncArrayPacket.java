@@ -82,8 +82,8 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
             Set<UUID> next = new HashSet<>();
             for (ArrayData array : packet.arrays()) {
                 next.add(array.id());
-                boolean firstSeen = knownArrays.add(array.id());
-                if (!firstSeen || array.compilationEffectTicks() <= 0) continue;
+                knownArrays.add(array.id());
+                if (array.compilationEffectTicks() <= 0) continue;
                 for (int partIndex = 0; partIndex < array.parts().size(); partIndex++) {
                     BlockData part = array.parts().get(partIndex);
                     Vec3 rayDir = part.surface().normal();

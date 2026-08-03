@@ -49,7 +49,8 @@ public final class WandProjectionService {
             WandProjectionCanvasEntity projection = WandProjectionCanvasEntity.create(
                     serverLevel, center, facing, copyForProjection(document), player.getUUID(),
                     view,
-                    player.getYRot() + 180.0F, player.getXRot());
+                    player.getYRot() + 180.0F, player.getXRot(),
+                    (float) layout.slotOffset(slot));
             if (!serverLevel.addFreshEntity(projection)) {
                 Gyromancy.LOGGER.warn("[Wand] Failed to add projection entity for player {}",
                         player.getScoreboardName());

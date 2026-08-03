@@ -258,6 +258,16 @@ public final class CanvasCompileService {
         }
     }
 
+    /**
+     * Moves an existing canvas' world glyphs without recompiling or replacing
+     * its active arrays. Projection canvases use this when their free surface
+     * follows a caster's view.
+     */
+    public static void refreshWorldGeometry(ServerLevel level, CanvasEntity canvas) {
+        refreshRetainedGlyphGeometry(level, canvas);
+        MagicArrayDetector.syncWorldState(level);
+    }
+
     private static PositionedGlyph registerGlyph(ServerLevel level, CanvasEntity canvas,
                                                  CanvasGlyph glyph) {
         MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);

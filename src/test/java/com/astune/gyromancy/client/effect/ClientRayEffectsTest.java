@@ -59,6 +59,31 @@ class ClientRayEffectsTest {
     }
 
     @Test
+    void compilationEffectFollowsRefreshedArrayGeometryDuringFadeIn() {
+        ClientRayEffects.clearAll();
+        UUID lifecycle = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        byte[] mask = {1};
+        Vec3 initialCenter = new Vec3(1.0, 2.0, 3.0);
+        Vec3 movedCenter = new Vec3(4.0, 5.0, 6.0);
+        Vec3 movedNormal = new Vec3(1.0, 0.0, 0.0);
+
+        ClientRayEffects.spawnForLifecycle(
+                lifecycle, 0, initialCenter, Direction.NORTH, new Vec3(0.0, 0.0, -1.0),
+                new Vec3(1.0, 0.0, 0.0), new Vec3(0.0, 1.0, 0.0),
+                mask, 1, 1, ignored -> 0xFFFFFFFF,
+                0xFFFFFFFF, 200, 1.0);
+        ClientRayEffects.spawnForLifecycle(
+                lifecycle, 0, movedCenter, movedNormal, movedNormal,
+                new Vec3(0.0, 0.0, 1.0), new Vec3(0.0, 1.0, 0.0),
+                mask, 1, 1, ignored -> 0xFFFFFFFF,
+                0xFFFFFFFF, 199, 1.0);
+
+        assertEquals(movedCenter, ClientRayEffects.lifecycleCenter(lifecycle, 0).orElseThrow());
+        assertEquals(movedNormal, ClientRayEffects.lifecycleSourceNormal(lifecycle, 0).orElseThrow());
+        ClientRayEffects.clearAll();
+    }
+
+    @Test
     void compactMeshReturnsSharedEmptyForBlankLayer() {
         ClientRayEffects.MeshVertex[] pixels = ClientRayEffects.compactMesh(new int[4], 2, 2, symbol -> 0xFFFFFFFF);
 

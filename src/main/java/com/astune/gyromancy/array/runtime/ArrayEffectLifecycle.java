@@ -163,9 +163,18 @@ public final class ArrayEffectLifecycle {
     }
 
     private static void bindPersistentEntities(ServerLevel level, UUID arrayId, Map<String, Object> scratchData) {
+        Set<UUID> bound = new HashSet<>();
         for (Map.Entry<String, Object> entry : scratchData.entrySet()) {
             if (!(entry.getValue() instanceof ArrayObject.EntityRef ref)) continue;
             if (ref.resolve(level) instanceof MagicBallEntity ball) {
+                ball.bindToArray(arrayId);
+                bound.add(ball.getUUID());
+            }
+        }
+        for (EmittedObject emitted : EmitResult.emissions(scratchData)) {
+            if (!(emitted.ref() instanceof ArrayObject.EntityRef ref)) continue;
+            if (ref.resolve(level) instanceof MagicBallEntity ball
+                    && bound.add(ball.getUUID())) {
                 ball.bindToArray(arrayId);
             }
         }

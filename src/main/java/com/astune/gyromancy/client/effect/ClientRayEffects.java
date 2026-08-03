@@ -209,6 +209,11 @@ public final class ClientRayEffects {
         return effect == null ? Optional.empty() : Optional.of(effect.sourceNormal);
     }
 
+    static Optional<Vec3> lifecycleCenter(UUID lifecycleId, int partIndex) {
+        Effect effect = effects.get(EffectKey.forLifecycle(lifecycleId, partIndex));
+        return effect == null ? Optional.empty() : Optional.of(effect.center);
+    }
+
     private static void spawnOrRefresh(
             EffectKey key,
             Vec3 center,
@@ -228,7 +233,12 @@ public final class ClientRayEffects {
     ) {
         Effect existing = effects.get(key);
         if (existing != null) {
+            existing.center = center;
             if (existing.isFadingIn()) {
+                existing.sourceNormal = sourceNormal.normalize();
+                existing.worldRayDir = worldRayDir;
+                existing.sourceU = sourceU;
+                existing.sourceV = sourceV;
                 existing.keepAlive(lifetime);
                 return;
             }
@@ -585,7 +595,7 @@ public final class ClientRayEffects {
     }
 
     private static final class Effect {
-        final Vec3 center;
+        Vec3 center;
         Vec3 sourceNormal;
         Vec3 worldRayDir;
         Vec3 sourceU;

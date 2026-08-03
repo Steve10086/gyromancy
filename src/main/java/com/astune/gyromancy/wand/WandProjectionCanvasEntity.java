@@ -3,6 +3,7 @@ package com.astune.gyromancy.wand;
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasEntity;
+import com.astune.gyromancy.canvas.CanvasCompileService;
 import com.astune.gyromancy.item.WandItem;
 import com.astune.gyromancy.registry.ModEntities;
 import net.minecraft.core.BlockPos;
@@ -34,6 +35,8 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
             SynchedEntityData.defineId(WandProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_NORMAL_Z =
             SynchedEntityData.defineId(WandProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_PROJECTION_OFFSET =
+            SynchedEntityData.defineId(WandProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
     private UUID owner;
 
     public WandProjectionCanvasEntity(EntityType<? extends WandProjectionCanvasEntity> type,
@@ -47,7 +50,8 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
                                                      UUID owner,
                                                      Vec3 viewDirection,
                                                      float viewYaw,
-                                                     float viewPitch) {
+                                                     float viewPitch,
+                                                     float projectionOffset) {
         WandProjectionCanvasEntity canvas = new WandProjectionCanvasEntity(
                 ModEntities.WAND_PROJECTION.get(), level);
         canvas.owner = owner;
@@ -56,6 +60,7 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         canvas.setDirection(facing);
         canvas.setProjectedNormal(viewDirection.normalize());
         canvas.setProjectionView(viewYaw, viewPitch);
+        canvas.entityData.set(DATA_PROJECTION_OFFSET, projectionOffset);
         canvas.setPos(center);
         canvas.recalculateBoundingBox();
         return canvas;
@@ -92,6 +97,7 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         compound.putDouble("surface_normal_x", surfaceNormal().x);
         compound.putDouble("surface_normal_y", surfaceNormal().y);
         compound.putDouble("surface_normal_z", surfaceNormal().z);
+        compound.putFloat("projection_offset", entityData.get(DATA_PROJECTION_OFFSET));
     }
 
     @Override
@@ -103,6 +109,9 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
                     compound.getDouble("surface_normal_x"),
                     compound.getDouble("surface_normal_y"),
                     compound.getDouble("surface_normal_z")));
+        }
+        if (compound.contains("projection_offset")) {
+            entityData.set(DATA_PROJECTION_OFFSET, compound.getFloat("projection_offset"));
         }
     }
 
@@ -127,6 +136,7 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         builder.define(DATA_NORMAL_X, 0.0F);
         builder.define(DATA_NORMAL_Y, 0.0F);
         builder.define(DATA_NORMAL_Z, -1.0F);
+        builder.define(DATA_PROJECTION_OFFSET, 1.0F);
     }
 
     public void setProjectedNormal(Vec3 normal) {
@@ -187,7 +197,20 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         if (player == null || !player.isUsingItem()
                 || !(player.getUseItem().getItem() instanceof WandItem)) {
             discard();
+            return;
         }
+
+        Vec3 view = player.getViewVector(1.0F).normalize();
+        Vec3 center = player.getEyePosition().add(
+                view.scale(entityData.get(DATA_PROJECTION_OFFSET)));
+        boolean geometryChanged = position().distanceToSqr(center) > 1.0E-12
+                || surfaceNormal().distanceToSqr(view) > 1.0E-12;
+        setProjectionView(player.getYRot() + 180.0F, player.getXRot());
+        if (!geometryChanged) return;
+
+        setPos(center);
+        setProjectedNormal(view);
+        CanvasCompileService.refreshWorldGeometry(serverLevel, this);
     }
 
     @Override

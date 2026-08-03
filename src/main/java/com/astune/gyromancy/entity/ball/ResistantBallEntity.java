@@ -21,7 +21,7 @@ public abstract class ResistantBallEntity extends MagicBallEntity {
         setBallSize(size);
         setPos(pos);
         pendingVelocity = launchVelocity(velocity, arrowSizeSum, liftDirection);
-        setDeltaMovement(pendingVelocity);
+        setDeltaMovement(Vec3.ZERO);
     }
 
     @Override
@@ -30,6 +30,7 @@ public abstract class ResistantBallEntity extends MagicBallEntity {
         growIntoTargetSize();
         if (!launched && isFullyGrown()) {
             launched = true;
+            setDeltaMovement(pendingVelocity);
         }
         if (launched) moveWithResistance(RESISTANCE_FACTOR, RESISTANCE_CONSTANT);
         return true;
