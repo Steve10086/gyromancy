@@ -43,14 +43,14 @@ class ClientRayEffectsTest {
 
     @Test
     void compactMeshReturnsSharedEmptyForBlankLayer() {
-        ClientRayEffects.MeshVertex[] pixels = ClientRayEffects.compactMesh(new byte[4], 2, 2, symbol -> 0xFFFFFFFF);
+        ClientRayEffects.MeshVertex[] pixels = ClientRayEffects.compactMesh(new int[4], 2, 2, symbol -> 0xFFFFFFFF);
 
         assertSame(pixels, ClientRayEffects.compactMesh(null, 2, 2, symbol -> 0xFFFFFFFF));
     }
 
     @Test
     void compactMeshSkipsInternalFacesBetweenAdjacentPixels() {
-        byte[] layer = {
+        int[] layer = {
                 1, 1
         };
 

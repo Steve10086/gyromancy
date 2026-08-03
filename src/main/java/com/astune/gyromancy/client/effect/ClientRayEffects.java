@@ -57,7 +57,7 @@ public final class ClientRayEffects {
 
     public static void spawnOrRefresh(Vec3 center, Direction face, Vec3 worldRayDir,
                                        Vec3 sourceU, Vec3 sourceV,
-                                       byte[] symbolLayer,
+                                       int[] symbolLayer,
                                        int sourceWidth, int sourceHeight,
                                        IntUnaryOperator colorBySymbolValue,
                                        int color, int lifetime, double beamHeight) {
@@ -68,7 +68,7 @@ public final class ClientRayEffects {
 
     public static void spawnOrRefresh(Vec3 center, Direction face, Vec3 worldRayDir,
                                        Vec3 sourceU, Vec3 sourceV,
-                                       ResourceLocation maskTexture, byte[] symbolLayer,
+                                       ResourceLocation maskTexture, int[] symbolLayer,
                                        int sourceWidth, int sourceHeight,
                                        IntUnaryOperator colorBySymbolValue,
                                        int color, int lifetime) {
@@ -79,7 +79,7 @@ public final class ClientRayEffects {
 
     public static void spawnOrRefresh(Vec3 center, Direction face, Vec3 worldRayDir,
                                        Vec3 sourceU, Vec3 sourceV,
-                                       ResourceLocation maskTexture, byte[] symbolLayer,
+                                       ResourceLocation maskTexture, int[] symbolLayer,
                                        int sourceWidth, int sourceHeight,
                                        IntUnaryOperator colorBySymbolValue,
                                        int color, int lifetime, double beamHeight) {
@@ -90,7 +90,7 @@ public final class ClientRayEffects {
 
     public static void spawnOrRefresh(Vec3 center, Direction face, Vec3 worldRayDir,
                                        Vec3 sourceU, Vec3 sourceV,
-                                       ResourceLocation maskTexture, byte[] symbolLayer,
+                                       ResourceLocation maskTexture, int[] symbolLayer,
                                        int sourceWidth, int sourceHeight,
                                        IntUnaryOperator colorBySymbolValue,
                                        int color, int lifetime, double beamHeight, int fadeInTicks) {
@@ -108,7 +108,7 @@ public final class ClientRayEffects {
             Vec3 worldRayDir,
             Vec3 sourceU,
             Vec3 sourceV,
-            byte[] symbolLayer,
+            int[] symbolLayer,
             int sourceWidth,
             int sourceHeight,
             IntUnaryOperator colorBySymbolValue,
@@ -120,6 +120,30 @@ public final class ClientRayEffects {
                 center, face, worldRayDir, sourceU, sourceV, null,
                 symbolLayer, sourceWidth, sourceHeight, colorBySymbolValue,
                 color, lifetime, beamHeight, DEFAULT_FADE_IN_TICKS);
+    }
+
+    /** Compatibility overload for non-Pigmentum binary masks used by array sync packets. */
+    public static void spawnForLifecycle(
+            UUID lifecycleId,
+            int partIndex,
+            Vec3 center,
+            Direction face,
+            Vec3 worldRayDir,
+            Vec3 sourceU,
+            Vec3 sourceV,
+            byte[] mask,
+            int sourceWidth,
+            int sourceHeight,
+            IntUnaryOperator colorBySymbolValue,
+            int color,
+            int lifetime,
+            double beamHeight
+    ) {
+        int[] widenedMask = new int[mask.length];
+        for (int i = 0; i < mask.length; i++) widenedMask[i] = mask[i] & 0xFF;
+        spawnForLifecycle(lifecycleId, partIndex, center, face, worldRayDir, sourceU, sourceV,
+                widenedMask, sourceWidth, sourceHeight, colorBySymbolValue,
+                color, lifetime, beamHeight);
     }
 
     public static void stopLifecycle(UUID lifecycleId) {
@@ -140,7 +164,7 @@ public final class ClientRayEffects {
             Vec3 sourceU,
             Vec3 sourceV,
             ResourceLocation maskTexture,
-            byte[] symbolLayer,
+            int[] symbolLayer,
             int sourceWidth,
             int sourceHeight,
             IntUnaryOperator colorBySymbolValue,
@@ -177,14 +201,14 @@ public final class ClientRayEffects {
                 sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks));
     }
 
-    static MeshVertex[] compactMesh(byte[] symbolLayer, int width, int height, IntUnaryOperator colorBySymbolValue) {
+    static MeshVertex[] compactMesh(int[] symbolLayer, int width, int height, IntUnaryOperator colorBySymbolValue) {
         if (symbolLayer == null || width <= 0 || height <= 0 || symbolLayer.length < width * height) return NO_MESH_VERTICES;
 
         boolean[] filled = new boolean[width * height];
         int[] argbByPixel = new int[width * height];
         int count = 0;
         for (int i = 0; i < width * height; i++) {
-            int symbolValue = symbolLayer[i] & 0xFF;
+            int symbolValue = symbolLayer[i];
             if (symbolValue == 0) continue;
             int argb = colorBySymbolValue.applyAsInt(symbolValue);
             if (((argb >>> 24) & 0xFF) == 0) continue;

@@ -8,10 +8,12 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.entity.Entity;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public abstract class EntityPayload {
     public abstract ResourceLocation typeId();
@@ -39,6 +41,12 @@ public abstract class EntityPayload {
     public void loadClientState(Level level, CompoundTag tag) {}
 
     public void onOwnerRemoved(Level level) {}
+
+    public void onOwnerRemoved(Level level, Entity owner) {
+        onOwnerRemoved(level);
+    }
+
+    public void bindToArray(UUID arrayId) {}
 
     public CompoundTag savePayload() {
         CompoundTag tag = new CompoundTag();

@@ -782,7 +782,7 @@ util ───────────► api ───────────�
 
 | Dependency | Version | Purpose |
 |------------|---------|---------|
-| **Pigmentum** (`com.astune.painter`) | 0.5.8beta | Multi-block canvas system, faces, effect layers, paint providers, rendering pipeline |
+| **Pigmentum** (`com.astune.painter`) | 0.6.0beta | Multi-block canvas system, faces, int effect layers, paint providers, rendering pipeline |
 | **Veil** (`foundry.veil`) | 4.2.1 | Post-processing bloom pipeline for glyph rendering (4 GLSL shaders) |
 | **ONNX Runtime** (`com.microsoft.onnxruntime`) | 1.18.0 | ML-based symbol matching via siamese network |
 | **NeoForge** | 21.1.233 | Mod platform (Minecraft 1.21.1) |

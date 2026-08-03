@@ -35,7 +35,7 @@ public final class GlyphImageProvider implements CanvasImageProvider {
 
     @Override
     public NativeImage createImage(CanvasFace face) {
-        byte[] symbolLayer = face.getEffectLayer(ManaPixelDetector.SYMBOL_ID_KEY);
+        int[] symbolLayer = face.getEffectLayer(ManaPixelDetector.SYMBOL_ID_KEY);
         if (symbolLayer == null) return null;
 
         IPixelMatrix pixels = face.pixels();
@@ -48,7 +48,7 @@ public final class GlyphImageProvider implements CanvasImageProvider {
 
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                int symbolValue = symbolLayer[y * w + x] & 0xFF;
+                int symbolValue = symbolLayer[y * w + x];
                 if (symbolValue == 0) continue;
 
                 int abgr = argbToAbgr(glyphColor(symbolValue));

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public abstract class MagicEntity extends Entity {
     private static final EntityDataAccessor<CompoundTag> DATA_PAYLOAD =
@@ -98,8 +99,13 @@ public abstract class MagicEntity extends Entity {
     @Override
     public void remove(RemovalReason reason) {
         initializeDefaultPayload();
-        payload.forEach(op -> op.onOwnerRemoved(level()));
+        payload.forEach(op -> op.onOwnerRemoved(level(), this));
         super.remove(reason);
+    }
+
+    public void bindPayloadToArray(UUID arrayId) {
+        initializeDefaultPayload();
+        payload.forEach(op -> op.bindToArray(arrayId));
     }
 
     @Override

@@ -145,6 +145,7 @@ public abstract class MagicBallEntity extends MagicEntity {
 
     public void bindToArray(UUID arrayId) {
         this.boundArrayId = arrayId;
+        bindPayloadToArray(arrayId);
     }
 
     public void bindGeneratedEntity(MagicBallEntity entity, String scratchKey) {

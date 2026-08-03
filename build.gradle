@@ -160,7 +160,7 @@ configurations {
 sourceSets { test { compileClasspath += sourceSets.main.compileClasspath; runtimeClasspath += sourceSets.main.runtimeClasspath } }
 
 dependencies {
-    implementation "maven.modrinth:pigmentum:0.5.8beta"
+    implementation "maven.modrinth:pigmentum:0.6.0beta"
     implementation "foundry.veil:veil-neoforge-${minecraft_version}:${veil_version}"
 
     // ── Photon + LDLib2 — VFX library ──

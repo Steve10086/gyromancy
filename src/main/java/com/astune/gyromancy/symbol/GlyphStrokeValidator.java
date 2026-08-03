@@ -61,8 +61,8 @@ public final class GlyphStrokeValidator {
 
     static boolean isExpectedMarker(int mana, int markedGlyphId, int markedSymbolId,
                                     int expectedGlyphId, int expectedSymbolId) {
-        return (mana & 0xFF) > 0
-                && (markedGlyphId & 0xFF) == (expectedGlyphId & 0xFF)
-                && (markedSymbolId & 0xFF) == (expectedSymbolId & 0xFF);
+        return mana > 0
+                && markedGlyphId == expectedGlyphId
+                && markedSymbolId == expectedSymbolId;
     }
 }

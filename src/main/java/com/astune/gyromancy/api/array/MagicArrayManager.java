@@ -161,10 +161,9 @@ public class MagicArrayManager {
     // ═══════════════════ glyphs ═══════════════════
 
     public int nextGlyphId() {
-        // ponytail: canvas effect layers are byte-backed; widen storage if >255 active glyphs matters.
-        for (int i = 0; i < 255; i++) {
+        for (int i = 0; i < Integer.MAX_VALUE; i++) {
             int id = nextGlyphId;
-            nextGlyphId = nextGlyphId % 255 + 1;
+            nextGlyphId = nextGlyphId == Integer.MAX_VALUE ? 1 : nextGlyphId + 1;
             if (!glyphIdIndex.containsKey(id)) return id;
         }
         throw new IllegalStateException("No free glyph ids");
@@ -210,7 +209,7 @@ public class MagicArrayManager {
         if (existing != null) return existing;
 
         int id = stored.glyphId();
-        PositionedGlyph glyph = id > 0 && id <= 255 && !glyphIdIndex.containsKey(id)
+        PositionedGlyph glyph = id > 0 && !glyphIdIndex.containsKey(id)
                 ? stored
                 : stored.withGlyphId(nextGlyphId());
         registerGlyph(glyph);
@@ -426,6 +425,10 @@ public class MagicArrayManager {
     public ArrayObject getArrayForGlyph(UUID glyphUuid) {
         UUID arrayId = glyphToArray.get(glyphUuid);
         return arrayId != null ? activeArrays.get(arrayId) : null;
+    }
+
+    public ArrayObject getArrayObj(UUID arrayId) {
+        return activeArrays.get(arrayId);
     }
 
     public Collection<ArrayObject> getAllArrayObjs() {

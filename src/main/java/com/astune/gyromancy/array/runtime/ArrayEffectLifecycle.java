@@ -11,15 +11,19 @@ import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.CompiledArray;
 import com.astune.gyromancy.array.compile.GroupNode;
 import com.astune.gyromancy.compile.operator.PersistentOp;
+import com.astune.gyromancy.array.runtime.emit.EmitResult;
+import com.astune.gyromancy.array.runtime.emit.EmittedObject;
 import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.symbol.GlyphStrokeValidator;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 
@@ -109,9 +113,53 @@ public final class ArrayEffectLifecycle {
 
     public static void deactivate(ServerLevel level, ArrayObject array) {
         OpRuntimeDispatcher.deactivate(level, array);
+        discardAllEmittedEntities(level, array.arrayId());
         level.getData(ModAttachments.ARRAY_MANAGER).unregisterArrayObj(array.arrayId());
         Gyromancy.LOGGER.info("[MagicArrayDetector] Array deactivated: root={}",
                 array.rootCircleGlyph().symbolId());
+    }
+
+    /**
+     * Binds entities emitted by a discard handler to the live array. The
+     * handler may run while the parent array is being torn down, so this also
+     * keeps those entities in the array's normal emission list.
+     */
+    public static void bindEmittedEntities(ServerLevel level, UUID arrayId, Map<String, Object> scratchData) {
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        ArrayObject array = mgr.getArrayObj(arrayId);
+        if (array == null) return;
+
+        List<EmittedObject> emitted = EmitResult.emissions(scratchData);
+        if (emitted.isEmpty()) return;
+
+        List<EmittedObject> all = new java.util.ArrayList<>(EmitResult.emissions(array.scratchData()));
+        all.addAll(emitted);
+        Map<String, Object> updated = new HashMap<>(array.scratchData());
+        updated.put(EmitResult.EMISSIONS_KEY, List.copyOf(all));
+        mgr.setArrayScratchData(arrayId, updated);
+
+        for (EmittedObject object : emitted) {
+            if (!(object.ref() instanceof ArrayObject.EntityRef ref)) continue;
+            if (ref.resolve(level) instanceof MagicBallEntity ball) ball.bindToArray(arrayId);
+        }
+    }
+
+    private static void discardAllEmittedEntities(ServerLevel level, UUID arrayId) {
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        Set<UUID> discarded = new HashSet<>();
+        while (true) {
+            ArrayObject current = mgr.getArrayObj(arrayId);
+            if (current == null) return;
+            boolean foundNew = false;
+            for (EmittedObject object : EmitResult.emissions(current.scratchData())) {
+                if (!(object.ref() instanceof ArrayObject.EntityRef ref)
+                        || !discarded.add(ref.uuid())) continue;
+                foundNew = true;
+                if (ref.resolve(level) instanceof net.minecraft.world.entity.Entity entity
+                        && entity.isAlive()) entity.discard();
+            }
+            if (!foundNew) return;
+        }
     }
 
     private static void bindPersistentEntities(ServerLevel level, UUID arrayId, Map<String, Object> scratchData) {

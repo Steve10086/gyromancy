@@ -99,7 +99,7 @@ public final class FireProjectileOp extends EntityEffectOp {
         if (centerGlyph == null) return new RuntimeHandle(Map.of());
         EmitResult result = new EmitResult();
         double liftDirection = CenterSymbol.isFacingDown(boundary()) ? -1.0 : 1.0;
-        Vec3 center = CenterSymbol.glyphCenter(level, centerGlyph);
+        Vec3 center = ctx.origin() != null ? ctx.origin() : CenterSymbol.glyphCenter(level, centerGlyph);
         Vec3 normal = CenterSymbol.faceNormal(centerGlyph);
         for (EmitOp.Emission emission : emissions()) {
             float size = Math.max(0.1F, scale() * emission.sizeScale());

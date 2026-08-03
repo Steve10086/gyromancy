@@ -63,7 +63,7 @@ If matches exist, `matches.getFirst()` is used as the best match. The result is 
 
 `GlyphMarker` writes two effect layers for every `PixelPos` in the glyph:
 
-- `gyromancy:glyph_id`: the runtime glyph id, stored in a byte-backed canvas effect layer.
+- `gyromancy:glyph_id`: the runtime glyph id, stored in an int-backed canvas effect layer.
 - `gyromancy:symbol_id`: symbol registry id + 1.
 
 `symbol_id == 0` means no glyph, so stored symbol values use `registryId + 1`.
@@ -291,4 +291,3 @@ new SymbolDef("fire", 3, false, SymbolRole.CENTER_SYMBOL, FIRE_GLYPH_COLOR,
         (level, pos, runes) -> { /* activate */ return Map.of(); },
         (level, pos, runes, data) -> { /* deactivate */ });
 ```
-

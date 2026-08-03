@@ -109,7 +109,7 @@ public final class WaterProjectileOp extends EntityEffectOp {
         if (center == null) return new RuntimeHandle(Map.of());
         EmitResult result = new EmitResult();
         double liftDirection = CenterSymbol.isFacingDown(boundary()) ? -1.0 : 1.0;
-        Vec3 centerPos = CenterSymbol.glyphCenter(level, center);
+        Vec3 centerPos = ctx.origin() != null ? ctx.origin() : CenterSymbol.glyphCenter(level, center);
         Vec3 normal = CenterSymbol.faceNormal(center);
         for (EmitOp.Emission emission : emissions()) {
             float size = Math.max(0.1F, scale() * emission.sizeScale());

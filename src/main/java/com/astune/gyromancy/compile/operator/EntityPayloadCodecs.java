@@ -17,7 +17,8 @@ final class EntityPayloadCodecs {
             Map.entry(WaterBurstOp.ID, WaterBurstOp.CODEC),
             Map.entry(BrewingOp.ID, BrewingOp.CODEC),
             Map.entry(MomentumOp.ID, MomentumOp.CODEC),
-            Map.entry(RotationOp.ID, RotationOp.CODEC)
+            Map.entry(RotationOp.ID, RotationOp.CODEC),
+            Map.entry(OnDiscardPayload.ID, OnDiscardPayload.CODEC)
     );
 
     private EntityPayloadCodecs() {}

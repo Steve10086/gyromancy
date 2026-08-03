@@ -8,6 +8,8 @@ import com.astune.gyromancy.array.compile.MotionAttribute;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.OpInputs;
+import com.astune.gyromancy.array.runtime.OpRuntimeContext;
+import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
@@ -60,6 +62,10 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
 
     public EffectAttributes attributes() {
         return attributes;
+    }
+
+    public RuntimeHandle activateAt(OpRuntimeContext context, Vec3 origin) {
+        return ((PersistentOp) this).activate(context.at(origin));
     }
 
     protected List<EmitOp.Emission> emissions() {

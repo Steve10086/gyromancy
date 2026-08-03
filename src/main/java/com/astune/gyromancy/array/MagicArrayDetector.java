@@ -254,7 +254,7 @@ public final class MagicArrayDetector {
         Set<Integer> changed = new HashSet<>();
         for (CanvasFace oldFace : oldData.faces()) {
             CanvasFace newFace = matchingFace(newData, oldFace);
-            byte[] oldGlyphs = oldFace.getEffectLayer(ManaPixelDetector.GLYPH_ID_KEY);
+            int[] oldGlyphs = oldFace.getEffectLayer(ManaPixelDetector.GLYPH_ID_KEY);
             if (oldGlyphs == null) continue;
 
             int w = oldFace.pixels().getWidth();
@@ -262,7 +262,7 @@ public final class MagicArrayDetector {
             int count = Math.min(w * h, oldGlyphs.length);
             if (newFace == null) {
                 for (int i = 0; i < count; i++) {
-                    int glyphId = oldGlyphs[i] & 0xFF;
+                    int glyphId = oldGlyphs[i];
                     if (glyphId > 0) changed.add(glyphId);
                 }
                 continue;
@@ -288,7 +288,7 @@ public final class MagicArrayDetector {
     }
 
     private static void collectNeighborGlyphIds(
-            byte[] glyphIds, int width, int height, int centerX, int centerY,
+            int[] glyphIds, int width, int height, int centerX, int centerY,
             Set<Integer> result) {
         for (int dy = -1; dy <= 1; dy++) {
             for (int dx = -1; dx <= 1; dx++) {
@@ -297,7 +297,7 @@ public final class MagicArrayDetector {
                 if (x < 0 || x >= width || y < 0 || y >= height) continue;
                 int index = y * width + x;
                 if (index >= glyphIds.length) continue;
-                int glyphId = glyphIds[index] & 0xFF;
+                int glyphId = glyphIds[index];
                 if (glyphId > 0) result.add(glyphId);
             }
         }
@@ -309,17 +309,17 @@ public final class MagicArrayDetector {
             CanvasFace newFace = matchingFace(newData, oldFace);
             if (newFace == null) continue;
 
-            byte[] oldGlyphs = oldFace.getEffectLayer(ManaPixelDetector.GLYPH_ID_KEY);
+            int[] oldGlyphs = oldFace.getEffectLayer(ManaPixelDetector.GLYPH_ID_KEY);
             if (oldGlyphs == null) continue;
-            byte[] oldSymbols = oldFace.getEffectLayer(ManaPixelDetector.SYMBOL_ID_KEY);
+            int[] oldSymbols = oldFace.getEffectLayer(ManaPixelDetector.SYMBOL_ID_KEY);
             int width = oldFace.pixels().getWidth();
             int height = oldFace.pixels().getHeight();
             int count = Math.min(width * height, oldGlyphs.length);
             for (int i = 0; i < count; i++) {
-                int glyphId = oldGlyphs[i] & 0xFF;
+                int glyphId = oldGlyphs[i];
                 if (glyphId == 0 || invalidGlyphIds.contains(glyphId)) continue;
                 int symbolId = oldSymbols != null && i < oldSymbols.length
-                        ? oldSymbols[i] & 0xFF
+                        ? oldSymbols[i]
                         : 0;
                 int x = i % width;
                 int y = i / width;
