@@ -1,5 +1,6 @@
 package com.astune.gyromancy.canvas;
 
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.symbol.PixelPos;
@@ -7,25 +8,83 @@ import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.MagicArrayDetector;
+import com.astune.gyromancy.array.compile.ArrayAstBuilder;
+import com.astune.gyromancy.array.compile.ArrayNodeCompiler;
+import com.astune.gyromancy.array.compile.CompileResult;
+import com.astune.gyromancy.array.compile.CompiledArray;
 import com.astune.gyromancy.array.runtime.ArrayEffectLifecycle;
+import com.astune.gyromancy.compile.operator.PersistentOp;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.registry.ModSymbols;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
 import com.astune.gyromancy.symbol.SymbolRecognizer;
 import com.astune.gyromancy.util.CanvasScanUtils;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 /** Incremental recognition and compilation boundary for placed canvases. */
 public final class CanvasCompileService {
+    static final int WAND_MATERIAL_ALPHA = 0x80;
+
     private CanvasCompileService() {}
+
+    /**
+     * Runs the same glyph recognition, hierarchy construction, and array
+     * compiler used by placed canvases without registering world runtime state.
+     */
+    public static CanvasDocument compilePortable(CanvasDocument document) {
+        CanvasDocument raster = document.withCompileCache(List.of(), List.of());
+        BitSet wholeRaster = new BitSet(raster.resolutionWidth() * raster.resolutionHeight());
+        wholeRaster.set(0, raster.resolutionWidth() * raster.resolutionHeight());
+        List<CanvasGlyph> glyphs = recognizeChangedComponents(raster, wholeRaster);
+        List<CanvasArrayRecord> arrays = compilePortableArrays(raster, glyphs);
+        CanvasDocument compiled = raster.withCompileCache(glyphs, arrays);
+        return compiled.withRaster(
+                compiledStrokeMaterial(raster, glyphs, arrays),
+                raster.strokeEffects());
+    }
+
+    static int[] compiledStrokeMaterial(
+            CanvasDocument source,
+            List<CanvasGlyph> glyphs,
+            List<CanvasArrayRecord> arrays) {
+        int[] material = new int[source.resolutionWidth() * source.resolutionHeight()];
+        java.util.HashMap<UUID, CanvasGlyph> glyphById = new java.util.HashMap<>();
+        glyphs.forEach(glyph -> glyphById.put(glyph.glyphUuid(), glyph));
+        int width = source.resolutionWidth();
+        int height = source.resolutionHeight();
+        for (CanvasArrayRecord array : arrays) {
+            CanvasGlyph boundary = glyphById.get(array.rootGlyph());
+            if (boundary == null) continue;
+            int color = WAND_MATERIAL_ALPHA << 24 | array.color() & 0x00FFFFFF;
+            int minX = Math.max(0, (int) Math.floor(boundary.minX() * width));
+            int maxX = Math.min(width - 1, (int) Math.ceil(boundary.maxX() * width) - 1);
+            int minY = Math.max(0, (int) Math.floor(boundary.minY() * height));
+            int maxY = Math.min(height - 1, (int) Math.ceil(boundary.maxY() * height) - 1);
+            for (int y = minY; y <= maxY; y++) {
+                double normalizedY = (y + 0.5) / height;
+                if (normalizedY < boundary.minY() || normalizedY > boundary.maxY()) continue;
+                for (int x = minX; x <= maxX; x++) {
+                    double normalizedX = (x + 0.5) / width;
+                    if (normalizedX < boundary.minX() || normalizedX > boundary.maxX()) continue;
+                    int cell = y * width + x;
+                    if (source.rawStrokeEffects()[cell] > 0) material[cell] = color;
+                }
+            }
+        }
+        return material;
+    }
 
     public static boolean applyEditorSubmission(ServerLevel level, CanvasEntity canvas,
                                                 int baseRevision, int requestedScale,
@@ -74,7 +133,8 @@ public final class CanvasCompileService {
         List<CanvasGlyph> retained = baseline.glyphs().stream()
                 .filter(glyph -> !invalidatedIds.contains(glyph.glyphUuid()))
                 .toList();
-        List<CanvasGlyph> recognized = recognizeChangedComponents(canvas, submitted, diff);
+        List<CanvasGlyph> recognized = recognizeChangedComponents(
+                submitted, diff.compileRegion());
 
         List<CanvasGlyph> nextGlyphs = new ArrayList<>(retained);
         nextGlyphs.addAll(recognized);
@@ -124,9 +184,13 @@ public final class CanvasCompileService {
         for (PositionedGlyph world : newlyRegistered) {
             deactivateAncestorArrays(level, manager, world);
         }
-        for (PositionedGlyph world : newlyRegistered) {
-            if (world.role() == SymbolRole.OUTER_CIRCLE) {
-                ArrayEffectLifecycle.compileNew(level, world);
+        if (canvas instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity) {
+            compileCachedProjectionArrays(level, canvas);
+        } else {
+            for (PositionedGlyph world : newlyRegistered) {
+                if (world.role() == SymbolRole.OUTER_CIRCLE) {
+                    ArrayEffectLifecycle.compileNew(level, world);
+                }
             }
         }
         List<CanvasArrayRecord> arrays =
@@ -134,6 +198,26 @@ public final class CanvasCompileService {
         canvas.replaceDocument(canvas.document().withCompileCache(
                 canvas.document().glyphs(), arrays), false);
         MagicArrayDetector.syncWorldState(level);
+    }
+
+    private static void compileCachedProjectionArrays(
+            ServerLevel level, CanvasEntity canvas) {
+        MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);
+        for (CanvasArrayRecord record : canvas.document().arrays()) {
+            if (record.fingerprint() != CanvasArrayRecord.fingerprint(
+                    record.rootGlyph(), record.boundGlyphs())) {
+                continue;
+            }
+            PositionedGlyph root = manager.getGlyph(record.rootGlyph());
+            if (root == null || root.role() != SymbolRole.OUTER_CIRCLE
+                    || root.sourceCanvasId().filter(canvas.getUUID()::equals).isEmpty()) {
+                continue;
+            }
+            Set<UUID> bound = Set.copyOf(record.boundGlyphs());
+            ArrayEffectLifecycle.compileNew(level, root,
+                    glyph -> bound.contains(glyph.glyphUuid())
+                            && glyph.sourceCanvasId().filter(canvas.getUUID()::equals).isPresent());
+        }
     }
 
     public static void onRemoved(ServerLevel level, CanvasEntity canvas) {
@@ -185,7 +269,7 @@ public final class CanvasCompileService {
     }
 
     private static List<CanvasGlyph> recognizeChangedComponents(
-            CanvasEntity canvas, CanvasDocument document, CanvasEditDiff diff) {
+            CanvasDocument document, BitSet compileRegion) {
         int width = document.resolutionWidth();
         int height = document.resolutionHeight();
         int[][] matrix = new int[height][width];
@@ -197,27 +281,21 @@ public final class CanvasCompileService {
         }
 
         List<CanvasGlyph> recognized = new ArrayList<>();
-        BitSet compileRegion = diff.compileRegion();
         for (CanvasScanUtils.ConnectedComponent component
                 : CanvasScanUtils.extractComponents(matrix, 1)) {
             int[] cells = componentCells(component, width);
             if (Arrays.stream(cells).noneMatch(compileRegion::get)) continue;
 
-            ExtractedGlyph extracted = extractedGlyph(canvas, document, component, cells);
+            ExtractedGlyph extracted = extractedGlyph(document, component, cells);
             List<SymbolMatch> matches = SymbolRecognizer.recognize(extracted);
             if (matches.isEmpty()) continue;
             SymbolMatch best = matches.getFirst();
             if (ModSymbols.symbolLayerValueFor(best.symbolId()) <= 0) continue;
 
-            double frontX = switch (canvas.getDirection()) {
-                case NORTH, SOUTH -> best.front().x;
-                case EAST, WEST -> best.front().z;
-                case UP, DOWN -> best.front().x;
-            };
-            double frontY = switch (canvas.getDirection()) {
-                case NORTH, SOUTH, EAST, WEST -> best.front().y;
-                case UP, DOWN -> best.front().z;
-            };
+            SurfaceFrame legacyFrame = SurfaceFrame.fromBlockFace(
+                    BlockPos.ZERO, Direction.NORTH);
+            double frontX = best.front().dot(legacyFrame.axisU());
+            double frontY = best.front().dot(legacyFrame.axisV());
             recognized.add(new CanvasGlyph(
                     UUID.randomUUID(), best.symbolId(), best.confidence(), best.role(),
                     frontX, frontY, best.length(), best.width(),
@@ -247,7 +325,6 @@ public final class CanvasCompileService {
     }
 
     private static ExtractedGlyph extractedGlyph(
-            CanvasEntity canvas,
             CanvasDocument document,
             CanvasScanUtils.ConnectedComponent component,
             int[] cells) {
@@ -259,7 +336,7 @@ public final class CanvasCompileService {
         for (int i = 0; i < cells.length; i++) {
             int x = cells[i] % width;
             int y = cells[i] / width;
-            pixels.add(new PixelPos(canvas.getPos(), canvas.getDirection(),
+            pixels.add(new PixelPos(BlockPos.ZERO, Direction.NORTH,
                     x, y, document.rawColors()[cells[i]]));
             xs[i] = (x + 0.5) / width;
             ys[i] = (y + 0.5) / height;
@@ -271,6 +348,122 @@ public final class CanvasCompileService {
                 (double) component.minY() / height,
                 (double) (component.maxY() + 1) / height,
                 1);
+    }
+
+    static List<CanvasArrayRecord> compilePortableArrays(
+            CanvasDocument document, List<CanvasGlyph> glyphs) {
+        MagicArrayManager manager = new MagicArrayManager();
+        java.util.LinkedHashMap<UUID, PositionedGlyph> positioned = new java.util.LinkedHashMap<>();
+        int glyphId = 1;
+        for (CanvasGlyph glyph : glyphs) {
+            PositionedGlyph world = portableGlyph(document, glyph, glyphId++);
+            positioned.put(glyph.glyphUuid(), world);
+            manager.registerGlyph(world);
+        }
+
+        List<CanvasArrayRecord> arrays = new ArrayList<>();
+        for (CanvasGlyph glyph : glyphs) {
+            if (glyph.role() != SymbolRole.OUTER_CIRCLE) continue;
+            PositionedGlyph circle = positioned.get(glyph.glyphUuid());
+            CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(
+                    ArrayAstBuilder.build(circle, manager), manager.opDefinitions());
+            if (!(result instanceof CompileResult.Success<CompiledArray> success)
+                    || !(success.value().root() instanceof PersistentOp)) {
+                continue;
+            }
+            List<UUID> bound = success.value().boundGlyphs().stream()
+                    .map(PositionedGlyph::glyphUuid)
+                    .toList();
+            arrays.add(new CanvasArrayRecord(
+                    circle.glyphUuid(), bound,
+                    CanvasArrayRecord.fingerprint(circle.glyphUuid(), bound),
+                    success.value().color()));
+        }
+        return List.copyOf(arrays);
+    }
+
+    private static PositionedGlyph portableGlyph(
+            CanvasDocument document, CanvasGlyph glyph, int glyphId) {
+        SurfaceFrame surface = new SurfaceFrame(
+                Vec3.ZERO,
+                new Vec3(1.0, 0.0, 0.0),
+                new Vec3(0.0, 1.0, 0.0),
+                new Vec3(0.0, 0.0, -1.0));
+        double minU = (glyph.minX() - 0.5) * document.physicalWidth();
+        double maxU = (glyph.maxX() - 0.5) * document.physicalWidth();
+        double minV = (0.5 - glyph.maxY()) * document.physicalHeight();
+        double maxV = (0.5 - glyph.minY()) * document.physicalHeight();
+        Vec3 physicalFront = surface.axisU()
+                .scale(glyph.frontX() * document.physicalWidth())
+                .add(surface.axisV().scale(-glyph.frontY() * document.physicalHeight()));
+        Vec3 front = physicalFront.lengthSqr() > 1.0E-12
+                ? physicalFront.normalize() : Vec3.ZERO;
+        double[] extents = portableGlyphExtents(document, glyph, surface, front,
+                new SurfaceFrame.SurfaceBounds(minU, maxU, minV, maxV));
+        return new PositionedGlyph(
+                glyph.glyphUuid(), glyphId, glyph.symbolId(), glyph.confidence(), glyph.role(),
+                front, extents[0], extents[1], BlockPos.ZERO,
+                minU, maxU, minV, maxV, Set.of(), Optional.empty(), surface);
+    }
+
+    private static double[] portableGlyphExtents(
+            CanvasDocument document, CanvasGlyph glyph, SurfaceFrame surface,
+            Vec3 front, SurfaceFrame.SurfaceBounds bounds) {
+        Vec3 right = surface.normal().cross(front);
+        if (front.lengthSqr() < 1.0E-12 || right.lengthSqr() < 1.0E-12) {
+            return new double[]{0.0, 0.0};
+        }
+        int rasterWidth = document.resolutionWidth();
+        int rasterHeight = document.resolutionHeight();
+        int[] cells = glyph.rawCells();
+        if (cells.length == 0) {
+            return projectedExtents(surface, bounds, front, right);
+        }
+        double minFront = Double.POSITIVE_INFINITY;
+        double maxFront = Double.NEGATIVE_INFINITY;
+        double minRight = Double.POSITIVE_INFINITY;
+        double maxRight = Double.NEGATIVE_INFINITY;
+        for (int cell : cells) {
+            if (cell < 0 || cell >= rasterWidth * rasterHeight) continue;
+            int x = cell % rasterWidth;
+            int y = cell / rasterWidth;
+            Vec3 point = surface.world(
+                    ((x + 0.5) / rasterWidth - 0.5) * document.physicalWidth(),
+                    (0.5 - (y + 0.5) / rasterHeight) * document.physicalHeight());
+            double along = point.dot(front);
+            double across = point.dot(right);
+            minFront = Math.min(minFront, along);
+            maxFront = Math.max(maxFront, along);
+            minRight = Math.min(minRight, across);
+            maxRight = Math.max(maxRight, across);
+        }
+        return Double.isFinite(minFront)
+                ? new double[]{maxFront - minFront, maxRight - minRight}
+                : projectedExtents(surface, bounds, front, right);
+    }
+
+    private static double[] projectedExtents(
+            SurfaceFrame surface, SurfaceFrame.SurfaceBounds bounds,
+            Vec3 front, Vec3 right) {
+        Vec3[] corners = {
+                surface.world(bounds.minU(), bounds.minV()),
+                surface.world(bounds.maxU(), bounds.minV()),
+                surface.world(bounds.minU(), bounds.maxV()),
+                surface.world(bounds.maxU(), bounds.maxV())
+        };
+        double minFront = Double.POSITIVE_INFINITY;
+        double maxFront = Double.NEGATIVE_INFINITY;
+        double minRight = Double.POSITIVE_INFINITY;
+        double maxRight = Double.NEGATIVE_INFINITY;
+        for (Vec3 corner : corners) {
+            double along = corner.dot(front);
+            double across = corner.dot(right);
+            minFront = Math.min(minFront, along);
+            maxFront = Math.max(maxFront, along);
+            minRight = Math.min(minRight, across);
+            maxRight = Math.max(maxRight, across);
+        }
+        return new double[]{maxFront - minFront, maxRight - minRight};
     }
 
     private static void deactivateAncestorArrays(
@@ -297,7 +490,9 @@ public final class CanvasCompileService {
                             .toList();
                     return new CanvasArrayRecord(
                             root, bound,
-                            CanvasArrayRecord.fingerprint(root, bound));
+                            CanvasArrayRecord.fingerprint(root, bound),
+                            array.scratchData().get("__array_color") instanceof Integer color
+                                    ? color : 0xFFFFFFFF);
                 })
                 .toList();
     }

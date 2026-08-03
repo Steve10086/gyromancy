@@ -123,7 +123,8 @@ class CanvasDocumentTest {
                 0.1, 0.9, 0.1, 0.9,
                 new int[]{1, 2, 3});
         CanvasArrayRecord array = new CanvasArrayRecord(
-                root, List.of(root), CanvasArrayRecord.fingerprint(root, List.of(root)));
+                root, List.of(root), CanvasArrayRecord.fingerprint(root, List.of(root)),
+                0xFF5A7BC1);
         CanvasDocument source = CanvasDocument.blank(1, 1)
                 .withCompileCache(List.of(glyph), List.of(array));
 
@@ -132,6 +133,7 @@ class CanvasDocumentTest {
 
         assertEquals(source, decoded);
         assertTrue(decoded.arrays().getFirst().fingerprint() != 0);
+        assertEquals(0xFF5A7BC1, decoded.arrays().getFirst().color());
     }
 
     private static CanvasGlyph glyph(int[] cells) {

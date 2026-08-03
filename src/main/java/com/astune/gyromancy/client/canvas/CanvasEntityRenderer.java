@@ -1,6 +1,7 @@
 package com.astune.gyromancy.client.canvas;
 
 import com.astune.gyromancy.canvas.CanvasEntity;
+import com.astune.gyromancy.canvas.CanvasDocument;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
@@ -20,10 +21,24 @@ public final class CanvasEntityRenderer extends EntityRenderer<CanvasEntity> {
     @Override
     public void render(CanvasEntity entity, float yaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource buffers, int packedLight) {
-        ResourceLocation texture = CanvasClientState.textureLocation(entity.getId());
-        if (texture == null) return;
+        CanvasDocument document = CanvasClientState.document(entity.getId());
+        ResourceLocation texture = CanvasClientState.textureLocation(entity);
+        if (document == null || texture == null) return;
 
         poseStack.pushPose();
+        if (entity instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity) {
+            VertexConsumer consumer = buffers.getBuffer(RenderType.entityTranslucent(texture));
+            orientedTexturedQuad(
+                    poseStack.last(), consumer,
+                    entity.surfaceFrame().axisU(), entity.surfaceFrame().axisV(),
+                    entity.surfaceFrame().normal(),
+                    document.physicalWidth() * 0.5F,
+                    document.physicalHeight() * 0.5F,
+                    packedLight);
+            poseStack.popPose();
+            super.render(entity, yaw, partialTick, poseStack, buffers, packedLight);
+            return;
+        }
         if (entity.getDirection().getAxis().isVertical()) {
             float floorRotation = entity.getDirection() == net.minecraft.core.Direction.UP
                     ? 90.0F : -90.0F;
@@ -34,8 +49,10 @@ public final class CanvasEntityRenderer extends EntityRenderer<CanvasEntity> {
         }
         VertexConsumer consumer = buffers.getBuffer(RenderType.entityCutoutNoCull(texture));
         PoseStack.Pose pose = poseStack.last();
-        float halfWidth = entity.syncedWidth() * 0.5F;
-        float halfHeight = entity.syncedHeight() * 0.5F;
+        // Use the same document that produced the texture so the rendered quad
+        // always matches the canvas' physical block dimensions and aspect ratio.
+        float halfWidth = document.physicalWidth() * 0.5F;
+        float halfHeight = document.physicalHeight() * 0.5F;
         float z = -CanvasEntity.DEPTH * 0.501F;
         texturedQuad(
                 pose,
@@ -48,6 +65,58 @@ public final class CanvasEntityRenderer extends EntityRenderer<CanvasEntity> {
                 packedLight);
         poseStack.popPose();
         super.render(entity, yaw, partialTick, poseStack, buffers, packedLight);
+    }
+
+    private static void orientedTexturedQuad(PoseStack.Pose pose,
+                                             VertexConsumer consumer,
+                                             net.minecraft.world.phys.Vec3 axisU,
+                                             net.minecraft.world.phys.Vec3 axisV,
+                                             net.minecraft.world.phys.Vec3 normal,
+                                             float halfWidth,
+                                             float halfHeight,
+                                             int packedLight) {
+        net.minecraft.world.phys.Vec3 offset = normal.scale(CanvasEntity.DEPTH * 0.501F);
+        // Entity canvas textures are pre-mirrored on X. The legacy attached-
+        // canvas rotations compensate for that; this direct world-space quad
+        // must reverse U explicitly so raster X and SurfaceFrame U agree.
+        orientedVertex(pose, consumer, axisU, axisV, offset,
+                halfWidth, -halfHeight, projectionTextureU(halfWidth), 1.0F,
+                normal, packedLight);
+        orientedVertex(pose, consumer, axisU, axisV, offset,
+                -halfWidth, -halfHeight, projectionTextureU(-halfWidth), 1.0F,
+                normal, packedLight);
+        orientedVertex(pose, consumer, axisU, axisV, offset,
+                -halfWidth, halfHeight, projectionTextureU(-halfWidth), 0.0F,
+                normal, packedLight);
+        orientedVertex(pose, consumer, axisU, axisV, offset,
+                halfWidth, halfHeight, projectionTextureU(halfWidth), 0.0F,
+                normal, packedLight);
+    }
+
+    static float projectionTextureU(float surfaceU) {
+        return surfaceU >= 0.0F ? 0.0F : 1.0F;
+    }
+
+    private static void orientedVertex(PoseStack.Pose pose,
+                                       VertexConsumer consumer,
+                                       net.minecraft.world.phys.Vec3 axisU,
+                                       net.minecraft.world.phys.Vec3 axisV,
+                                       net.minecraft.world.phys.Vec3 offset,
+                                       float uDistance,
+                                       float vDistance,
+                                       float textureU,
+                                       float textureV,
+                                       net.minecraft.world.phys.Vec3 normal,
+                                       int packedLight) {
+        net.minecraft.world.phys.Vec3 point = offset
+                .add(axisU.scale(uDistance))
+                .add(axisV.scale(vDistance));
+        consumer.addVertex(pose, (float) point.x, (float) point.y, (float) point.z)
+                .setColor(0xFFFFFFFF)
+                .setUv(textureU, textureV)
+                .setOverlay(OverlayTexture.NO_OVERLAY)
+                .setLight(packedLight)
+                .setNormal(pose, (float) normal.x, (float) normal.y, (float) normal.z);
     }
 
     private static void texturedQuad(PoseStack.Pose pose,

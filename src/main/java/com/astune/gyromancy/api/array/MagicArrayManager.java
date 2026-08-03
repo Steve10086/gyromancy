@@ -318,8 +318,7 @@ public class MagicArrayManager {
     }
 
     private static double boundsArea(PositionedGlyph glyph) {
-        return Math.max(0.0, glyph.maxWorldX() - glyph.minWorldX())
-                * Math.max(0.0, glyph.maxWorldY() - glyph.minWorldY());
+        return glyph.bounds().area();
     }
 
     private void assignParent(PositionedGlyph glyph, PositionedGlyph parent) {
@@ -368,34 +367,22 @@ public class MagicArrayManager {
     }
 
     private static boolean containsCenter(PositionedGlyph circle, PositionedGlyph glyph) {
-        double x = (glyph.minWorldX() + glyph.maxWorldX()) * 0.5;
-        double y = (glyph.minWorldY() + glyph.maxWorldY()) * 0.5;
+        var bounds = glyph.boundsOn(circle.surface());
+        double x = bounds.centerU();
+        double y = bounds.centerV();
         return x >= circle.minWorldX() && x <= circle.maxWorldX()
                 && y >= circle.minWorldY() && y <= circle.maxWorldY();
     }
 
     private static boolean containsNode(PositionedGlyph circle, PositionedGlyph glyph) {
         if (glyph.role() != SymbolRole.OUTER_CIRCLE) return containsCenter(circle, glyph);
-        return glyph.minWorldX() >= circle.minWorldX() && glyph.maxWorldX() <= circle.maxWorldX()
-                && glyph.minWorldY() >= circle.minWorldY() && glyph.maxWorldY() <= circle.maxWorldY();
+        var bounds = glyph.boundsOn(circle.surface());
+        return bounds.minU() >= circle.minWorldX() && bounds.maxU() <= circle.maxWorldX()
+                && bounds.minV() >= circle.minWorldY() && bounds.maxV() <= circle.maxWorldY();
     }
 
     private static boolean sameSurface(PositionedGlyph a, PositionedGlyph b) {
-        if (a.pixels().isEmpty() || b.pixels().isEmpty()) return true;
-        var ap = a.pixels().iterator().next();
-        var bp = b.pixels().iterator().next();
-        return ap.face() == bp.face() && Double.compare(surfaceCoordinate(ap), surfaceCoordinate(bp)) == 0;
-    }
-
-    private static double surfaceCoordinate(com.astune.gyromancy.api.symbol.PixelPos pixel) {
-        return switch (pixel.face()) {
-            case NORTH -> pixel.pos().getZ();
-            case SOUTH -> pixel.pos().getZ() + 1.0;
-            case WEST -> pixel.pos().getX();
-            case EAST -> pixel.pos().getX() + 1.0;
-            case DOWN -> pixel.pos().getY();
-            case UP -> pixel.pos().getY() + 1.0;
-        };
+        return a.surface().isCoplanar(b.surface());
     }
 
     // ═══════════════════ phrase5 array objects ═══════════════════

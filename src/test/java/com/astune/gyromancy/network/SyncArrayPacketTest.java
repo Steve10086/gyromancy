@@ -42,6 +42,7 @@ class SyncArrayPacketTest {
             assertEquals(73, decodedArray.compilationEffectTicks());
             assertEquals(part.center(), decodedPart.center());
             assertEquals(part.face(), decodedPart.face());
+            assertEquals(part.surface(), decodedPart.surface());
             assertArrayEquals(part.mask(), decodedPart.mask());
         } finally {
             buffer.release();

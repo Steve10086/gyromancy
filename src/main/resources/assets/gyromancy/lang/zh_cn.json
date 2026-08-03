@@ -18,6 +18,12 @@
   "item.gyromancy.stamp.has_data": "图案：%s x %s 像素",
   "item.gyromancy.stamp.empty": "尚未记录图案",
   "item.gyromancy.stamp.help": "Shift+右键雕刻；使用以绘制已记录的图案",
+  "item.gyromancy.wand": "法杖",
+  "item.gyromancy.wand.slots": "%s 个投影面，%s 个画布槽位",
+  "item.gyromancy.wand.help": "Shift+右键配置，长按右键维持投影",
+  "screen.gyromancy.wand": "法杖",
+  "screen.gyromancy.wand.slot_near": "1 格",
+  "screen.gyromancy.wand.slot_far": "1.5 格",
   "screen.gyromancy.stamp_carving": "印章雕刻",
   "screen.gyromancy.stamp_carving.controls": "左键雕刻 / 右键擦除 / Shift 平移与缩放"
 }

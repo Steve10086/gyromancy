@@ -6,6 +6,7 @@ import com.astune.gyromancy.item.InkBottleItem;
 import com.astune.gyromancy.item.PenItem;
 import com.astune.gyromancy.item.CanvasItem;
 import com.astune.gyromancy.item.StampItem;
+import com.astune.gyromancy.item.WandItem;
 import net.minecraft.world.item.Item;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -38,4 +39,8 @@ public final class ModItems {
     /** Reusable painting pattern captured from a Painter canvas face. */
     public static final DeferredItem<StampItem> STAMP = ITEMS.register("stamp",
             StampItem::new);
+
+    /** Default two-plane wand: two canvas slots at one and one-and-a-half blocks. */
+    public static final DeferredItem<WandItem> WAND = ITEMS.register("wand",
+            WandItem::new);
 }

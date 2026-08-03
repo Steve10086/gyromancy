@@ -2,6 +2,7 @@ package com.astune.gyromancy.array;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.array.ArrayObject;
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.array.runtime.ArrayEffectLifecycle;
 import com.astune.gyromancy.api.symbol.PixelPos;
@@ -550,7 +551,9 @@ public final class MagicArrayDetector {
         Vec3 sourceV = corners[0].subtract(corners[3]);
         Vec3 center = Vec3.atCenterOf(key.pos)
                 .add(corners[0].add(corners[1]).add(corners[2]).add(corners[3]).scale(0.25));
-        return new SyncArrayPacket.BlockData(center, key.face, sourceU, sourceV, width, height, mask);
+        return new SyncArrayPacket.BlockData(
+                SurfaceFrame.fromBlockFace(key.pos, key.face), center, key.face,
+                sourceU, sourceV, width, height, mask);
     }
 
     private static SyncArrayPacket.BlockData canvasBlockData(
@@ -570,7 +573,10 @@ public final class MagicArrayDetector {
         Vec3 sourceV = canvas.localToWorld(0.5, 0.0)
                 .subtract(canvas.localToWorld(0.5, 1.0));
         return new SyncArrayPacket.BlockData(
-                center, canvas.getDirection(), sourceU, sourceV, width, height, mask);
+                canvas.surfaceFrame(), center,
+                canvas.surfaceFrame().axisAlignedDirection()
+                        .orElseGet(() -> Direction.getNearest(canvas.surfaceNormal())),
+                sourceU, sourceV, width, height, mask);
     }
 
     private record BlockFace(BlockPos pos, Direction face) {}

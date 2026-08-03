@@ -5,6 +5,8 @@ import com.astune.gyromancy.api.canvas.StampCanvasMaterial;
 import com.astune.gyromancy.api.ink.InkType;
 import com.astune.gyromancy.api.ink.PenProperties;
 import com.astune.gyromancy.canvas.CanvasDocument;
+import com.astune.gyromancy.wand.WandContents;
+import com.astune.gyromancy.wand.WandSlotSnapshots;
 import com.astune.painter.api.CanvasFace;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.component.DataComponentType;
@@ -77,6 +79,24 @@ public final class ModDataComponents {
                     DataComponentType.<CanvasDocument>builder()
                             .persistent(CanvasDocument.CODEC)
                             .networkSynchronized(ByteBufCodecs.fromCodec(CanvasDocument.CODEC))
+                    .build()
+            );
+
+    /** Canvas stacks stored by a wand menu. */
+    public static final Supplier<DataComponentType<WandContents>> WAND_CONTENTS =
+            DATA_COMPONENTS.register("wand_contents", () ->
+                    DataComponentType.<WandContents>builder()
+                            .persistent(WandContents.CODEC)
+                            .networkSynchronized(WandContents.STREAM_CODEC)
+                            .build()
+            );
+
+    /** Wand-owned combined slot materials and portable compilation caches. */
+    public static final Supplier<DataComponentType<WandSlotSnapshots>> WAND_SLOT_SNAPSHOTS =
+            DATA_COMPONENTS.register("wand_slot_snapshots", () ->
+                    DataComponentType.<WandSlotSnapshots>builder()
+                            .persistent(WandSlotSnapshots.CODEC)
+                            .networkSynchronized(ByteBufCodecs.fromCodec(WandSlotSnapshots.CODEC))
                             .build()
             );
 

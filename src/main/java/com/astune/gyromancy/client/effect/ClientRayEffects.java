@@ -95,7 +95,8 @@ public final class ClientRayEffects {
                                        IntUnaryOperator colorBySymbolValue,
                                        int color, int lifetime, double beamHeight, int fadeInTicks) {
         spawnOrRefresh(EffectKey.forGeometry(center, face),
-                center, face, worldRayDir, sourceU, sourceV, maskTexture,
+                center, Vec3.atLowerCornerOf(face.getNormal()), worldRayDir,
+                sourceU, sourceV, maskTexture,
                 symbolLayer, sourceWidth, sourceHeight, colorBySymbolValue,
                 color, lifetime, beamHeight, fadeInTicks);
     }
@@ -116,8 +117,31 @@ public final class ClientRayEffects {
             int lifetime,
             double beamHeight
     ) {
+        spawnForLifecycle(lifecycleId, partIndex, center,
+                Vec3.atLowerCornerOf(face.getNormal()), worldRayDir,
+                sourceU, sourceV, symbolLayer, sourceWidth, sourceHeight,
+                colorBySymbolValue, color, lifetime, beamHeight);
+    }
+
+    /** Core lifecycle API for effects emitted from an arbitrarily oriented surface. */
+    public static void spawnForLifecycle(
+            UUID lifecycleId,
+            int partIndex,
+            Vec3 center,
+            Vec3 sourceNormal,
+            Vec3 worldRayDir,
+            Vec3 sourceU,
+            Vec3 sourceV,
+            int[] symbolLayer,
+            int sourceWidth,
+            int sourceHeight,
+            IntUnaryOperator colorBySymbolValue,
+            int color,
+            int lifetime,
+            double beamHeight
+    ) {
         spawnOrRefresh(EffectKey.forLifecycle(lifecycleId, partIndex),
-                center, face, worldRayDir, sourceU, sourceV, null,
+                center, sourceNormal, worldRayDir, sourceU, sourceV, null,
                 symbolLayer, sourceWidth, sourceHeight, colorBySymbolValue,
                 color, lifetime, beamHeight, DEFAULT_FADE_IN_TICKS);
     }
@@ -139,9 +163,33 @@ public final class ClientRayEffects {
             int lifetime,
             double beamHeight
     ) {
+        spawnForLifecycle(lifecycleId, partIndex, center,
+                Vec3.atLowerCornerOf(face.getNormal()), worldRayDir,
+                sourceU, sourceV, mask, sourceWidth, sourceHeight,
+                colorBySymbolValue, color, lifetime, beamHeight);
+    }
+
+    /** Free-surface overload for binary masks used by array sync packets. */
+    public static void spawnForLifecycle(
+            UUID lifecycleId,
+            int partIndex,
+            Vec3 center,
+            Vec3 sourceNormal,
+            Vec3 worldRayDir,
+            Vec3 sourceU,
+            Vec3 sourceV,
+            byte[] mask,
+            int sourceWidth,
+            int sourceHeight,
+            IntUnaryOperator colorBySymbolValue,
+            int color,
+            int lifetime,
+            double beamHeight
+    ) {
         int[] widenedMask = new int[mask.length];
         for (int i = 0; i < mask.length; i++) widenedMask[i] = mask[i] & 0xFF;
-        spawnForLifecycle(lifecycleId, partIndex, center, face, worldRayDir, sourceU, sourceV,
+        spawnForLifecycle(lifecycleId, partIndex, center, sourceNormal, worldRayDir,
+                sourceU, sourceV,
                 widenedMask, sourceWidth, sourceHeight, colorBySymbolValue,
                 color, lifetime, beamHeight);
     }
@@ -156,10 +204,15 @@ public final class ClientRayEffects {
                 .count();
     }
 
+    static Optional<Vec3> lifecycleSourceNormal(UUID lifecycleId, int partIndex) {
+        Effect effect = effects.get(EffectKey.forLifecycle(lifecycleId, partIndex));
+        return effect == null ? Optional.empty() : Optional.of(effect.sourceNormal);
+    }
+
     private static void spawnOrRefresh(
             EffectKey key,
             Vec3 center,
-            Direction face,
+            Vec3 sourceNormal,
             Vec3 worldRayDir,
             Vec3 sourceU,
             Vec3 sourceV,
@@ -182,7 +235,8 @@ public final class ClientRayEffects {
             if (existing.maskTexture != null && existing.maskTexture.equals(maskTexture)
                     && existing.sourceWidth == sourceWidth
                     && existing.sourceHeight == sourceHeight) {
-                existing.refresh(worldRayDir, sourceU, sourceV, maskTexture, existing.meshVertices,
+                existing.refresh(sourceNormal, worldRayDir, sourceU, sourceV,
+                        maskTexture, existing.meshVertices,
                         sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks);
             } else {
                 MeshVertex[] meshVertices = compactMesh(symbolLayer, sourceWidth, sourceHeight, colorBySymbolValue);
@@ -190,14 +244,16 @@ public final class ClientRayEffects {
                     effects.remove(key);
                     return;
                 }
-                existing.refresh(worldRayDir, sourceU, sourceV, maskTexture, meshVertices,
+                existing.refresh(sourceNormal, worldRayDir, sourceU, sourceV,
+                        maskTexture, meshVertices,
                         sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks);
             }
             return;
         }
         MeshVertex[] meshVertices = compactMesh(symbolLayer, sourceWidth, sourceHeight, colorBySymbolValue);
         if (meshVertices.length == 0) return;
-        effects.put(key, new Effect(center, face, worldRayDir, sourceU, sourceV, maskTexture, meshVertices,
+        effects.put(key, new Effect(center, sourceNormal, worldRayDir,
+                sourceU, sourceV, maskTexture, meshVertices,
                 sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks));
     }
 
@@ -309,7 +365,7 @@ public final class ClientRayEffects {
     private static boolean renderOne(Effect e, Vec3 cameraPos) {
         float fade = alphaFade(e.age, e.ticksSinceRefresh, e.lifetime, e.fadeInTicks);
 
-        Vec3 normal = Vec3.atLowerCornerOf(e.face.getNormal());
+        Vec3 normal = e.sourceNormal.normalize();
         Projection projection = projectionPlane(e.center, normal, e.sourceU, e.sourceV,
                 e.worldRayDir, cameraPos, e.beamHeight);
 
@@ -530,7 +586,7 @@ public final class ClientRayEffects {
 
     private static final class Effect {
         final Vec3 center;
-        final Direction face;
+        Vec3 sourceNormal;
         Vec3 worldRayDir;
         Vec3 sourceU;
         Vec3 sourceV;
@@ -545,19 +601,22 @@ public final class ClientRayEffects {
         int age;
         int ticksSinceRefresh;
 
-        Effect(Vec3 center, Direction face, Vec3 worldRayDir,
+        Effect(Vec3 center, Vec3 sourceNormal, Vec3 worldRayDir,
                Vec3 sourceU, Vec3 sourceV,
                ResourceLocation maskTexture, MeshVertex[] meshVertices, int sourceWidth, int sourceHeight,
                int color, int lifetime, double beamHeight, int fadeInTicks) {
             this.center = center;
-            this.face = face;
-            refresh(worldRayDir, sourceU, sourceV, maskTexture, meshVertices,
+            refresh(sourceNormal, worldRayDir, sourceU, sourceV, maskTexture, meshVertices,
                     sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks);
         }
 
-        void refresh(Vec3 worldRayDir, Vec3 sourceU, Vec3 sourceV,
+        void refresh(Vec3 sourceNormal, Vec3 worldRayDir, Vec3 sourceU, Vec3 sourceV,
                      ResourceLocation maskTexture, MeshVertex[] meshVertices, int sourceWidth, int sourceHeight,
                      int color, int lifetime, double beamHeight, int fadeInTicks) {
+            if (sourceNormal.lengthSqr() < 1.0E-10) {
+                throw new IllegalArgumentException("Source surface normal must be non-zero");
+            }
+            this.sourceNormal = sourceNormal.normalize();
             this.worldRayDir = worldRayDir;
             this.sourceU = sourceU;
             this.sourceV = sourceV;

@@ -1,6 +1,7 @@
 package com.astune.gyromancy.network;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.client.effect.ClientRayEffects;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.Direction;
@@ -39,11 +40,13 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                     Direction face = Direction.values()[buf.readUnsignedByte() % Direction.values().length];
                     Vec3 sourceU = readVec3(buf);
                     Vec3 sourceV = readVec3(buf);
+                    SurfaceFrame surface = readSurfaceFrame(buf);
                     int width = buf.readInt();
                     int height = buf.readInt();
                     byte[] mask = new byte[buf.readInt()];
                     buf.readBytes(mask);
-                    parts.add(new BlockData(center, face, sourceU, sourceV, width, height, mask));
+                    parts.add(new BlockData(surface, center, face, sourceU, sourceV,
+                            width, height, mask));
                 }
                 arrays.add(new ArrayData(id, color, compilationEffectTicks, parts));
             }
@@ -64,6 +67,7 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                     buf.writeByte(part.face().ordinal());
                     writeVec3(buf, part.sourceU());
                     writeVec3(buf, part.sourceV());
+                    writeSurfaceFrame(buf, part.surface());
                     buf.writeInt(part.width());
                     buf.writeInt(part.height());
                     buf.writeInt(part.mask().length);
@@ -82,10 +86,10 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                 if (!firstSeen || array.compilationEffectTicks() <= 0) continue;
                 for (int partIndex = 0; partIndex < array.parts().size(); partIndex++) {
                     BlockData part = array.parts().get(partIndex);
-                    Vec3 rayDir = Vec3.atLowerCornerOf(part.face().getNormal());
+                    Vec3 rayDir = part.surface().normal();
                     ClientRayEffects.spawnForLifecycle(
                             array.id(), partIndex,
-                            part.center(), part.face(), rayDir,
+                            part.center(), part.surface().normal(), rayDir,
                             part.sourceU(), part.sourceV(), part.mask(), part.width(), part.height(),
                             ignored -> 0xFFFFFFFF, array.color(),
                             array.compilationEffectTicks(), BEAM_HEIGHT);
@@ -117,6 +121,18 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
         buf.writeDouble(vec.z);
     }
 
+    private static SurfaceFrame readSurfaceFrame(ByteBuf buf) {
+        return new SurfaceFrame(readVec3(buf), readVec3(buf),
+                readVec3(buf), readVec3(buf));
+    }
+
+    private static void writeSurfaceFrame(ByteBuf buf, SurfaceFrame surface) {
+        writeVec3(buf, surface.origin());
+        writeVec3(buf, surface.axisU());
+        writeVec3(buf, surface.axisV());
+        writeVec3(buf, surface.normal());
+    }
+
     public record ArrayData(
             UUID id,
             int color,
@@ -124,6 +140,28 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
             List<BlockData> parts
     ) {}
 
-    public record BlockData(Vec3 center, Direction face, Vec3 sourceU, Vec3 sourceV,
-                            int width, int height, byte[] mask) {}
+    /**
+     * {@code surface} is authoritative geometry. {@code face} is retained only
+     * for callers and packet consumers that still use six-direction coordinates.
+     */
+    public record BlockData(SurfaceFrame surface, Vec3 center, Direction face,
+                            Vec3 sourceU, Vec3 sourceV,
+                            int width, int height, byte[] mask) {
+        public BlockData(Vec3 center, Direction face, Vec3 sourceU, Vec3 sourceV,
+                         int width, int height, byte[] mask) {
+            this(SurfaceFrame.fromBlockFace(
+                            net.minecraft.core.BlockPos.containing(center.subtract(
+                                    Vec3.atLowerCornerOf(face.getNormal())
+                                            .scale(SurfaceFrame.EPSILON))),
+                            face),
+                    center, face, sourceU, sourceV, width, height, mask);
+        }
+
+        /** Compatibility constructor for code which supplied only a free normal. */
+        public BlockData(Vec3 center, Direction face, Vec3 sourceU, Vec3 sourceV,
+                         int width, int height, byte[] mask, Vec3 normal) {
+            this(new SurfaceFrame(center, sourceU.normalize(), sourceV.normalize(), normal),
+                    center, face, sourceU, sourceV, width, height, mask);
+        }
+    }
 }

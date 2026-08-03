@@ -36,6 +36,12 @@
   "item.gyromancy.stamp.has_data": "Pattern: %s x %s pixels",
   "item.gyromancy.stamp.empty": "No pattern captured",
   "item.gyromancy.stamp.help": "Shift-right-click to carve; use to apply the stored pattern",
+  "item.gyromancy.wand": "Projection Wand",
+  "item.gyromancy.wand.slots": "%s projection planes, %s canvas slots",
+  "item.gyromancy.wand.help": "Shift-right-click to configure; hold right-click to project",
+  "screen.gyromancy.wand": "Projection Wand",
+  "screen.gyromancy.wand.slot_near": "1 block",
+  "screen.gyromancy.wand.slot_far": "1.5 blocks",
   "screen.gyromancy.stamp_carving": "Stamp Carving",
   "screen.gyromancy.stamp_carving.controls": "Left: carve / Right: erase / Shift: pan and zoom"
 }

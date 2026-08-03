@@ -1,10 +1,8 @@
 package com.astune.gyromancy.symbol;
 
 import com.astune.gyromancy.api.array.ArrayObject;
-import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
-import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
@@ -43,34 +41,19 @@ public abstract class CenterSymbol extends Symbol {
     public SymbolCatalog.EndEffect endEffect() { return null; }
 
     public static boolean isFacingDown(PositionedGlyph glyph) {
-        return glyph.pixels().stream().findAny().map(PixelPos::face).orElse(Direction.UP) == Direction.DOWN;
+        return glyph.surface().normal().y < -0.999;
     }
 
     public static Vec3 glyphCenter(PositionedGlyph glyph) {
-        double a = (glyph.minWorldX() + glyph.maxWorldX()) * 0.5;
-        double b = (glyph.minWorldY() + glyph.maxWorldY()) * 0.5;
-        PixelPos sample = glyph.pixels().stream().findAny().orElse(null);
-        if (sample == null) return Vec3.atCenterOf(glyph.worldPos());
-
-        Direction face = sample.face();
-        Vec3 normal = Vec3.atLowerCornerOf(face.getNormal());
-        Vec3 plane = Vec3.atCenterOf(sample.pos()).add(normal.scale(0.5));
-        return switch (face) {
-            case NORTH, SOUTH -> new Vec3(a, b, plane.z);
-            case EAST, WEST -> new Vec3(plane.x, b, a);
-            case UP, DOWN -> new Vec3(a, plane.y, b);
-        };
+        return glyph.center();
     }
 
     public static Vec3 glyphCenter(ServerLevel level, PositionedGlyph glyph) {
-        return FloodFillExtractor.worldCenter(level, glyph.pixels(),
-                        glyph.minWorldX(), glyph.maxWorldX(), glyph.minWorldY(), glyph.maxWorldY())
-                .orElseGet(() -> glyphCenter(glyph));
+        return glyphCenter(glyph);
     }
 
     public static Vec3 faceNormal(PositionedGlyph glyph) {
-        Direction face = glyph.pixels().stream().findAny().map(PixelPos::face).orElse(Direction.UP);
-        return Vec3.atLowerCornerOf(face.getNormal());
+        return glyph.surface().normal();
     }
 
     protected static LaunchData launchData(ServerLevel level, PositionedGlyph circleGlyph,

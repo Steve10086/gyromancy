@@ -10,6 +10,8 @@ import com.astune.gyromancy.client.canvas.CanvasEntityRenderer;
 import com.astune.gyromancy.client.glyph.GlyphImageProvider;
 import com.astune.gyromancy.client.glyph.GlyphRenderer;
 import com.astune.gyromancy.registry.ModEntities;
+import com.astune.gyromancy.registry.ModMenus;
+import com.astune.gyromancy.client.wand.WandScreen;
 import com.astune.painter.api.imageProvider.CanvasImageProviderRegistry;
 import com.astune.painter.api.render.CanvasRendererRegistry;
 import net.neoforged.api.distmarker.Dist;
@@ -17,6 +19,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
 @EventBusSubscriber(modid = Gyromancy.MODID, value = Dist.CLIENT)
 public final class ClientSetup {
@@ -41,5 +44,11 @@ public final class ClientSetup {
         event.registerEntityRenderer(ModEntities.ICE_BALL.get(), context -> new ElementBallRenderer<>(context, "frozen_core", 0xFFD8F4FF));
         event.registerEntityRenderer(ModEntities.DRY_BALL.get(), context -> new ElementBallRenderer<>(context, "mana_ball", 0xFFD8B36A));
         event.registerEntityRenderer(ModEntities.CANVAS.get(), CanvasEntityRenderer::new);
+        event.registerEntityRenderer(ModEntities.WAND_PROJECTION.get(), CanvasEntityRenderer::new);
+    }
+
+    @SubscribeEvent
+    static void registerMenuScreens(RegisterMenuScreensEvent event) {
+        event.register(ModMenus.WAND.get(), WandScreen::new);
     }
 }

@@ -59,11 +59,13 @@ class PositionedGlyphCodecTest {
         json.getAsJsonObject().remove("front");
         json.getAsJsonObject().remove("length");
         json.getAsJsonObject().remove("width");
+        json.getAsJsonObject().remove("surface");
 
         var decoded = PositionedGlyph.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 
         assertEquals(Vec3.ZERO, decoded.front());
         assertEquals(0.0, decoded.length());
         assertEquals(0.0, decoded.width());
+        assertEquals(Direction.NORTH, decoded.surface().requireAxisAlignedDirection());
     }
 }

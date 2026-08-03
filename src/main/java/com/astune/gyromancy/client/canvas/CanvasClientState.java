@@ -38,9 +38,10 @@ public final class CanvasClientState {
         return snapshot == null ? null : snapshot.document();
     }
 
-    static ResourceLocation textureLocation(int entityId) {
-        Snapshot snapshot = SNAPSHOTS.get(entityId);
-        return snapshot == null ? null : snapshot.textureLocation();
+    static ResourceLocation textureLocation(CanvasEntity entity) {
+        Snapshot snapshot = SNAPSHOTS.get(entity.getId());
+        return snapshot == null ? null : snapshot.textureLocation(
+                entity instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity);
     }
 
     public static void onEntityLeave(EntityLeaveLevelEvent event) {
@@ -76,12 +77,19 @@ public final class CanvasClientState {
             this.document = document;
         }
 
-        private ResourceLocation textureLocation() {
+        private ResourceLocation textureLocation(boolean transparent) {
             if (texture == null) {
-                texture = CanvasDynamicTexture.create(
-                        "entity/" + entityId,
-                        document,
-                        true);
+                texture = transparent
+                        ? CanvasDynamicTexture.createOverlay(
+                                "entity/" + entityId,
+                                document.resolutionWidth(),
+                                document.resolutionHeight(),
+                                document.colors(),
+                                true)
+                        : CanvasDynamicTexture.create(
+                                "entity/" + entityId,
+                                document,
+                                true);
             }
             return texture.location();
         }

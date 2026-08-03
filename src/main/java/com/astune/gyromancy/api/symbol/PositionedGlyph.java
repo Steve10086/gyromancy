@@ -1,5 +1,6 @@
 package com.astune.gyromancy.api.symbol;
 
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -28,7 +29,8 @@ public record PositionedGlyph(
         double minWorldX, double maxWorldX,
         double minWorldY, double maxWorldY,
         Set<PixelPos> pixels,
-        Optional<UUID> sourceCanvasId
+        Optional<UUID> sourceCanvasId,
+        SurfaceFrame surface
 ) {
     private static final Codec<UUID> UUID_CODEC =
             Codec.STRING.xmap(UUID::fromString, UUID::toString);
@@ -53,8 +55,28 @@ public record PositionedGlyph(
                     Codec.DOUBLE.fieldOf("min_world_y").forGetter(PositionedGlyph::minWorldY),
                     Codec.DOUBLE.fieldOf("max_world_y").forGetter(PositionedGlyph::maxWorldY),
                     PixelPos.CODEC.listOf().xmap(Set::copyOf, java.util.List::copyOf).fieldOf("pixels").forGetter(PositionedGlyph::pixels),
-                    UUID_CODEC.optionalFieldOf("source_canvas").forGetter(PositionedGlyph::sourceCanvasId))
-             .apply(i, PositionedGlyph::new));
+                    UUID_CODEC.optionalFieldOf("source_canvas").forGetter(PositionedGlyph::sourceCanvasId),
+                    SurfaceFrame.CODEC.optionalFieldOf("surface")
+                            .forGetter(glyph -> Optional.of(glyph.surface())))
+             .apply(i, PositionedGlyph::fromCodec));
+
+    public PositionedGlyph {
+        pixels = Set.copyOf(pixels);
+        sourceCanvasId = sourceCanvasId == null ? Optional.empty() : sourceCanvasId;
+        if (surface == null) surface = inferLegacySurface(worldPos, pixels);
+    }
+
+    private static PositionedGlyph fromCodec(
+            UUID glyphUuid, int glyphId, ResourceLocation symbolId, float confidence,
+            SymbolRole role, Vec3 front, double length, double width, BlockPos worldPos,
+            double minWorldX, double maxWorldX, double minWorldY, double maxWorldY,
+            Set<PixelPos> pixels, Optional<UUID> sourceCanvasId,
+            Optional<SurfaceFrame> surface) {
+        return new PositionedGlyph(glyphUuid, glyphId, symbolId, confidence, role,
+                front, length, width, worldPos, minWorldX, maxWorldX,
+                minWorldY, maxWorldY, pixels, sourceCanvasId,
+                surface.orElseGet(() -> inferLegacySurface(worldPos, pixels)));
+    }
 
     public PositionedGlyph(
             UUID glyphUuid,
@@ -71,13 +93,55 @@ public record PositionedGlyph(
             Set<PixelPos> pixels
     ) {
         this(glyphUuid, glyphId, symbolId, confidence, role, front, length, width,
-                worldPos, minWorldX, maxWorldX, minWorldY, maxWorldY, pixels, Optional.empty());
+                worldPos, minWorldX, maxWorldX, minWorldY, maxWorldY, pixels,
+                Optional.empty(), inferLegacySurface(worldPos, pixels));
+    }
+
+    public PositionedGlyph(
+            UUID glyphUuid, int glyphId, ResourceLocation symbolId, float confidence,
+            SymbolRole role, Vec3 front, double length, double width, BlockPos worldPos,
+            double minWorldX, double maxWorldX, double minWorldY, double maxWorldY,
+            Set<PixelPos> pixels, Optional<UUID> sourceCanvasId
+    ) {
+        this(glyphUuid, glyphId, symbolId, confidence, role, front, length, width,
+                worldPos, minWorldX, maxWorldX, minWorldY, maxWorldY, pixels,
+                sourceCanvasId, inferLegacySurface(worldPos, pixels));
     }
 
     public PositionedGlyph withGlyphId(int newGlyphId) {
         return new PositionedGlyph(glyphUuid, newGlyphId, symbolId, confidence, role,
                 front, length, width, worldPos,
-                minWorldX, maxWorldX, minWorldY, maxWorldY, pixels, sourceCanvasId);
+                minWorldX, maxWorldX, minWorldY, maxWorldY, pixels, sourceCanvasId, surface);
+    }
+
+    public SurfaceFrame.SurfaceBounds bounds() {
+        return new SurfaceFrame.SurfaceBounds(
+                minWorldX, maxWorldX, minWorldY, maxWorldY);
+    }
+
+    public SurfaceFrame.SurfaceBounds boundsOn(SurfaceFrame target) {
+        return surface.transformBounds(bounds(), target);
+    }
+
+    public Vec3 center() {
+        return surface.world(
+                (minWorldX + maxWorldX) * 0.5,
+                (minWorldY + maxWorldY) * 0.5);
+    }
+
+    public Optional<net.minecraft.core.Direction> legacyDirection() {
+        return surface.axisAlignedDirection();
+    }
+
+    public Optional<SurfaceFrame.LegacyBlockFace> legacyBlockFaceAt(Vec3 worldPosition) {
+        return surface.legacyBlockFaceAt(worldPosition);
+    }
+
+    private static SurfaceFrame inferLegacySurface(BlockPos worldPos, Set<PixelPos> pixels) {
+        PixelPos sample = pixels == null ? null : pixels.stream().findFirst().orElse(null);
+        return sample != null
+                ? SurfaceFrame.fromBlockFace(sample.pos(), sample.face())
+                : SurfaceFrame.fromBlockFace(worldPos, net.minecraft.core.Direction.UP);
     }
 
     public record Entry(UUID uuid, PositionedGlyph glyph) {

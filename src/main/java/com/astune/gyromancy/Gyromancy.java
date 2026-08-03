@@ -40,6 +40,7 @@ public class Gyromancy {
         ModAttachments.ATTACHMENTS.register(modEventBus);
         ModDataComponents.DATA_COMPONENTS.register(modEventBus);
         ModRecipes.RECIPE_SERIALIZERS.register(modEventBus);
+        ModMenus.MENUS.register(modEventBus);
         ModSymbols.register(modEventBus);
 
         // ── NeoForge.EVENT_BUS — explicit (no @EventBusSubscriber) ──

@@ -42,6 +42,23 @@ class ClientRayEffectsTest {
     }
 
     @Test
+    void compilationEffectRetainsAnArbitrarySourceSurfaceNormal() {
+        ClientRayEffects.clearAll();
+        UUID lifecycle = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        Vec3 normal = new Vec3(1.0, 1.0, 1.0).normalize();
+        Vec3 sourceU = new Vec3(1.0, -1.0, 0.0).normalize();
+        Vec3 sourceV = normal.cross(sourceU).normalize();
+
+        ClientRayEffects.spawnForLifecycle(
+                lifecycle, 0, Vec3.ZERO, normal, normal, sourceU, sourceV,
+                new byte[]{1}, 1, 1, ignored -> 0xFFFFFFFF,
+                0xFFFFFFFF, 200, 1.0);
+
+        assertEquals(normal, ClientRayEffects.lifecycleSourceNormal(lifecycle, 0).orElseThrow());
+        ClientRayEffects.clearAll();
+    }
+
+    @Test
     void compactMeshReturnsSharedEmptyForBlankLayer() {
         ClientRayEffects.MeshVertex[] pixels = ClientRayEffects.compactMesh(new int[4], 2, 2, symbol -> 0xFFFFFFFF);
 

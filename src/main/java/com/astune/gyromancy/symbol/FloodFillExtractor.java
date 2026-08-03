@@ -1,5 +1,6 @@
 package com.astune.gyromancy.symbol;
 
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.painter.api.CanvasData;
@@ -136,11 +137,9 @@ public final class FloodFillExtractor {
     }
 
     public static double[] flatten(Direction face, Vec3 w) {
-        return switch (face) {
-            case NORTH, SOUTH -> new double[]{w.x, w.y};
-            case EAST, WEST   -> new double[]{w.z, w.y};
-            case UP, DOWN     -> new double[]{w.x, w.z};
-        };
+        SurfaceFrame.Coordinates coordinates =
+                SurfaceFrame.fromBlockFace(BlockPos.ZERO, face).project(w);
+        return new double[]{coordinates.u(), coordinates.v()};
     }
 
     public static Optional<Vec3> worldCenter(ServerLevel level, Collection<PixelPos> pixels,
@@ -159,11 +158,10 @@ public final class FloodFillExtractor {
     }
 
     static Vec3 unflatten(Direction face, Vec3 sampleWorld, double a, double b) {
-        return switch (face) {
-            case NORTH, SOUTH -> new Vec3(a, b, sampleWorld.z);
-            case EAST, WEST -> new Vec3(sampleWorld.x, b, a);
-            case UP, DOWN -> new Vec3(a, sampleWorld.y, b);
-        };
+        Vec3 normal = Vec3.atLowerCornerOf(face.getNormal());
+        BlockPos support = BlockPos.containing(
+                sampleWorld.subtract(normal.scale(SurfaceFrame.EPSILON)));
+        return SurfaceFrame.fromBlockFace(support, face).world(a, b);
     }
 
     // Public API

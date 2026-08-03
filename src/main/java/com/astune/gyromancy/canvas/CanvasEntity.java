@@ -1,5 +1,6 @@
 package com.astune.gyromancy.canvas;
 
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.network.CanvasSnapshotPacket;
@@ -48,7 +49,7 @@ import java.util.Objects;
  * A portable, editable hanging canvas. Its collision box is always 1/16 block
  * thick while width and height come from the stored document.
  */
-public final class CanvasEntity extends BlockAttachedEntity {
+public class CanvasEntity extends BlockAttachedEntity {
     public static final float DEPTH = 1.0F / 16.0F;
     private static final String DOCUMENT_TAG = "CanvasDocument";
 
@@ -64,18 +65,21 @@ public final class CanvasEntity extends BlockAttachedEntity {
     private CanvasDocument document = CanvasDocument.blank(1, 1);
     private int revision;
     private Direction direction = Direction.SOUTH;
+    private Vec3 surfaceNormalOverride;
+    private Vec3 surfaceWidthAxisOverride;
+    private Vec3 surfaceHeightAxisOverride;
 
     public CanvasEntity(EntityType<? extends CanvasEntity> type, Level level) {
         super(type, level);
     }
 
-    private CanvasEntity(Level level, BlockPos pos) {
-        super(ModEntities.CANVAS.get(), level, pos);
+    protected CanvasEntity(EntityType<? extends CanvasEntity> type, Level level, BlockPos pos) {
+        super(type, level, pos);
     }
 
     public static CanvasEntity create(Level level, BlockPos pos, Direction direction,
                                       CanvasDocument document) {
-        CanvasEntity canvas = new CanvasEntity(level, pos);
+        CanvasEntity canvas = new CanvasEntity(ModEntities.CANVAS.get(), level, pos);
         canvas.setDocumentInternal(document, false);
         canvas.setDirection(direction);
         return canvas;
@@ -83,6 +87,9 @@ public final class CanvasEntity extends BlockAttachedEntity {
 
     public void setDirection(Direction direction) {
         this.direction = Objects.requireNonNull(direction);
+        surfaceNormalOverride = null;
+        surfaceWidthAxisOverride = null;
+        surfaceHeightAxisOverride = null;
         if (direction.getAxis().isHorizontal()) {
             setYRot(direction.get2DDataValue() * 90.0F);
         } else {
@@ -90,6 +97,43 @@ public final class CanvasEntity extends BlockAttachedEntity {
         }
         yRotO = getYRot();
         recalculateBoundingBox();
+    }
+
+    /** Sets an arbitrary orthonormal plane for projection canvases. */
+    public void setSurfaceOrientation(Vec3 normal, Vec3 widthAxis, Vec3 heightAxis) {
+        Vec3 normalizedNormal = normal.normalize();
+        Vec3 normalizedWidth = widthAxis.normalize();
+        Vec3 normalizedHeight = heightAxis.normalize();
+        if (Math.abs(normalizedNormal.dot(normalizedWidth)) > 1.0E-4
+                || Math.abs(normalizedNormal.dot(normalizedHeight)) > 1.0E-4
+                || Math.abs(normalizedWidth.dot(normalizedHeight)) > 1.0E-4) {
+            throw new IllegalArgumentException("Canvas surface axes must be orthogonal");
+        }
+        surfaceNormalOverride = normalizedNormal;
+        surfaceWidthAxisOverride = normalizedWidth;
+        surfaceHeightAxisOverride = normalizedHeight;
+        recalculateBoundingBox();
+    }
+
+    public Vec3 surfaceNormal() {
+        return surfaceNormalOverride != null
+                ? surfaceNormalOverride : Vec3.atLowerCornerOf(direction.getNormal());
+    }
+
+    public Vec3 surfaceWidthAxis() {
+        return surfaceWidthAxisOverride != null
+                ? surfaceWidthAxisOverride : CanvasOrientation.widthAxis(direction);
+    }
+
+    public Vec3 surfaceHeightAxis() {
+        return surfaceHeightAxisOverride != null
+                ? surfaceHeightAxisOverride : CanvasOrientation.heightAxis(direction);
+    }
+
+    /** The compiler and renderer share this exact world-space plane definition. */
+    public SurfaceFrame surfaceFrame() {
+        return new SurfaceFrame(position(), surfaceWidthAxis(),
+                surfaceHeightAxis(), surfaceNormal());
     }
 
     @Override
@@ -128,9 +172,9 @@ public final class CanvasEntity extends BlockAttachedEntity {
         Vec3 base = Vec3.atCenterOf(pos).relative(facing, -0.46875);
         double horizontalOffset = ((int) width & 1) == 0 ? 0.5 : 0.0;
         double verticalOffset = ((int) height & 1) == 0 ? 0.5 : 0.0;
-        Vec3 widthAxis = CanvasOrientation.widthAxis(facing);
-        Vec3 heightAxis = CanvasOrientation.heightAxis(facing);
-        Vec3 normal = Vec3.atLowerCornerOf(facing.getNormal());
+        Vec3 widthAxis = surfaceWidthAxis();
+        Vec3 heightAxis = surfaceHeightAxis();
+        Vec3 normal = surfaceNormal();
         Vec3 center = base.add(widthAxis.scale(horizontalOffset))
                 .add(heightAxis.scale(verticalOffset));
         double sizeX = Math.abs(widthAxis.x) * width
@@ -183,7 +227,7 @@ public final class CanvasEntity extends BlockAttachedEntity {
         setDocumentInternal(next, incrementRevision);
     }
 
-    private void setDocumentInternal(CanvasDocument next, boolean incrementRevision) {
+    protected void setDocumentInternal(CanvasDocument next, boolean incrementRevision) {
         document = next;
         if (incrementRevision) revision++;
         entityData.set(DATA_WIDTH, next.physicalWidth());
@@ -222,25 +266,26 @@ public final class CanvasEntity extends BlockAttachedEntity {
                 localToWorld(local.minX(), local.maxY()),
                 localToWorld(local.maxX(), local.maxY())
         };
+        SurfaceFrame frame = surfaceFrame();
         double minWorldX = Double.POSITIVE_INFINITY;
         double maxWorldX = Double.NEGATIVE_INFINITY;
         double minWorldY = Double.POSITIVE_INFINITY;
         double maxWorldY = Double.NEGATIVE_INFINITY;
         for (Vec3 corner : corners) {
-            double[] flat = flatten(corner);
-            minWorldX = Math.min(minWorldX, flat[0]);
-            maxWorldX = Math.max(maxWorldX, flat[0]);
-            minWorldY = Math.min(minWorldY, flat[1]);
-            maxWorldY = Math.max(maxWorldY, flat[1]);
+            SurfaceFrame.Coordinates coordinates = frame.project(corner);
+            minWorldX = Math.min(minWorldX, coordinates.u());
+            maxWorldX = Math.max(maxWorldX, coordinates.u());
+            minWorldY = Math.min(minWorldY, coordinates.v());
+            maxWorldY = Math.max(maxWorldY, coordinates.v());
         }
 
-        Vec3 widthAxis = CanvasOrientation.widthAxis(direction);
-        Vec3 heightAxis = CanvasOrientation.heightAxis(direction);
+        Vec3 widthAxis = surfaceWidthAxis();
+        Vec3 heightAxis = surfaceHeightAxis();
         Vec3 physicalFront = widthAxis.scale(local.frontX() * document.physicalWidth())
                 .add(heightAxis.scale(-local.frontY() * document.physicalHeight()));
         Vec3 front = physicalFront.lengthSqr() > 1.0E-12
                 ? physicalFront.normalize() : Vec3.ZERO;
-        Vec3 right = Vec3.atLowerCornerOf(getDirection().getNormal()).cross(front);
+        Vec3 right = surfaceNormal().cross(front);
         double[] extents = projectedGlyphExtents(
                 local, rasterWidth, rasterHeight, front, right, corners);
 
@@ -248,23 +293,13 @@ public final class CanvasEntity extends BlockAttachedEntity {
                 local.glyphUuid(), glyphId, local.symbolId(), local.confidence(), local.role(),
                 front, extents[0], extents[1], getPos(),
                 minWorldX, maxWorldX, minWorldY, maxWorldY,
-                Set.copyOf(pixels), java.util.Optional.of(getUUID()));
+                Set.copyOf(pixels), java.util.Optional.of(getUUID()), frame);
     }
 
     public Vec3 localToWorld(double normalizedX, double normalizedY) {
-        return position()
-                .add(CanvasOrientation.widthAxis(direction)
-                        .scale((normalizedX - 0.5) * document.physicalWidth()))
-                .add(CanvasOrientation.heightAxis(direction)
-                        .scale((0.5 - normalizedY) * document.physicalHeight()));
-    }
-
-    private double[] flatten(Vec3 world) {
-        return switch (getDirection()) {
-            case NORTH, SOUTH -> new double[]{world.x, world.y};
-            case EAST, WEST -> new double[]{world.z, world.y};
-            case UP, DOWN -> new double[]{world.x, world.z};
-        };
+        return surfaceFrame().world(
+                (normalizedX - 0.5) * document.physicalWidth(),
+                (0.5 - normalizedY) * document.physicalHeight());
     }
 
     private static double[] projectedExtents(Vec3[] corners, Vec3 front, Vec3 right) {

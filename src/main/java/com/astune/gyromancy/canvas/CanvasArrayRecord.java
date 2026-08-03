@@ -10,7 +10,8 @@ import java.util.UUID;
 public record CanvasArrayRecord(
         UUID rootGlyph,
         List<UUID> boundGlyphs,
-        long fingerprint
+        long fingerprint,
+        int color
 ) {
     private static final Codec<UUID> UUID_CODEC =
             Codec.STRING.xmap(UUID::fromString, UUID::toString);
@@ -19,11 +20,18 @@ public record CanvasArrayRecord(
             instance.group(
                     UUID_CODEC.fieldOf("root").forGetter(CanvasArrayRecord::rootGlyph),
                     UUID_CODEC.listOf().fieldOf("bound").forGetter(CanvasArrayRecord::boundGlyphs),
-                    Codec.LONG.fieldOf("fingerprint").forGetter(CanvasArrayRecord::fingerprint))
+                    Codec.LONG.fieldOf("fingerprint").forGetter(CanvasArrayRecord::fingerprint),
+                    Codec.INT.optionalFieldOf("color", 0xFFFFFFFF)
+                            .forGetter(CanvasArrayRecord::color))
                     .apply(instance, CanvasArrayRecord::new));
 
     public CanvasArrayRecord {
         boundGlyphs = List.copyOf(boundGlyphs);
+    }
+
+    /** Source-compatible constructor for old call sites and legacy tests. */
+    public CanvasArrayRecord(UUID rootGlyph, List<UUID> boundGlyphs, long fingerprint) {
+        this(rootGlyph, boundGlyphs, fingerprint, 0xFFFFFFFF);
     }
 
     public static long fingerprint(UUID root, List<UUID> bound) {
