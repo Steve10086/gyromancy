@@ -40,10 +40,16 @@ public final class SymbolRecognizer {
     private SymbolRecognizer() {}
 
     public record RecognizerConfig(
-            float confidenceThreshold
+            float confidenceThreshold,
+            boolean saveDebugImage
     ) {
         /** Kept for API compatibility; SkeletonMatcher now owns all match thresholds. */
-        public static final RecognizerConfig DEFAULT = new RecognizerConfig(0.40f);
+        public static final RecognizerConfig DEFAULT = new RecognizerConfig(0.40f, true);
+        public static final RecognizerConfig CLIENT_PREVIEW = new RecognizerConfig(0.40f, false);
+
+        public RecognizerConfig(float confidenceThreshold) {
+            this(confidenceThreshold, true);
+        }
     }
 
     /**
@@ -68,7 +74,7 @@ public final class SymbolRecognizer {
                 String.format("%.1f", glyph.minWorldX()), String.format("%.1f", glyph.minWorldY()),
                 String.format("%.1f", glyph.maxWorldX()), String.format("%.1f", glyph.maxWorldY()));
 
-        saveDebugMatrixPng(rawMatrix);
+        if (config.saveDebugImage()) saveDebugMatrixPng(rawMatrix);
 
         SkeletonMatcher matcher = SkeletonMatcher.getInstance();
         List<SkeletonMatcher.Match> results = matcher.recognize(rawMatrix);

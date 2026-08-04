@@ -1,5 +1,6 @@
 package com.astune.gyromancy.client.canvas;
 
+import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.canvas.CanvasPenTool;
 import com.astune.gyromancy.api.canvas.CanvasStampTool;
 import com.astune.gyromancy.canvas.CanvasDocument;
@@ -23,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 /** Simple pixel editor for an entity-backed canvas. */
 public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEditorMenu> {
@@ -40,6 +42,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private static final double MIN_STAMP_SIZE = 0.125;
     private static final double MAX_STAMP_SIZE = 8.0;
     private static final double STAMP_RESIZE_PIXELS_PER_DOUBLING = 96.0;
+    private static final long RUNE_PREVIEW_INTERVAL_NANOS = 75_000_000L;
     private static final ResourceLocation HOTBAR_SPRITE =
             ResourceLocation.withDefaultNamespace("hud/hotbar");
     private static final ResourceLocation HOTBAR_SELECTION_SPRITE =
@@ -58,6 +61,11 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private final CanvasHotbarScroll hotbarScroll = new CanvasHotbarScroll();
     private CanvasDynamicTexture canvasTexture;
     private CanvasDynamicTexture stampPreviewTexture;
+    private CanvasRunePreview runePreview = CanvasRunePreview.empty();
+    private CompletableFuture<RunePreviewTaskResult> runePreviewTask;
+    private long runePreviewGeneration;
+    private long nextRunePreviewNanos;
+    private boolean runePreviewDirty = true;
     private int scale;
     private int[] colors;
     private int[] effects;
@@ -176,7 +184,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         int drawingRight = Math.max(MARGIN + 1,
                 width - MARGIN - SIDE_TOOLBAR_WIDTH - SIDE_GAP);
         int availableWidth = Math.max(1, drawingRight - MARGIN);
-        int availableHeight = Math.max(1, inventoryY - TOP_MARGIN - 30);
+        int availableHeight = Math.max(1, inventoryY - TOP_MARGIN - 41);
         viewportX = MARGIN;
         viewportY = TOP_MARGIN;
         viewportWidth = availableWidth;
@@ -216,6 +224,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         scale = next;
         colors = resized.colors();
         effects = resized.strokeEffects();
+        clearRunePreview();
         rebuildCanvasTexture();
         history.recordResolutionChange(
                 previousScale, previousColors, previousEffects,
@@ -270,6 +279,21 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 viewportX + viewportWidth - font.width(zoomLabel) - leftPos,
                 viewportY + viewportHeight + 5 - topPos,
                 0xFFBFBFBF);
+        CanvasRunePreview.RuneMatch hoveredRune = hoveredRune(mouseX, mouseY);
+        int secondaryInfoY = viewportY + viewportHeight + 16;
+        if (hoveredRune != null) {
+            Component runeName = Component.translatable(
+                    "symbol." + hoveredRune.symbolId().getNamespace()
+                            + "." + hoveredRune.symbolId().getPath());
+            graphics.drawString(
+                    font,
+                    Component.translatable(
+                            "screen.gyromancy.canvas.rune_hover", runeName),
+                    viewportX - leftPos,
+                    secondaryInfoY - topPos,
+                    0xFFE8E8E8);
+            secondaryInfoY += 11;
+        }
         if (hasSelectedStampTool()) {
             graphics.drawString(
                     font,
@@ -278,12 +302,13 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                             Math.round(stampRotationDegrees),
                             Math.round(stampSizeMultiplier * 100.0)),
                     viewportX - leftPos,
-                    viewportY + viewportHeight + 16 - topPos,
+                    secondaryInfoY - topPos,
                     0xFFD7C79A);
         }
     }
 
     private void renderCanvas(GuiGraphics graphics, int mouseX, int mouseY) {
+        updateRunePreview();
         ensureCanvasTexture();
         CanvasViewState.DisplayRect display = displayRect();
         int canvasLeft = (int) Math.floor(display.x());
@@ -537,6 +562,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
             history.recordChange(index, colors[index], effects[index], nextColor, nextEffect);
             colors[index] = nextColor;
             effects[index] = nextEffect;
+            invalidateRunePreview();
             if (canvasTexture != null) {
                 canvasTexture.setCanvasPixel(x, y, nextColor);
             }
@@ -597,6 +623,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 index, colors[index], effects[index], nextColor, nextEffect);
         colors[index] = nextColor;
         effects[index] = nextEffect;
+        invalidateRunePreview();
         if (canvasTexture != null) {
             canvasTexture.setCanvasPixel(x, y, nextColor);
         }
@@ -744,6 +771,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         activeStroke = null;
         strokeButton = -1;
         resetStrokePosition();
+        if (runePreviewDirty) nextRunePreviewNanos = 0L;
         updateActionButtons();
     }
 
@@ -776,6 +804,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         scale = state.scale();
         colors = state.colors();
         effects = state.effects();
+        clearRunePreview();
         rebuildCanvasTexture();
     }
 
@@ -789,6 +818,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
             effects[index] = 0;
         }
         history.commitAction();
+        clearRunePreview();
         refreshCanvasTexture();
         updateChanged();
         updateActionButtons();
@@ -883,7 +913,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
 
     private void refreshCanvasTexture() {
         if (canvasTexture != null) {
-            canvasTexture.replacePixels(colors);
+            canvasTexture.replacePixels(runePreview.colorize(colors));
         }
     }
 
@@ -895,9 +925,67 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         canvasTexture = CanvasDynamicTexture.create(
                 "editor/" + entityId,
                 scale,
-                colors,
+                runePreview.colorize(colors),
                 false);
     }
+
+    private void invalidateRunePreview() {
+        runePreviewGeneration++;
+        runePreviewDirty = true;
+    }
+
+    private void clearRunePreview() {
+        runePreview = CanvasRunePreview.empty();
+        invalidateRunePreview();
+    }
+
+    private void updateRunePreview() {
+        if (runePreviewTask != null && runePreviewTask.isDone()) {
+            try {
+                RunePreviewTaskResult result = runePreviewTask.join();
+                if (result.generation() == runePreviewGeneration) {
+                    runePreview = result.preview();
+                    refreshCanvasTexture();
+                }
+            } catch (RuntimeException exception) {
+                Gyromancy.LOGGER.warn("Client canvas rune preview failed", exception);
+                runePreviewDirty = true;
+            } finally {
+                runePreviewTask = null;
+            }
+        }
+
+        long now = System.nanoTime();
+        if (!runePreviewDirty || runePreviewTask != null
+                || now < nextRunePreviewNanos) {
+            return;
+        }
+
+        int rasterWidth = CanvasDocument.PIXELS_PER_BLOCK * scale;
+        int rasterHeight = CanvasDocument.PIXELS_PER_BLOCK * scale;
+        int[] effectSnapshot = effects.clone();
+        long generation = runePreviewGeneration;
+        runePreviewDirty = false;
+        nextRunePreviewNanos = now + RUNE_PREVIEW_INTERVAL_NANOS;
+        runePreviewTask = CompletableFuture.supplyAsync(() ->
+                new RunePreviewTaskResult(
+                        generation,
+                        CanvasRunePreview.compile(
+                                rasterWidth, rasterHeight, effectSnapshot)));
+    }
+
+    private CanvasRunePreview.RuneMatch hoveredRune(
+            double mouseX, double mouseY) {
+        if (!isOverCanvas(mouseX, mouseY)) return null;
+        int rasterWidth = CanvasDocument.PIXELS_PER_BLOCK * scale;
+        int rasterHeight = CanvasDocument.PIXELS_PER_BLOCK * scale;
+        int[] pixel = canvasPixelAt(
+                mouseX, mouseY, rasterWidth, rasterHeight);
+        return runePreview.runeAt(pixel[0], pixel[1]).orElse(null);
+    }
+
+    private record RunePreviewTaskResult(
+            long generation, CanvasRunePreview preview) {}
 
     private void closeStampPreviewTexture() {
         if (stampPreviewTexture != null) {
@@ -965,6 +1053,11 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     @Override
     public void removed() {
         finishSession();
+        runePreviewGeneration++;
+        if (runePreviewTask != null) {
+            runePreviewTask.cancel(true);
+            runePreviewTask = null;
+        }
         if (canvasTexture != null) {
             canvasTexture.close();
             canvasTexture = null;

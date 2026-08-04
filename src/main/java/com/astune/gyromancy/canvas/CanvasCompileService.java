@@ -334,7 +334,7 @@ public final class CanvasCompileService {
         return count == cells.length ? cells : Arrays.copyOf(cells, count);
     }
 
-    private static ExtractedGlyph extractedGlyph(
+    static ExtractedGlyph extractedGlyph(
             CanvasDocument document,
             CanvasScanUtils.ConnectedComponent component,
             int[] cells) {
@@ -353,10 +353,12 @@ public final class CanvasCompileService {
         }
         return new ExtractedGlyph(
                 Set.copyOf(pixels), xs, ys,
-                (double) component.minX() / width,
-                (double) (component.maxX() + 1) / width,
-                (double) component.minY() / height,
-                (double) (component.maxY() + 1) / height,
+                // rawGlyphMatrix expects the bounds of the pixel centers,
+                // not the outer edges of their cells.
+                (component.minX() + 0.5) / width,
+                (component.maxX() + 0.5) / width,
+                (component.minY() + 0.5) / height,
+                (component.maxY() + 0.5) / height,
                 1);
     }
 
