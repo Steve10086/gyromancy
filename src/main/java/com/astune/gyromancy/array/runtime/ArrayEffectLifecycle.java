@@ -42,6 +42,14 @@ public final class ArrayEffectLifecycle {
             Predicate<PositionedGlyph> isValidStroke
     ) {
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        // A nested circle is compiled as a child of its parent AST.  Never
+        // start (or restart) a second, independent runtime for that root; if
+        // one was created before the parent relation appeared, tear it down
+        // at the same boundary as well.
+        if (mgr.parentCircle(circleGlyph) != null) {
+            deactivateForRootGlyph(level, circleGlyph.glyphUuid());
+            return Optional.empty();
+        }
         if (!mgr.claimCircleCompilation(circleGlyph.glyphUuid())) {
             return Optional.empty();
         }
@@ -109,6 +117,29 @@ public final class ArrayEffectLifecycle {
         List<ArrayObject> arrays = mgr.getArrayObjsForRoot(rootGlyphId);
         arrays.forEach(array -> deactivate(level, array));
         return !arrays.isEmpty();
+    }
+
+    /**
+     * Stops runtimes whose root circle has just become a child of another
+     * circle.  Hierarchy ownership is rebuilt by {@link MagicArrayManager}
+     * when glyphs are registered, so this check deliberately runs after that
+     * rebuild and snapshots the roots before deactivating any arrays.
+     *
+     * <p>The nested circle remains part of its parent's AST; only the stale
+     * independent runtime is removed.</p>
+     */
+    public static int deactivateParentedRootArrays(ServerLevel level) {
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        List<UUID> parentedRoots = mgr.getAllArrayObjs().stream()
+                .map(ArrayObject::rootCircleGlyph)
+                .filter(root -> mgr.parentCircle(root) != null)
+                .map(PositionedGlyph::glyphUuid)
+                .distinct()
+                .toList();
+        for (UUID rootGlyphId : parentedRoots) {
+            deactivateForRootGlyph(level, rootGlyphId);
+        }
+        return parentedRoots.size();
     }
 
     public static void deactivate(ServerLevel level, ArrayObject array) {

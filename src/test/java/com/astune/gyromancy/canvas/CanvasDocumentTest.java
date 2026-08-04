@@ -11,6 +11,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -109,6 +110,33 @@ class CanvasDocumentTest {
 
         assertFalse(maximum.canIncreasePhysicalSize());
         assertThrows(IllegalStateException.class, maximum::increasePhysicalSize);
+    }
+
+    @Test
+    void duplicateKeepsContentAtOneBlockWithIndependentGlyphIdentities() {
+        CanvasDocument blank = CanvasDocument.blank(4, 3);
+        int[] colors = blank.colors();
+        int[] effects = blank.strokeEffects();
+        colors[2 * 16 + 3] = 0xFF112233;
+        effects[2 * 16 + 3] = 7;
+        CanvasGlyph glyph = glyph(new int[]{2 * 16 + 3});
+        CanvasArrayRecord array = new CanvasArrayRecord(
+                glyph.glyphUuid(), List.of(glyph.glyphUuid()),
+                CanvasArrayRecord.fingerprint(glyph.glyphUuid(), List.of(glyph.glyphUuid())));
+        CanvasDocument source = blank.withRaster(colors, effects)
+                .withCompileCache(List.of(glyph), List.of(array));
+
+        CanvasDocument copy = source.duplicateAsSingleBlock();
+
+        assertEquals(1, copy.physicalWidth());
+        assertEquals(1, copy.physicalHeight());
+        assertEquals(source.resolutionScale(), copy.resolutionScale());
+        assertArrayEquals(source.colors(), copy.colors());
+        assertArrayEquals(source.strokeEffects(), copy.strokeEffects());
+        assertNotEquals(source.glyphs().getFirst().glyphUuid(), copy.glyphs().getFirst().glyphUuid());
+        assertEquals(copy.glyphs().getFirst().glyphUuid(), copy.arrays().getFirst().rootGlyph());
+        assertEquals(copy.arrays().getFirst().boundGlyphs(),
+                List.of(copy.glyphs().getFirst().glyphUuid()));
     }
 
     @Test

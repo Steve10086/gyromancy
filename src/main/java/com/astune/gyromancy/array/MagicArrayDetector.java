@@ -103,6 +103,9 @@ public final class MagicArrayDetector {
 
     public static void onChunkLoad(ServerLevel level, LevelChunk chunk) {
         GlyphChunkStorage.load(level, chunk);
+        if (ArrayEffectLifecycle.deactivateParentedRootArrays(level) > 0) {
+            syncWorldState(level);
+        }
     }
 
     public static void onBlockReplaced(ServerLevel level, LevelChunk chunk, BlockPos pos,
@@ -429,6 +432,7 @@ public final class MagicArrayDetector {
                 glyph.minWorldY(), glyph.maxWorldY(),
                 Set.copyOf(glyph.pixels()));
         manager.registerGlyph(positioned);
+        ArrayEffectLifecycle.deactivateParentedRootArrays(level);
         GlyphChunkStorage.store(level, positioned);
         Gyromancy.LOGGER.debug("[MagicArrayDetector] {} {} ACCEPTED - glyph #{} stored",
                 best.role() == SymbolRole.OUTER_CIRCLE ? "Circle" : "Rune",

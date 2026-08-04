@@ -4,7 +4,10 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Complete portable canvas state shared by the placed entity and its item.
@@ -153,6 +156,39 @@ public record CanvasDocument(
 
     public boolean canIncreasePhysicalSize() {
         return physicalWidth < MAX_PHYSICAL_SIZE && physicalHeight < MAX_PHYSICAL_SIZE;
+    }
+
+    /**
+     * Creates an independent one-block canvas carrying this document's exact
+     * raster and compile cache. Glyph identities are regenerated so placing
+     * the copy beside the source cannot make the two canvases share runtime
+     * registrations.
+     */
+    public CanvasDocument duplicateAsSingleBlock() {
+        Map<UUID, UUID> glyphIds = new HashMap<>();
+        List<CanvasGlyph> copiedGlyphs = glyphs.stream()
+                .map(glyph -> {
+                    UUID copyId = UUID.randomUUID();
+                    glyphIds.put(glyph.glyphUuid(), copyId);
+                    return new CanvasGlyph(
+                            copyId, glyph.symbolId(), glyph.confidence(), glyph.role(),
+                            glyph.frontX(), glyph.frontY(), glyph.length(), glyph.width(),
+                            glyph.minX(), glyph.maxX(), glyph.minY(), glyph.maxY(),
+                            glyph.rawCells());
+                })
+                .toList();
+        List<CanvasArrayRecord> copiedArrays = arrays.stream()
+                .map(array -> {
+                    UUID root = glyphIds.getOrDefault(array.rootGlyph(), array.rootGlyph());
+                    List<UUID> bound = array.boundGlyphs().stream()
+                            .map(id -> glyphIds.getOrDefault(id, id))
+                            .toList();
+                    return new CanvasArrayRecord(
+                            root, bound, CanvasArrayRecord.fingerprint(root, bound), array.color());
+                })
+                .toList();
+        return new CanvasDocument(1, 1, resolutionScale,
+                colors, strokeEffects, copiedGlyphs, copiedArrays);
     }
 
     public CanvasDocument resample(int newScale) {

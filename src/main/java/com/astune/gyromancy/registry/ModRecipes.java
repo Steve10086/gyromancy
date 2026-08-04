@@ -1,6 +1,7 @@
 package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.recipe.CanvasCopyRecipe;
 import com.astune.gyromancy.recipe.CanvasUpgradeRecipe;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.crafting.RecipeSerializer;
@@ -19,4 +20,8 @@ public final class ModRecipes {
     public static final Supplier<RecipeSerializer<CanvasUpgradeRecipe>> CANVAS_UPGRADE =
             RECIPE_SERIALIZERS.register("canvas_upgrade",
                     () -> new SimpleCraftingRecipeSerializer<>(CanvasUpgradeRecipe::new));
+
+    public static final Supplier<RecipeSerializer<CanvasCopyRecipe>> CANVAS_COPY =
+            RECIPE_SERIALIZERS.register("canvas_copy",
+                    () -> new SimpleCraftingRecipeSerializer<>(CanvasCopyRecipe::new));
 }

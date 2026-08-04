@@ -256,6 +256,7 @@ public final class CanvasCompileService {
             int glyphId = existing == null ? manager.nextGlyphId() : existing.glyphId();
             manager.refreshGlyph(canvas.worldGlyph(local, glyphId));
         }
+        ArrayEffectLifecycle.deactivateParentedRootArrays(level);
     }
 
     /**
@@ -275,6 +276,7 @@ public final class CanvasCompileService {
         int glyphId = existing == null ? manager.nextGlyphId() : existing.glyphId();
         PositionedGlyph world = canvas.worldGlyph(glyph, glyphId);
         manager.refreshGlyph(world);
+        ArrayEffectLifecycle.deactivateParentedRootArrays(level);
         return world;
     }
 
