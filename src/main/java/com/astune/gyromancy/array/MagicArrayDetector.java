@@ -534,6 +534,7 @@ public final class MagicArrayDetector {
                 arr.arrayId(),
                 color,
                 arr.remainingCompilationEffectTicks(level.getGameTime()),
+                arr.compilationEffectEndTick(),
                 parts);
     }
 

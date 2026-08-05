@@ -223,9 +223,22 @@ public final class ClientRayEffects {
                 : OptionalInt.of(effect.sourceEntityId);
     }
 
+    static int geometryMeshVertexCount(Vec3 center, Direction face) {
+        Effect effect = effects.get(EffectKey.forGeometry(center, face));
+        return effect == null ? 0 : effect.meshVertices.length;
+    }
+
     public static void bindLifecycleSource(UUID lifecycleId, int partIndex, int entityId) {
         Effect effect = effects.get(EffectKey.forLifecycle(lifecycleId, partIndex));
         if (effect != null) effect.sourceEntityId = entityId;
+    }
+
+    public static void bindLifecycleEndTick(
+            UUID lifecycleId, int partIndex, long endTick, int durationTicks) {
+        Effect effect = effects.get(EffectKey.forLifecycle(lifecycleId, partIndex));
+        if (effect != null && endTick != Long.MIN_VALUE) {
+            effect.bindEndTick(endTick, durationTicks);
+        }
     }
 
     private static void spawnOrRefresh(
@@ -235,7 +248,7 @@ public final class ClientRayEffects {
             Vec3 worldRayDir,
             Vec3 sourceU,
             Vec3 sourceV,
-            ResourceLocation maskTexture,
+            ResourceLocation ignoredMaskTexture,
             int[] symbolLayer,
             int sourceWidth,
             int sourceHeight,
@@ -249,43 +262,34 @@ public final class ClientRayEffects {
         if (existing != null) {
             boolean preserveLifetime = key.lifecycleId() != null;
             existing.center = center;
-            if (existing.isFadingIn()) {
-                existing.sourceNormal = sourceNormal.normalize();
-                existing.worldRayDir = worldRayDir;
-                existing.sourceU = sourceU;
-                existing.sourceV = sourceV;
-                if (preserveLifetime) {
-                    existing.inheritRemainingLifetime(lifetime);
-                } else {
-                    existing.keepAlive(lifetime);
-                }
-                return;
-            }
-            if (existing.maskTexture != null && existing.maskTexture.equals(maskTexture)
-                    && existing.sourceWidth == sourceWidth
-                    && existing.sourceHeight == sourceHeight) {
-                existing.refresh(sourceNormal, worldRayDir, sourceU, sourceV,
-                        maskTexture, existing.meshVertices,
-                        sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks,
-                        preserveLifetime);
-            } else {
-                MeshVertex[] meshVertices = compactMesh(symbolLayer, sourceWidth, sourceHeight, colorBySymbolValue);
+            MeshVertex[] meshVertices = existing.meshVertices;
+            if (!Arrays.equals(existing.symbolLayerSnapshot, symbolLayer)
+                    || existing.sourceWidth != sourceWidth
+                    || existing.sourceHeight != sourceHeight) {
+                meshVertices = compactMesh(symbolLayer, sourceWidth, sourceHeight, colorBySymbolValue);
                 if (meshVertices.length == 0) {
                     effects.remove(key);
                     return;
                 }
-                existing.refresh(sourceNormal, worldRayDir, sourceU, sourceV,
-                        maskTexture, meshVertices,
-                        sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks,
-                        preserveLifetime);
+                existing.symbolLayerSnapshot = copySymbolLayer(symbolLayer);
             }
+            existing.refresh(sourceNormal, worldRayDir, sourceU, sourceV,
+                    meshVertices,
+                    sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks,
+                    preserveLifetime);
             return;
         }
         MeshVertex[] meshVertices = compactMesh(symbolLayer, sourceWidth, sourceHeight, colorBySymbolValue);
         if (meshVertices.length == 0) return;
-        effects.put(key, new Effect(center, sourceNormal, worldRayDir,
-                sourceU, sourceV, maskTexture, meshVertices,
-                sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks));
+        Effect effect = new Effect(center, sourceNormal, worldRayDir,
+                sourceU, sourceV, meshVertices,
+                sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks);
+        effect.symbolLayerSnapshot = copySymbolLayer(symbolLayer);
+        effects.put(key, effect);
+    }
+
+    private static int[] copySymbolLayer(int[] symbolLayer) {
+        return symbolLayer == null ? null : symbolLayer.clone();
     }
 
     static MeshVertex[] compactMesh(int[] symbolLayer, int width, int height, IntUnaryOperator colorBySymbolValue) {
@@ -381,21 +385,30 @@ public final class ClientRayEffects {
         Camera camera = event.getCamera();
         Vec3 camPos = camera.getPosition();
         float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
+        long gameTime = Minecraft.getInstance().level == null
+                ? Long.MIN_VALUE
+                : Minecraft.getInstance().level.getGameTime();
         boolean needsComposite = false;
 
         Iterator<Map.Entry<EffectKey, Effect>> it = effects.entrySet().iterator();
         while (it.hasNext()) {
             Effect e = it.next().getValue();
             e.age++;
-            if (++e.ticksSinceRefresh >= e.lifetime) { it.remove(); continue; }
-            needsComposite |= renderOne(e, camPos, partialTick);
+            e.ticksSinceRefresh++;
+            if (e.expired(gameTime)) { it.remove(); continue; }
+            needsComposite |= renderOne(e, camPos, partialTick, gameTime);
         }
 
         if (needsComposite && compositeFbo != null) compositeRayBuffer(compositeFbo);
     }
 
-    private static boolean renderOne(Effect e, Vec3 cameraPos, float partialTick) {
-        float fade = alphaFade(e.age, e.ticksSinceRefresh, e.lifetime, e.fadeInTicks);
+    private static boolean renderOne(
+            Effect e, Vec3 cameraPos, float partialTick, long gameTime) {
+        float fade = e.lifecycleEndTick == Long.MIN_VALUE
+                ? alphaFade(e.age, e.ticksSinceRefresh, e.lifetime, e.fadeInTicks)
+                : deadlineFade(
+                        gameTime + partialTick, e.lifecycleEndTick,
+                        e.lifecycleDurationTicks, e.fadeInTicks);
 
         EffectGeometry geometry = renderGeometry(e, partialTick);
         Vec3 normal = geometry.normal();
@@ -460,6 +473,16 @@ public final class ClientRayEffects {
         float fadeOut = Math.max(0f, 1f - (float) ticksSinceRefresh / Math.max(1, lifetime));
         if (fadeInTicks <= 0) return fadeOut;
         return fadeOut * Math.min(1f, (float) age / fadeInTicks);
+    }
+
+    static float deadlineFade(
+            double gameTime, long endTick, int durationTicks, int fadeInTicks) {
+        double duration = Math.max(1, durationTicks);
+        double remaining = Math.clamp(endTick - gameTime, 0.0, duration);
+        float fadeOut = (float) (remaining / duration);
+        if (fadeInTicks <= 0) return fadeOut;
+        double elapsed = duration - remaining;
+        return fadeOut * (float) Math.min(1.0, elapsed / fadeInTicks);
     }
 
     private static AdvancedFbo ensureRayCompositeFbo() {
@@ -647,7 +670,7 @@ public final class ClientRayEffects {
         Vec3 worldRayDir;
         Vec3 sourceU;
         Vec3 sourceV;
-        ResourceLocation maskTexture;
+        int[] symbolLayerSnapshot;
         MeshVertex[] meshVertices;
         int sourceWidth;
         int sourceHeight;
@@ -658,18 +681,20 @@ public final class ClientRayEffects {
         int age;
         int ticksSinceRefresh;
         int sourceEntityId = -1;
+        long lifecycleEndTick = Long.MIN_VALUE;
+        int lifecycleDurationTicks;
 
         Effect(Vec3 center, Vec3 sourceNormal, Vec3 worldRayDir,
                Vec3 sourceU, Vec3 sourceV,
-               ResourceLocation maskTexture, MeshVertex[] meshVertices, int sourceWidth, int sourceHeight,
+               MeshVertex[] meshVertices, int sourceWidth, int sourceHeight,
                int color, int lifetime, double beamHeight, int fadeInTicks) {
             this.center = center;
-            refresh(sourceNormal, worldRayDir, sourceU, sourceV, maskTexture, meshVertices,
+            refresh(sourceNormal, worldRayDir, sourceU, sourceV, meshVertices,
                     sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks, false);
         }
 
         void refresh(Vec3 sourceNormal, Vec3 worldRayDir, Vec3 sourceU, Vec3 sourceV,
-                     ResourceLocation maskTexture, MeshVertex[] meshVertices, int sourceWidth, int sourceHeight,
+                     MeshVertex[] meshVertices, int sourceWidth, int sourceHeight,
                      int color, int lifetime, double beamHeight, int fadeInTicks,
                      boolean preserveLifetime) {
             if (sourceNormal.lengthSqr() < 1.0E-10) {
@@ -679,7 +704,6 @@ public final class ClientRayEffects {
             this.worldRayDir = worldRayDir;
             this.sourceU = sourceU;
             this.sourceV = sourceV;
-            this.maskTexture = maskTexture;
             this.meshVertices = meshVertices;
             this.sourceWidth = sourceWidth;
             this.sourceHeight = sourceHeight;
@@ -694,18 +718,22 @@ public final class ClientRayEffects {
             }
         }
 
-        boolean isFadingIn() {
-            return age < fadeInTicks;
-        }
-
-        void keepAlive(int lifetime) {
-            this.lifetime = lifetime;
-            this.ticksSinceRefresh = 0;
-        }
-
         void inheritRemainingLifetime(int reportedRemaining) {
             this.lifetime = inheritedDeadline(
                     ticksSinceRefresh, lifetime, reportedRemaining);
+        }
+
+        void bindEndTick(long endTick, int durationTicks) {
+            lifecycleEndTick = lifecycleEndTick == Long.MIN_VALUE
+                    ? endTick
+                    : Math.min(lifecycleEndTick, endTick);
+            lifecycleDurationTicks = Math.max(1, durationTicks);
+        }
+
+        boolean expired(long gameTime) {
+            return lifecycleEndTick != Long.MIN_VALUE && gameTime != Long.MIN_VALUE
+                    ? gameTime >= lifecycleEndTick
+                    : ticksSinceRefresh >= lifetime;
         }
     }
 

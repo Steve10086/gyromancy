@@ -1,6 +1,7 @@
 package com.astune.gyromancy.network;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.client.effect.ClientRayEffects;
 import io.netty.buffer.ByteBuf;
@@ -33,6 +34,7 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                 UUID id = new UUID(buf.readLong(), buf.readLong());
                 int color = buf.readInt();
                 int compilationEffectTicks = buf.readInt();
+                long compilationEffectEndTick = buf.readLong();
                 int partCount = buf.readInt();
                 java.util.ArrayList<BlockData> parts = new java.util.ArrayList<>(partCount);
                 for (int j = 0; j < partCount; j++) {
@@ -49,7 +51,8 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                     parts.add(new BlockData(surface, center, face, sourceU, sourceV,
                             width, height, mask, sourceEntityId));
                 }
-                arrays.add(new ArrayData(id, color, compilationEffectTicks, parts));
+                arrays.add(new ArrayData(
+                        id, color, compilationEffectTicks, compilationEffectEndTick, parts));
             }
             return new SyncArrayPacket(arrays);
         }
@@ -62,6 +65,7 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                 buf.writeLong(array.id().getLeastSignificantBits());
                 buf.writeInt(array.color());
                 buf.writeInt(array.compilationEffectTicks());
+                buf.writeLong(array.compilationEffectEndTick());
                 buf.writeInt(array.parts().size());
                 for (BlockData part : array.parts()) {
                     writeVec3(buf, part.center());
@@ -95,6 +99,9 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                             part.sourceU(), part.sourceV(), part.mask(), part.width(), part.height(),
                             ignored -> 0xFFFFFFFF, array.color(),
                             array.compilationEffectTicks(), BEAM_HEIGHT);
+                    ClientRayEffects.bindLifecycleEndTick(
+                            array.id(), partIndex, array.compilationEffectEndTick(),
+                            ArrayObject.COMPILATION_EFFECT_TICKS);
                     if (part.sourceEntityId() >= 0) {
                         ClientRayEffects.bindLifecycleSource(
                                 array.id(), partIndex, part.sourceEntityId());
@@ -143,8 +150,13 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
             UUID id,
             int color,
             int compilationEffectTicks,
+            long compilationEffectEndTick,
             List<BlockData> parts
-    ) {}
+    ) {
+        public ArrayData(UUID id, int color, int compilationEffectTicks, List<BlockData> parts) {
+            this(id, color, compilationEffectTicks, Long.MIN_VALUE, parts);
+        }
+    }
 
     /**
      * {@code surface} is authoritative geometry. {@code face} is retained only

@@ -30,6 +30,7 @@ class SyncArrayPacketTest {
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 0xFF336699,
                 73,
+                1_234_567L,
                 List.of(part));
         ByteBuf buffer = Unpooled.buffer();
         try {
@@ -45,6 +46,7 @@ class SyncArrayPacketTest {
             assertEquals(array.id(), decodedArray.id());
             assertEquals(array.color(), decodedArray.color());
             assertEquals(73, decodedArray.compilationEffectTicks());
+            assertEquals(1_234_567L, decodedArray.compilationEffectEndTick());
             assertEquals(part.center(), decodedPart.center());
             assertEquals(part.face(), decodedPart.face());
             assertEquals(part.surface(), decodedPart.surface());

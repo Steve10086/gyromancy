@@ -3,6 +3,7 @@ package com.astune.gyromancy.client.effect;
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import org.junit.jupiter.api.Test;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.UUID;
@@ -130,6 +131,13 @@ class ClientRayEffectsTest {
     }
 
     @Test
+    void serverDeadlineExpiresIndependentlyOfRenderedFrameCount() {
+        assertEquals(0.5f, ClientRayEffects.deadlineFade(1_100.0, 1_200L, 200, 0), 1e-6f);
+        assertEquals(0.0f, ClientRayEffects.deadlineFade(1_200.0, 1_200L, 200, 0), 1e-6f);
+        assertEquals(0.0f, ClientRayEffects.deadlineFade(1_250.0, 1_200L, 200, 0), 1e-6f);
+    }
+
+    @Test
     void compactMeshReturnsSharedEmptyForBlankLayer() {
         ClientRayEffects.MeshVertex[] pixels = ClientRayEffects.compactMesh(new int[4], 2, 2, symbol -> 0xFFFFFFFF);
 
@@ -145,6 +153,48 @@ class ClientRayEffectsTest {
         ClientRayEffects.MeshVertex[] mesh = ClientRayEffects.compactMesh(layer, 2, 1, symbol -> 0xFFFFFFFF);
 
         assertEquals(40, mesh.length);
+    }
+
+    @Test
+    void geometryMeshRebuildsWhenLayerChangesDuringFadeIn() {
+        ClientRayEffects.clearAll();
+        Vec3 center = new Vec3(1.0, 2.0, 3.0);
+        ResourceLocation texture = ResourceLocation.fromNamespaceAndPath("test", "same_texture");
+
+        ClientRayEffects.spawnOrRefresh(
+                center, Direction.UP, new Vec3(0.0, 1.0, 0.0),
+                new Vec3(1.0, 0.0, 0.0), new Vec3(0.0, 0.0, 1.0),
+                texture, new int[]{1, 0}, 2, 1, ignored -> 0xFFFFFFFF,
+                0xFFFFFFFF, 40, 0.3, 20);
+        ClientRayEffects.spawnOrRefresh(
+                center, Direction.UP, new Vec3(0.0, 1.0, 0.0),
+                new Vec3(1.0, 0.0, 0.0), new Vec3(0.0, 0.0, 1.0),
+                texture, new int[]{1, 1}, 2, 1, ignored -> 0xFFFFFFFF,
+                0xFFFFFFFF, 40, 0.3, 20);
+
+        assertEquals(40, ClientRayEffects.geometryMeshVertexCount(center, Direction.UP));
+        ClientRayEffects.clearAll();
+    }
+
+    @Test
+    void geometryMeshDoesNotUseTextureIdentityAsContentVersion() {
+        ClientRayEffects.clearAll();
+        Vec3 center = new Vec3(1.0, 2.0, 3.0);
+        ResourceLocation texture = ResourceLocation.fromNamespaceAndPath("test", "same_texture");
+
+        ClientRayEffects.spawnOrRefresh(
+                center, Direction.UP, new Vec3(0.0, 1.0, 0.0),
+                new Vec3(1.0, 0.0, 0.0), new Vec3(0.0, 0.0, 1.0),
+                texture, new int[]{1, 0}, 2, 1, ignored -> 0xFFFFFFFF,
+                0xFFFFFFFF, 40, 0.3, 0);
+        ClientRayEffects.spawnOrRefresh(
+                center, Direction.UP, new Vec3(0.0, 1.0, 0.0),
+                new Vec3(1.0, 0.0, 0.0), new Vec3(0.0, 0.0, 1.0),
+                texture, new int[]{1, 1}, 2, 1, ignored -> 0xFFFFFFFF,
+                0xFFFFFFFF, 40, 0.3, 0);
+
+        assertEquals(40, ClientRayEffects.geometryMeshVertexCount(center, Direction.UP));
+        ClientRayEffects.clearAll();
     }
 
     @Test
