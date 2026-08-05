@@ -1,5 +1,6 @@
 package com.astune.gyromancy.client.effect;
 
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import org.junit.jupiter.api.Test;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
@@ -81,6 +82,51 @@ class ClientRayEffectsTest {
         assertEquals(movedCenter, ClientRayEffects.lifecycleCenter(lifecycle, 0).orElseThrow());
         assertEquals(movedNormal, ClientRayEffects.lifecycleSourceNormal(lifecycle, 0).orElseThrow());
         ClientRayEffects.clearAll();
+    }
+
+    @Test
+    void lifecycleEffectCanBindToItsProjectionEntity() {
+        ClientRayEffects.clearAll();
+        UUID lifecycle = UUID.fromString("00000000-0000-0000-0000-000000000005");
+
+        ClientRayEffects.spawnForLifecycle(
+                lifecycle, 0, Vec3.ZERO, Direction.NORTH, new Vec3(0.0, 0.0, -1.0),
+                new Vec3(2.0, 0.0, 0.0), new Vec3(0.0, 3.0, 0.0),
+                new byte[]{1}, 1, 1, ignored -> 0xFFFFFFFF,
+                0xFFFFFFFF, 200, 1.0);
+        ClientRayEffects.bindLifecycleSource(lifecycle, 0, 42);
+
+        assertEquals(42, ClientRayEffects.lifecycleSourceEntityId(lifecycle, 0).orElseThrow());
+        ClientRayEffects.clearAll();
+    }
+
+    @Test
+    void projectionEffectUsesTheRenderedSurfaceFrameWithoutChangingItsSize() {
+        Vec3 center = new Vec3(4.0, 5.0, 6.0);
+        SurfaceFrame frame = SurfaceFrame.facing(
+                center, new Vec3(1.0, 0.0, 1.0), new Vec3(0.0, 1.0, 0.0));
+
+        ClientRayEffects.EffectGeometry geometry =
+                ClientRayEffects.projectionGeometry(frame, 2.0, 3.0);
+
+        assertEquals(center, geometry.center());
+        assertEquals(frame.normal(), geometry.normal());
+        assertEquals(frame.normal(), geometry.worldRayDir());
+        assertEquals(frame.axisU(), geometry.sourceU().normalize());
+        assertEquals(frame.axisV(), geometry.sourceV().normalize());
+        assertEquals(2.0, geometry.sourceU().length(), 1e-9);
+        assertEquals(3.0, geometry.sourceV().length(), 1e-9);
+    }
+
+    @Test
+    void movingLifecycleKeepsItsExistingDisplayDeadline() {
+        assertEquals(200, ClientRayEffects.inheritedDeadline(40, 200, 180));
+    }
+
+    @Test
+    void authoritativeRemainingTimeMayShortenButNeverExtendTheDeadline() {
+        assertEquals(160, ClientRayEffects.inheritedDeadline(40, 200, 120));
+        assertEquals(200, ClientRayEffects.inheritedDeadline(40, 200, 300));
     }
 
     @Test

@@ -43,8 +43,6 @@ class ArrayNodeCompilerTest {
         EntityEffectOp root = assertInstanceOf(FireProjectileOp.class, success.value().root());
 
         assertEquals(ElementType.FIRE, root.primaryElement());
-        assertEquals(true, root.attributes().inverted());
-        assertEquals(List.of(new MotionAttribute(arrow.front(), arrow.length())), root.attributes().motion());
         assertEquals(List.of("fire", "arrow", "revert"), runeNames(root.inputs()));
         assertEquals(List.of("fire"), runeNames(root.matchedInputs()));
         assertEquals(List.of(circle, fire, arrow, revert), success.value().boundGlyphs());

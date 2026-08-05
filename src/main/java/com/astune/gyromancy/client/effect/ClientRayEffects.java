@@ -1,6 +1,8 @@
 package com.astune.gyromancy.client.effect;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
+import com.astune.gyromancy.wand.WandProjectionCanvasEntity;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
@@ -214,6 +216,18 @@ public final class ClientRayEffects {
         return effect == null ? Optional.empty() : Optional.of(effect.center);
     }
 
+    static OptionalInt lifecycleSourceEntityId(UUID lifecycleId, int partIndex) {
+        Effect effect = effects.get(EffectKey.forLifecycle(lifecycleId, partIndex));
+        return effect == null || effect.sourceEntityId < 0
+                ? OptionalInt.empty()
+                : OptionalInt.of(effect.sourceEntityId);
+    }
+
+    public static void bindLifecycleSource(UUID lifecycleId, int partIndex, int entityId) {
+        Effect effect = effects.get(EffectKey.forLifecycle(lifecycleId, partIndex));
+        if (effect != null) effect.sourceEntityId = entityId;
+    }
+
     private static void spawnOrRefresh(
             EffectKey key,
             Vec3 center,
@@ -233,13 +247,18 @@ public final class ClientRayEffects {
     ) {
         Effect existing = effects.get(key);
         if (existing != null) {
+            boolean preserveLifetime = key.lifecycleId() != null;
             existing.center = center;
             if (existing.isFadingIn()) {
                 existing.sourceNormal = sourceNormal.normalize();
                 existing.worldRayDir = worldRayDir;
                 existing.sourceU = sourceU;
                 existing.sourceV = sourceV;
-                existing.keepAlive(lifetime);
+                if (preserveLifetime) {
+                    existing.inheritRemainingLifetime(lifetime);
+                } else {
+                    existing.keepAlive(lifetime);
+                }
                 return;
             }
             if (existing.maskTexture != null && existing.maskTexture.equals(maskTexture)
@@ -247,7 +266,8 @@ public final class ClientRayEffects {
                     && existing.sourceHeight == sourceHeight) {
                 existing.refresh(sourceNormal, worldRayDir, sourceU, sourceV,
                         maskTexture, existing.meshVertices,
-                        sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks);
+                        sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks,
+                        preserveLifetime);
             } else {
                 MeshVertex[] meshVertices = compactMesh(symbolLayer, sourceWidth, sourceHeight, colorBySymbolValue);
                 if (meshVertices.length == 0) {
@@ -256,7 +276,8 @@ public final class ClientRayEffects {
                 }
                 existing.refresh(sourceNormal, worldRayDir, sourceU, sourceV,
                         maskTexture, meshVertices,
-                        sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks);
+                        sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks,
+                        preserveLifetime);
             }
             return;
         }
@@ -359,6 +380,7 @@ public final class ClientRayEffects {
 
         Camera camera = event.getCamera();
         Vec3 camPos = camera.getPosition();
+        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
         boolean needsComposite = false;
 
         Iterator<Map.Entry<EffectKey, Effect>> it = effects.entrySet().iterator();
@@ -366,18 +388,20 @@ public final class ClientRayEffects {
             Effect e = it.next().getValue();
             e.age++;
             if (++e.ticksSinceRefresh >= e.lifetime) { it.remove(); continue; }
-            needsComposite |= renderOne(e, camPos);
+            needsComposite |= renderOne(e, camPos, partialTick);
         }
 
         if (needsComposite && compositeFbo != null) compositeRayBuffer(compositeFbo);
     }
 
-    private static boolean renderOne(Effect e, Vec3 cameraPos) {
+    private static boolean renderOne(Effect e, Vec3 cameraPos, float partialTick) {
         float fade = alphaFade(e.age, e.ticksSinceRefresh, e.lifetime, e.fadeInTicks);
 
-        Vec3 normal = e.sourceNormal.normalize();
-        Projection projection = projectionPlane(e.center, normal, e.sourceU, e.sourceV,
-                e.worldRayDir, cameraPos, e.beamHeight);
+        EffectGeometry geometry = renderGeometry(e, partialTick);
+        Vec3 normal = geometry.normal();
+        Projection projection = projectionPlane(
+                geometry.center(), normal, geometry.sourceU(), geometry.sourceV(),
+                geometry.worldRayDir(), cameraPos, e.beamHeight);
 
         int argb = e.color;
         float r = ((argb >> 16) & 0xFF) / 255f;
@@ -397,7 +421,7 @@ public final class ClientRayEffects {
 
         if (meshRenderer == null) meshRenderer = new MeshBeamRenderer();
         return meshRenderer.draw(VeilRenderType.get(RAY_MESH_RENDER_TYPE), e.meshVertices, () -> {
-            Vec3 sourceCenter = e.center.add(normal.normalize().scale(PLANE_CLEARANCE));
+            Vec3 sourceCenter = geometry.center().add(normal.scale(PLANE_CLEARANCE));
             meshShader.getUniform("SourceCenter").setVector(
                     (float) sourceCenter.x, (float) sourceCenter.y, (float) sourceCenter.z);
             meshShader.getUniform("SourceU").setVector(
@@ -408,6 +432,29 @@ public final class ClientRayEffects {
             meshShader.getUniform("EffectTint").setVector(r, g, b2, a);
         });
     }
+
+    private static EffectGeometry renderGeometry(Effect effect, float partialTick) {
+        if (effect.sourceEntityId >= 0 && Minecraft.getInstance().level != null
+                && Minecraft.getInstance().level.getEntity(effect.sourceEntityId)
+                instanceof WandProjectionCanvasEntity projection) {
+            SurfaceFrame frame = projection.renderSurfaceFrame(partialTick);
+            return projectionGeometry(frame, effect.sourceU.length(), effect.sourceV.length());
+        }
+        return new EffectGeometry(
+                effect.center, effect.sourceNormal.normalize(),
+                effect.sourceU, effect.sourceV, effect.worldRayDir);
+    }
+
+    static EffectGeometry projectionGeometry(SurfaceFrame frame, double sourceWidth, double sourceHeight) {
+        return new EffectGeometry(
+                frame.origin(), frame.normal(),
+                frame.axisU().scale(sourceWidth),
+                frame.axisV().scale(sourceHeight),
+                frame.normal());
+    }
+
+    record EffectGeometry(Vec3 center, Vec3 normal, Vec3 sourceU,
+                          Vec3 sourceV, Vec3 worldRayDir) {}
 
     static float alphaFade(int age, int ticksSinceRefresh, int lifetime, int fadeInTicks) {
         float fadeOut = Math.max(0f, 1f - (float) ticksSinceRefresh / Math.max(1, lifetime));
@@ -610,6 +657,7 @@ public final class ClientRayEffects {
         int fadeInTicks;
         int age;
         int ticksSinceRefresh;
+        int sourceEntityId = -1;
 
         Effect(Vec3 center, Vec3 sourceNormal, Vec3 worldRayDir,
                Vec3 sourceU, Vec3 sourceV,
@@ -617,12 +665,13 @@ public final class ClientRayEffects {
                int color, int lifetime, double beamHeight, int fadeInTicks) {
             this.center = center;
             refresh(sourceNormal, worldRayDir, sourceU, sourceV, maskTexture, meshVertices,
-                    sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks);
+                    sourceWidth, sourceHeight, color, lifetime, beamHeight, fadeInTicks, false);
         }
 
         void refresh(Vec3 sourceNormal, Vec3 worldRayDir, Vec3 sourceU, Vec3 sourceV,
                      ResourceLocation maskTexture, MeshVertex[] meshVertices, int sourceWidth, int sourceHeight,
-                     int color, int lifetime, double beamHeight, int fadeInTicks) {
+                     int color, int lifetime, double beamHeight, int fadeInTicks,
+                     boolean preserveLifetime) {
             if (sourceNormal.lengthSqr() < 1.0E-10) {
                 throw new IllegalArgumentException("Source surface normal must be non-zero");
             }
@@ -635,10 +684,14 @@ public final class ClientRayEffects {
             this.sourceWidth = sourceWidth;
             this.sourceHeight = sourceHeight;
             this.color = color;
-            this.lifetime = lifetime;
             this.beamHeight = beamHeight;
             this.fadeInTicks = Math.max(0, fadeInTicks);
-            this.ticksSinceRefresh = 0;
+            if (preserveLifetime) {
+                inheritRemainingLifetime(lifetime);
+            } else {
+                this.lifetime = lifetime;
+                this.ticksSinceRefresh = 0;
+            }
         }
 
         boolean isFadingIn() {
@@ -649,5 +702,15 @@ public final class ClientRayEffects {
             this.lifetime = lifetime;
             this.ticksSinceRefresh = 0;
         }
+
+        void inheritRemainingLifetime(int reportedRemaining) {
+            this.lifetime = inheritedDeadline(
+                    ticksSinceRefresh, lifetime, reportedRemaining);
+        }
+    }
+
+    static int inheritedDeadline(int elapsed, int currentDeadline, int reportedRemaining) {
+        int currentRemaining = Math.max(0, currentDeadline - elapsed);
+        return elapsed + Math.min(currentRemaining, Math.max(0, reportedRemaining));
     }
 }

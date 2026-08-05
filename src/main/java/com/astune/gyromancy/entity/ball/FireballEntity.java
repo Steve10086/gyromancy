@@ -32,7 +32,7 @@ public class FireballEntity extends MagicBallEntity {
         this(ModEntities.FIREBALL.get(), level);
         setBallSize(size);
         initRuntimeData(Math.max(1.0F, size));
-        this.pendingVelocity = launchVelocity(velocity, arrowSizeSum, liftDirection);
+        this.pendingVelocity = velocity;
         this.pendingAcceleration = acceleration;
         this.acceleration = Vec3.ZERO;
         setPos(pos);

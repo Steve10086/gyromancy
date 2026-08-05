@@ -16,11 +16,16 @@ class SyncArrayPacketTest {
     @Test
     void codecPreservesPerArrayCompilationEffectLifetime() {
         SyncArrayPacket.BlockData part = new SyncArrayPacket.BlockData(
+                new com.astune.gyromancy.api.geometry.SurfaceFrame(
+                        new Vec3(1.0, 2.0, 3.0),
+                        new Vec3(1.0, 0.0, 0.0),
+                        new Vec3(0.0, 1.0, 0.0),
+                        new Vec3(0.0, 0.0, 1.0)),
                 new Vec3(1.0, 2.0, 3.0),
                 Direction.NORTH,
                 new Vec3(1.0, 0.0, 0.0),
                 new Vec3(0.0, 1.0, 0.0),
-                2, 2, new byte[]{1, 0, 0, 1});
+                2, 2, new byte[]{1, 0, 0, 1}, 42);
         SyncArrayPacket.ArrayData array = new SyncArrayPacket.ArrayData(
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 0xFF336699,
@@ -43,6 +48,7 @@ class SyncArrayPacketTest {
             assertEquals(part.center(), decodedPart.center());
             assertEquals(part.face(), decodedPart.face());
             assertEquals(part.surface(), decodedPart.surface());
+            assertEquals(42, decodedPart.sourceEntityId());
             assertArrayEquals(part.mask(), decodedPart.mask());
         } finally {
             buffer.release();

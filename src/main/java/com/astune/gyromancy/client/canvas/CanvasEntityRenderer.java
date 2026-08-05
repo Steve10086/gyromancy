@@ -1,5 +1,6 @@
 package com.astune.gyromancy.client.canvas;
 
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.canvas.CanvasEntity;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -26,12 +27,12 @@ public final class CanvasEntityRenderer extends EntityRenderer<CanvasEntity> {
         if (document == null || texture == null) return;
 
         poseStack.pushPose();
-        if (entity instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity) {
+        if (entity instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity projection) {
             VertexConsumer consumer = buffers.getBuffer(RenderType.entityTranslucent(texture));
+            SurfaceFrame renderFrame = projection.renderSurfaceFrame(partialTick);
             orientedTexturedQuad(
                     poseStack.last(), consumer,
-                    entity.surfaceFrame().axisU(), entity.surfaceFrame().axisV(),
-                    entity.surfaceFrame().normal(),
+                    renderFrame.axisU(), renderFrame.axisV(), renderFrame.normal(),
                     document.physicalWidth() * 0.5F,
                     document.physicalHeight() * 0.5F,
                     packedLight);

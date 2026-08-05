@@ -2,12 +2,7 @@ package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
-import com.astune.gyromancy.array.compile.CompileResult;
-import com.astune.gyromancy.array.compile.EffectAttributes;
-import com.astune.gyromancy.array.compile.MotionAttribute;
 import com.astune.gyromancy.array.compile.OpInput;
-import com.astune.gyromancy.array.compile.OpInputMatcher;
-import com.astune.gyromancy.array.compile.OpInputs;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.symbol.SymbolCatalog;
@@ -24,32 +19,14 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
     private final PositionedGlyph boundary;
     private final List<OpInput> matchedInputs;
     private final List<OpInput> inputs;
-    private final EffectAttributes attributes;
 
     protected EntityEffectOp(ResourceLocation id, ElementType element, PositionedGlyph boundary,
-                             List<OpInput> matchedInputs, List<OpInput> inputs,
-                             EffectAttributes attributes) {
+                             List<OpInput> matchedInputs, List<OpInput> inputs) {
         this.id = id;
         this.element = element;
         this.boundary = boundary;
         this.matchedInputs = List.copyOf(matchedInputs);
         this.inputs = List.copyOf(inputs);
-        this.attributes = attributes;
-    }
-
-    protected static CompileResult<EffectAttributes> compileAttributes(List<OpInput> inputs, ElementType element) {
-        CompileResult<EffectAttributes> attributes = OpInputs.projectileAttributes(inputs, element);
-        if (attributes instanceof CompileResult.Failure<EffectAttributes> failure) {
-            return new CompileResult.Failure<>(failure.diagnostics());
-        }
-        return attributes;
-    }
-
-    protected static List<OpInputMatcher> acceptedProjectileInputs() {
-        return List.of(
-                OpInputMatcher.rune("arrow"),
-                OpInputMatcher.rune("revert"),
-                OpInputMatcher.op(CompiledOp.class));
     }
 
     public PositionedGlyph boundary() {
@@ -58,10 +35,6 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
 
     public ElementType primaryElement() {
         return element;
-    }
-
-    public EffectAttributes attributes() {
-        return attributes;
     }
 
     public RuntimeHandle activateAt(OpRuntimeContext context, Vec3 origin) {
@@ -100,14 +73,21 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
     private EmitOp.Emission defaultEmission() {
         Vec3 velocity = Vec3.ZERO;
         double motionSum = 0.0;
-        List<MotionAttribute> motions = attributes.motion();
-        for (MotionAttribute motion : motions) {
-            motionSum += motion.speed();
-            if (motion.direction().lengthSqr() >= 1e-8) {
-                velocity = velocity.add(motion.direction().normalize().scale(motion.speed()));
+        boolean hasMotion = false;
+        for (OpInput input : inputs) {
+            if (!(input instanceof OpInput.Rune rune) || !"arrow".equals(rune.symbolName())) continue;
+            double speed = rune.glyph().length();
+            motionSum += speed;
+            hasMotion = true;
+            Vec3 direction = rune.glyph().front();
+            if (direction.lengthSqr() >= 1e-8) {
+                velocity = velocity.add(direction.normalize().scale(speed));
             }
         }
-        return new EmitOp.Emission(velocity, motionSum, 1.0F, !motions.isEmpty());
+        double speed = velocity.length();
+        velocity = velocity.add(boundary.surface().normal().scale(((motionSum - speed) + 0.2 * speed)));
+
+        return new EmitOp.Emission(velocity, motionSum, 1.0F, hasMotion);
     }
 
     public float scale() {

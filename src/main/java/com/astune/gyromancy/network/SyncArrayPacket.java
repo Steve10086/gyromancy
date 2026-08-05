@@ -45,8 +45,9 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                     int height = buf.readInt();
                     byte[] mask = new byte[buf.readInt()];
                     buf.readBytes(mask);
+                    int sourceEntityId = buf.readInt();
                     parts.add(new BlockData(surface, center, face, sourceU, sourceV,
-                            width, height, mask));
+                            width, height, mask, sourceEntityId));
                 }
                 arrays.add(new ArrayData(id, color, compilationEffectTicks, parts));
             }
@@ -72,6 +73,7 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                     buf.writeInt(part.height());
                     buf.writeInt(part.mask().length);
                     buf.writeBytes(part.mask());
+                    buf.writeInt(part.sourceEntityId());
                 }
             }
         }
@@ -93,6 +95,10 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                             part.sourceU(), part.sourceV(), part.mask(), part.width(), part.height(),
                             ignored -> 0xFFFFFFFF, array.color(),
                             array.compilationEffectTicks(), BEAM_HEIGHT);
+                    if (part.sourceEntityId() >= 0) {
+                        ClientRayEffects.bindLifecycleSource(
+                                array.id(), partIndex, part.sourceEntityId());
+                    }
                 }
             }
             Set<UUID> removed = new HashSet<>(knownArrays);
@@ -146,7 +152,8 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
      */
     public record BlockData(SurfaceFrame surface, Vec3 center, Direction face,
                             Vec3 sourceU, Vec3 sourceV,
-                            int width, int height, byte[] mask) {
+                            int width, int height, byte[] mask,
+                            int sourceEntityId) {
         public BlockData(Vec3 center, Direction face, Vec3 sourceU, Vec3 sourceV,
                          int width, int height, byte[] mask) {
             this(SurfaceFrame.fromBlockFace(
@@ -154,14 +161,14 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                                     Vec3.atLowerCornerOf(face.getNormal())
                                             .scale(SurfaceFrame.EPSILON))),
                             face),
-                    center, face, sourceU, sourceV, width, height, mask);
+                    center, face, sourceU, sourceV, width, height, mask, -1);
         }
 
         /** Compatibility constructor for code which supplied only a free normal. */
         public BlockData(Vec3 center, Direction face, Vec3 sourceU, Vec3 sourceV,
                          int width, int height, byte[] mask, Vec3 normal) {
             this(new SurfaceFrame(center, sourceU.normalize(), sourceV.normalize(), normal),
-                    center, face, sourceU, sourceV, width, height, mask);
+                    center, face, sourceU, sourceV, width, height, mask, -1);
         }
     }
 }

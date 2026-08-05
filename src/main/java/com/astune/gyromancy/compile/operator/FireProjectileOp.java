@@ -6,7 +6,6 @@ import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.runtime.emit.EntityEmitter;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.compile.CompileResult;
-import com.astune.gyromancy.array.compile.EffectAttributes;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
@@ -47,7 +46,10 @@ public final class FireProjectileOp extends EntityEffectOp {
 
         @Override
         public List<OpInputMatcher> accepted() {
-            return acceptedProjectileInputs();
+            return List.of(
+                    OpInputMatcher.rune("arrow"),
+                    OpInputMatcher.rune("revert"),
+                    OpInputMatcher.op(CompiledOp.class));
         }
 
         @Override
@@ -61,19 +63,23 @@ public final class FireProjectileOp extends EntityEffectOp {
     public static final String OLD_SPAWNED_KEY = "oldSpawned";
     public static final String LIFETIME_KEY = "lifetime";
 
-    private FireProjectileOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs,
-                             EffectAttributes attributes) {
-        super(ID, ElementType.FIRE, boundary, matchedInputs, inputs, attributes);
+    private FireProjectileOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
+        super(ID, ElementType.FIRE, boundary, matchedInputs, inputs);
     }
 
     public static CompileResult<CompiledOp> create(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                  List<OpInput> inputs) {
-        CompileResult<EffectAttributes> attributes = compileAttributes(inputs, ElementType.FIRE);
-        if (attributes instanceof CompileResult.Failure<EffectAttributes> failure) {
-            return new CompileResult.Failure<>(failure.diagnostics());
+        boolean reverted = false;
+        for (OpInput input : inputs) {
+            if (!(input instanceof OpInput.Rune rune) || !"revert".equals(rune.symbolName())) continue;
+            if (reverted) {
+                return new CompileResult.Failure<>(List.of(
+                        new com.astune.gyromancy.array.compile.CompileDiagnostic(
+                                "invalid_element_inverse", "Only one revert rune is supported")));
+            }
+            reverted = true;
         }
-        EffectAttributes attrs = ((CompileResult.Success<EffectAttributes>) attributes).value();
-        return new CompileResult.Success<>(new FireProjectileOp(boundary, matchedInputs, inputs, attrs));
+        return new CompileResult.Success<>(new FireProjectileOp(boundary, matchedInputs, inputs));
     }
 
     public static FireballEntity create(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,

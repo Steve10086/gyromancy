@@ -20,6 +20,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.util.Mth;
 
 import java.util.UUID;
 
@@ -38,6 +39,12 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
     private static final EntityDataAccessor<Float> DATA_PROJECTION_OFFSET =
             SynchedEntityData.defineId(WandProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
     private UUID owner;
+    private int clientLerpSteps;
+    private double clientLerpX;
+    private double clientLerpY;
+    private double clientLerpZ;
+    private boolean clientNormalSyncPending;
+    private Vec3 previousRenderNormal;
 
     public WandProjectionCanvasEntity(EntityType<? extends WandProjectionCanvasEntity> type,
                                       Level level) {
@@ -82,6 +89,27 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
     @Override
     public Vec3 trackingPosition() {
         return position();
+    }
+
+    /** CanvasEntity disables interpolation because attached canvases never move. */
+    @Override
+    public void lerpTo(double x, double y, double z, float yaw, float pitch, int steps) {
+        if (!level().isClientSide) {
+            setPos(x, y, z);
+            return;
+        }
+        Vec3 target = new Vec3(x, y, z);
+        if (position().distanceToSqr(target)
+                >= WandProjectionMotion.TELEPORT_SNAP_DISTANCE
+                * WandProjectionMotion.TELEPORT_SNAP_DISTANCE) {
+            clientLerpSteps = 0;
+            setPos(target);
+            return;
+        }
+        clientLerpX = x;
+        clientLerpY = y;
+        clientLerpZ = z;
+        clientLerpSteps = Math.max(1, steps);
     }
 
     @Override
@@ -152,13 +180,33 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         setSurfaceOrientation(frame.normal(), frame.axisU(), frame.axisV());
     }
 
+    /** Frame used only for rendering between client ticks. */
+    public SurfaceFrame renderSurfaceFrame(float partialTick) {
+        Vec3 current = surfaceNormal();
+        Vec3 previous = previousRenderNormal == null ? current : previousRenderNormal;
+        Vec3 rendered = WandProjectionMotion.interpolateDirection(
+                previous, current, partialTick);
+        return SurfaceFrame.facing(renderCenter(partialTick), rendered, new Vec3(0.0, 1.0, 0.0));
+    }
+
+    /** Exact interpolated center shared by the canvas and its client effects. */
+    public Vec3 renderCenter(float partialTick) {
+        return new Vec3(
+                Mth.lerp(partialTick, xo, getX()),
+                Mth.lerp(partialTick, yo, getY()),
+                Mth.lerp(partialTick, zo, getZ()));
+    }
+
     @Override
     public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
         super.onSyncedDataUpdated(key);
         if (DATA_NORMAL_X.equals(key) || DATA_NORMAL_Y.equals(key) || DATA_NORMAL_Z.equals(key)) {
-            applyProjectedNormal(new Vec3(
-                    entityData.get(DATA_NORMAL_X), entityData.get(DATA_NORMAL_Y),
-                    entityData.get(DATA_NORMAL_Z)).normalize());
+            if (level().isClientSide) {
+                // All three components are sent in one metadata update. Defer
+                // reading them until tick so no mixed intermediate normal can
+                // reach the renderer.
+                clientNormalSyncPending = true;
+            }
         }
     }
 
@@ -191,7 +239,14 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
 
     @Override
     public void tick() {
+        if (level().isClientSide) {
+            previousRenderNormal = surfaceNormal();
+        }
         super.tick();
+        if (level().isClientSide) {
+            tickClientInterpolation();
+            return;
+        }
         if (!(level() instanceof ServerLevel serverLevel) || owner == null) return;
         net.minecraft.world.entity.player.Player player = serverLevel.getPlayerByUUID(owner);
         if (player == null || !player.isUsingItem()
@@ -201,16 +256,35 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         }
 
         Vec3 view = player.getViewVector(1.0F).normalize();
-        Vec3 center = player.getEyePosition().add(
+        Vec3 targetCenter = player.getEyePosition().add(
                 view.scale(entityData.get(DATA_PROJECTION_OFFSET)));
-        boolean geometryChanged = position().distanceToSqr(center) > 1.0E-12
-                || surfaceNormal().distanceToSqr(view) > 1.0E-12;
+        Vec3 nextCenter = WandProjectionMotion.smoothPosition(position(), targetCenter);
+        Vec3 nextNormal = WandProjectionMotion.smoothDirection(surfaceNormal(), view);
+        boolean geometryChanged = position().distanceToSqr(nextCenter) > 1.0E-12
+                || surfaceNormal().distanceToSqr(nextNormal) > 1.0E-12;
         setProjectionView(player.getYRot() + 180.0F, player.getXRot());
         if (!geometryChanged) return;
 
-        setPos(center);
-        setProjectedNormal(view);
+        setPos(nextCenter);
+        setProjectedNormal(nextNormal);
         CanvasCompileService.refreshWorldGeometry(serverLevel, this);
+    }
+
+    private void tickClientInterpolation() {
+        if (clientLerpSteps > 0) {
+            double divisor = clientLerpSteps;
+            setPos(
+                    getX() + (clientLerpX - getX()) / divisor,
+                    getY() + (clientLerpY - getY()) / divisor,
+                    getZ() + (clientLerpZ - getZ()) / divisor);
+            clientLerpSteps--;
+        }
+        if (!clientNormalSyncPending) return;
+        clientNormalSyncPending = false;
+        Vec3 synced = new Vec3(
+                entityData.get(DATA_NORMAL_X), entityData.get(DATA_NORMAL_Y),
+                entityData.get(DATA_NORMAL_Z));
+        if (synced.lengthSqr() > 1.0E-12) applyProjectedNormal(synced.normalize());
     }
 
     @Override

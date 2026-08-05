@@ -557,7 +557,7 @@ public final class MagicArrayDetector {
                 .add(corners[0].add(corners[1]).add(corners[2]).add(corners[3]).scale(0.25));
         return new SyncArrayPacket.BlockData(
                 SurfaceFrame.fromBlockFace(key.pos, key.face), center, key.face,
-                sourceU, sourceV, width, height, mask);
+                sourceU, sourceV, width, height, mask, -1);
     }
 
     private static SyncArrayPacket.BlockData canvasBlockData(
@@ -580,7 +580,9 @@ public final class MagicArrayDetector {
                 canvas.surfaceFrame(), center,
                 canvas.surfaceFrame().axisAlignedDirection()
                         .orElseGet(() -> Direction.getNearest(canvas.surfaceNormal())),
-                sourceU, sourceV, width, height, mask);
+                sourceU, sourceV, width, height, mask,
+                canvas instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity
+                        ? canvas.getId() : -1);
     }
 
     private record BlockFace(BlockPos pos, Direction face) {}

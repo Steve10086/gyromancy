@@ -6,7 +6,6 @@ import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.runtime.emit.EntityEmitter;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.compile.CompileResult;
-import com.astune.gyromancy.array.compile.EffectAttributes;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
@@ -35,6 +34,7 @@ public final class WaterProjectileOp extends EntityEffectOp {
     private static final double ELEMENT_CONVERSION_COST = 10.0;
     private static final double MANA_TO_VOLUME = 0.05;
     public static final String STORED_MANA_KEY = "storedMana";
+    private final boolean inverted;
 
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "water_projectile");
     public static final OpDefinition DEFINITION = new OpDefinition() {
@@ -50,7 +50,10 @@ public final class WaterProjectileOp extends EntityEffectOp {
 
         @Override
         public List<OpInputMatcher> accepted() {
-            return acceptedProjectileInputs();
+            return List.of(
+                    OpInputMatcher.rune("arrow"),
+                    OpInputMatcher.rune("revert"),
+                    OpInputMatcher.op(CompiledOp.class));
         }
 
         @Override
@@ -61,8 +64,9 @@ public final class WaterProjectileOp extends EntityEffectOp {
     };
 
     private WaterProjectileOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs,
-                              EffectAttributes attributes) {
-        super(ID, ElementType.WATER, boundary, matchedInputs, inputs, attributes);
+                              boolean inverted) {
+        super(ID, ElementType.WATER, boundary, matchedInputs, inputs);
+        this.inverted = inverted;
     }
 
     public static CompileResult<CompiledOp> create(PositionedGlyph boundary, List<OpInput> matchedInputs,
@@ -72,12 +76,17 @@ public final class WaterProjectileOp extends EntityEffectOp {
                     new com.astune.gyromancy.array.compile.CompileDiagnostic(
                             "missing_primary_element", "Water operator requires water rune")));
         }
-        CompileResult<EffectAttributes> attributes = compileAttributes(inputs, ElementType.WATER);
-        if (attributes instanceof CompileResult.Failure<EffectAttributes> failure) {
-            return new CompileResult.Failure<>(failure.diagnostics());
+        boolean inverted = false;
+        for (OpInput input : inputs) {
+            if (!(input instanceof OpInput.Rune rune) || !"revert".equals(rune.symbolName())) continue;
+            if (inverted) {
+                return new CompileResult.Failure<>(List.of(
+                        new com.astune.gyromancy.array.compile.CompileDiagnostic(
+                                "invalid_element_inverse", "Only one revert rune is supported")));
+            }
+            inverted = true;
         }
-        EffectAttributes attrs = ((CompileResult.Success<EffectAttributes>) attributes).value();
-        return new CompileResult.Success<>(new WaterProjectileOp(boundary, matchedInputs, inputs, attrs));
+        return new CompileResult.Success<>(new WaterProjectileOp(boundary, matchedInputs, inputs, inverted));
     }
 
     public static WaterBallEntity create(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
@@ -116,7 +125,7 @@ public final class WaterProjectileOp extends EntityEffectOp {
             Vec3 pos = centerPos.add(normal.scale(size * 2.0));
             Vec3 acceleration = emission.hasMotion() ? new Vec3(0.0, -0.04 * 0.5, 0.0) : Vec3.ZERO;
             Entity entity;
-            if (attributes().inverted()) {
+            if (inverted) {
                 entity = new DryBallEntity(level, pos, emission.velocity(), emission.motionSum(), liftDirection, size);
             } else {
                 WaterBallEntity waterball = create(level, pos, emission.velocity(),

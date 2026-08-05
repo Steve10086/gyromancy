@@ -154,15 +154,20 @@ public abstract class MagicBallEntity extends MagicEntity {
 
     private void updateArrayRelativePosition() {
         if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return;
-        // Pending launch values intentionally do not participate in this test.
-        // An effect remains attached until velocity or active acceleration is applied.
-        if (getDeltaMovement().lengthSqr() != 0.0 || payloadAcceleration().lengthSqr() != 0.0) {
+        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
+                .getArrayObj(boundArrayId);
+        if (array == null) {
             arrayRelativePosition = null;
             return;
         }
-        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
-                .getArrayObj(boundArrayId);
-        if (array == null) return;
+        // Pending launch values intentionally do not participate in this policy.
+        // MagicBallEntity alone decides whether it follows; the array only
+        // supplies its persisted creation window and current geometry.
+        if (!MagicBallFollowPolicy.shouldFollow(serverLevel.getGameTime(),
+                array.compilationEffectEndTick(), getDeltaMovement(), payloadAcceleration())) {
+            arrayRelativePosition = null;
+            return;
+        }
         if (arrayRelativePosition == null) {
             arrayRelativePosition = ArrayRelativePosition.capture(
                     position(), array.rootCircleGlyph().center(),

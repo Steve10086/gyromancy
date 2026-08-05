@@ -5,7 +5,6 @@ import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.ParameterRune;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.CompileResult;
-import com.astune.gyromancy.array.compile.EffectAttributes;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
@@ -41,7 +40,10 @@ public final class ManaProjectileOp extends EntityEffectOp {
 
         @Override
         public List<OpInputMatcher> accepted() {
-            return acceptedProjectileInputs();
+            return List.of(
+                    OpInputMatcher.rune("arrow"),
+                    OpInputMatcher.rune("revert"),
+                    OpInputMatcher.op(CompiledOp.class));
         }
 
         @Override
@@ -51,19 +53,20 @@ public final class ManaProjectileOp extends EntityEffectOp {
         }
     };
 
-    private ManaProjectileOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs,
-                             EffectAttributes attributes) {
-        super(ID, ElementType.MANA, boundary, matchedInputs, inputs, attributes);
+    private ManaProjectileOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
+        super(ID, ElementType.MANA, boundary, matchedInputs, inputs);
     }
 
     public static CompileResult<CompiledOp> create(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                  List<OpInput> inputs) {
-        CompileResult<EffectAttributes> attributes = compileAttributes(inputs, ElementType.MANA);
-        if (attributes instanceof CompileResult.Failure<EffectAttributes> failure) {
-            return new CompileResult.Failure<>(failure.diagnostics());
+        for (OpInput input : inputs) {
+            if (input instanceof OpInput.Rune rune && "revert".equals(rune.symbolName())) {
+                return new CompileResult.Failure<>(List.of(
+                        new com.astune.gyromancy.array.compile.CompileDiagnostic(
+                                "invalid_element_inverse", "Mana has no inverse element")));
+            }
         }
-        EffectAttributes attrs = ((CompileResult.Success<EffectAttributes>) attributes).value();
-        return new CompileResult.Success<>(new ManaProjectileOp(boundary, matchedInputs, inputs, attrs));
+        return new CompileResult.Success<>(new ManaProjectileOp(boundary, matchedInputs, inputs));
     }
 
     @Override
