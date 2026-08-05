@@ -82,9 +82,8 @@ public final class FireProjectileOp extends EntityEffectOp {
         return new CompileResult.Success<>(new FireProjectileOp(boundary, matchedInputs, inputs));
     }
 
-    public static FireballEntity create(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
-                                        double liftDirection, Vec3 acceleration, float size) {
-        FireballEntity entity = new FireballEntity(level, pos, velocity, arrowSizeSum, liftDirection, acceleration, size);
+    public static FireballEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
+        FireballEntity entity = new FireballEntity(level, pos, velocity, acceleration, size);
         entity.setPayload(defaultPayload());
         return entity;
     }
@@ -104,15 +103,13 @@ public final class FireProjectileOp extends EntityEffectOp {
         PositionedGlyph centerGlyph = primaryRune();
         if (centerGlyph == null) return new RuntimeHandle(Map.of());
         EmitResult result = new EmitResult();
-        double liftDirection = CenterSymbol.isFacingDown(boundary()) ? -1.0 : 1.0;
         Vec3 center = ctx.origin() != null ? ctx.origin() : CenterSymbol.glyphCenter(level, centerGlyph);
         Vec3 normal = CenterSymbol.faceNormal(centerGlyph);
         for (EmitOp.Emission emission : emissions()) {
             float size = Math.max(0.1F, scale() * emission.sizeScale());
             Vec3 pos = center.add(normal.scale(size * 2.0));
             Vec3 acceleration = emission.hasMotion() ? new Vec3(0.0, -0.04 * 0.5, 0.0) : Vec3.ZERO;
-            FireballEntity fireball = create(level, pos, emission.velocity(),
-                    emission.motionSum(), liftDirection, acceleration, size);
+            FireballEntity fireball = create(level, pos, emission.velocity(), acceleration, size);
             fireball.setPayload(payloadFor(this));
             EntityEmitter.INSTANCE.emit(level, ID, fireball, result);
         }

@@ -31,24 +31,16 @@ public class WaterBallEntity extends MagicBallEntity {
     private static final EntityDataAccessor<ItemStack> DATA_POTION_STATE =
             SynchedEntityData.defineId(WaterBallEntity.class, EntityDataSerializers.ITEM_STACK);
     private static final String STORED_MANA_KEY = "storedMana";
-    private Vec3 acceleration = Vec3.ZERO;
-    private Vec3 pendingVelocity = Vec3.ZERO;
-    private Vec3 pendingAcceleration = Vec3.ZERO;
     private ItemStack potionState = defaultPotionState();
-    private boolean launched;
 
     public WaterBallEntity(EntityType<WaterBallEntity> type, Level level) {
         super(type, level, ElementType.WATER);
     }
 
-    public WaterBallEntity(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
-                           double liftDirection, Vec3 acceleration, float size) {
-        this(ModEntities.WATER_BALL.get(), level);
+    public WaterBallEntity(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
+        super(ModEntities.WATER_BALL.get(), level, ElementType.WATER, velocity, acceleration);
         setBallSize(size);
         setPos(pos);
-        pendingVelocity = launchVelocity(velocity, arrowSizeSum, liftDirection);
-        pendingAcceleration = acceleration;
-        setDeltaMovement(Vec3.ZERO);
     }
 
     public ItemStack getPotionState() {
@@ -74,28 +66,16 @@ public class WaterBallEntity extends MagicBallEntity {
     @Override
     protected boolean tickBeforePayload() {
         if (!super.tickBeforePayload()) return false;
-        growIntoTargetSize();
-        if (!launched && isFullyGrown()) {
-            launched = true;
-            acceleration = pendingAcceleration;
-            setDeltaMovement(pendingVelocity);
-        }
+
         return true;
     }
 
     @Override
     protected void tickAfterPayload() {
-        Vec3 velocity = getDeltaMovement();
-        if (launched) {
-            setPos(position().add(velocity));
-            setDeltaMovement(velocity.add(acceleration));
-        }
-
         if (level().isClientSide) return;
         consumeDirectPotion();
 
         applyPotionEffects();
-
     }
 
     @Override
@@ -200,9 +180,6 @@ public class WaterBallEntity extends MagicBallEntity {
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         if (tag.contains("AccelX")) acceleration = new Vec3(tag.getDouble("AccelX"), tag.getDouble("AccelY"), tag.getDouble("AccelZ"));
-        if (tag.contains("PendingVelX")) pendingVelocity = new Vec3(tag.getDouble("PendingVelX"), tag.getDouble("PendingVelY"), tag.getDouble("PendingVelZ"));
-        if (tag.contains("PendingAccelX")) pendingAcceleration = new Vec3(tag.getDouble("PendingAccelX"), tag.getDouble("PendingAccelY"), tag.getDouble("PendingAccelZ"));
-        launched = tag.getBoolean("Launched");
         if (tag.contains("StoredMana")) runtimeData().put(STORED_MANA_KEY, tag.getLong("StoredMana"));
         if (tag.contains("PotionState", Tag.TAG_COMPOUND)) {
             potionState = ItemStack.parse(registryAccess(), tag.getCompound("PotionState")).orElse(potionState);
@@ -216,13 +193,6 @@ public class WaterBallEntity extends MagicBallEntity {
         tag.putDouble("AccelX", acceleration.x);
         tag.putDouble("AccelY", acceleration.y);
         tag.putDouble("AccelZ", acceleration.z);
-        tag.putDouble("PendingVelX", pendingVelocity.x);
-        tag.putDouble("PendingVelY", pendingVelocity.y);
-        tag.putDouble("PendingVelZ", pendingVelocity.z);
-        tag.putDouble("PendingAccelX", pendingAcceleration.x);
-        tag.putDouble("PendingAccelY", pendingAcceleration.y);
-        tag.putDouble("PendingAccelZ", pendingAcceleration.z);
-        tag.putBoolean("Launched", launched);
         tag.putLong("StoredMana", ((Number)runtimeData().getOrDefault(STORED_MANA_KEY, 0L)).longValue());
         tag.put("PotionState", potionState.save(registryAccess()));
     }

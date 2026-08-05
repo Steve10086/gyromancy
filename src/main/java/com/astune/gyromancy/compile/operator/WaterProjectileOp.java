@@ -89,9 +89,8 @@ public final class WaterProjectileOp extends EntityEffectOp {
         return new CompileResult.Success<>(new WaterProjectileOp(boundary, matchedInputs, inputs, inverted));
     }
 
-    public static WaterBallEntity create(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
-                                         double liftDirection, Vec3 acceleration, float size) {
-        WaterBallEntity entity = new WaterBallEntity(level, pos, velocity, arrowSizeSum, liftDirection, acceleration, size);
+    public static WaterBallEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
+        WaterBallEntity entity = new WaterBallEntity(level, pos, velocity, acceleration, size);
         entity.setPayload(defaultPayload());
         return entity;
     }
@@ -128,8 +127,7 @@ public final class WaterProjectileOp extends EntityEffectOp {
             if (inverted) {
                 entity = new DryBallEntity(level, pos, emission.velocity(), emission.motionSum(), liftDirection, size);
             } else {
-                WaterBallEntity waterball = create(level, pos, emission.velocity(),
-                        emission.motionSum(), liftDirection, acceleration, size);
+                WaterBallEntity waterball = create(level, pos, emission.velocity(), acceleration, size);
                 waterball.setPayload(payloadFor(this));
                 entity = waterball;
             }

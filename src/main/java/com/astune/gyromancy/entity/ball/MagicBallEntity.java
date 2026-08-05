@@ -41,7 +41,10 @@ public abstract class MagicBallEntity extends MagicEntity {
     private double averageElementLevel;
     private boolean impactThisTick;
     Vec3 acceleration = Vec3.ZERO;
+    private Vec3 pendingVelocity = Vec3.ZERO;
+    private Vec3 pendingAcceleration = Vec3.ZERO;
 
+    private boolean launched = false;
 
     public MagicBallEntity(EntityType<? extends MagicBallEntity> type, Level level, ElementType targetElement) {
         super(type, level);
@@ -49,9 +52,25 @@ public abstract class MagicBallEntity extends MagicEntity {
         this.noPhysics = true;
     }
 
+    public MagicBallEntity(EntityType<? extends MagicBallEntity> type, Level level, ElementType targetElement, Vec3 velocity, Vec3 acceleration) {
+        super(type, level);
+        this.pendingVelocity = velocity;
+        this.pendingAcceleration = acceleration;
+        this.targetElement = targetElement;
+        this.noPhysics = true;
+    }
+
     @Override
     protected boolean tickBeforePayload() {
         updateArrayRelativePosition();
+        growIntoTargetSize();
+
+        if (!launched && !isFullyGrown()) {
+            setDeltaMovement(Vec3.ZERO);
+            return false;
+        }
+        launchIfReady();
+
         Vec3 start = position();
         Vec3 end = start.add(velocityThisTick);
         HitResult blockHit = level().clip(new ClipContext(start, end, ClipContext.Block.COLLIDER,
@@ -63,9 +82,9 @@ public abstract class MagicBallEntity extends MagicEntity {
         setPos(end);
         impactThisTick = blockHit.getType() != HitResult.Type.MISS || hitLivingEntity(velocityThisTick);
 
-        setDeltaMovement(velocityThisTick.add(acceleration));
-        return true;
+        addDeltaMovement(acceleration);
 
+        return true;
     }
 
     @Override
@@ -113,7 +132,9 @@ public abstract class MagicBallEntity extends MagicEntity {
     public boolean isFullyGrown() {
         return getBallSize() >= getTargetBallSize();
     }
-
+    public boolean isLaunched() {
+        return launched;
+    }
     public int getGrowthTicks() {
         return getTargetBallSize() <= SPAWN_SIZE ? 0 : (int)Math.ceil(100.0F / GROWTH_RATE);
     }
@@ -144,6 +165,13 @@ public abstract class MagicBallEntity extends MagicEntity {
                 ? Math.min(targetSize, cur + step)
                 : Math.max(targetSize, cur - step));
         refreshDimensions();
+    }
+
+    private void launchIfReady() {
+        if (launched) return;
+        launched = true;
+        acceleration = pendingAcceleration;
+        setDeltaMovement(pendingVelocity);
     }
 
     public void bindToArray(UUID arrayId) {
@@ -241,6 +269,14 @@ public abstract class MagicBallEntity extends MagicEntity {
                     tag.getDouble("ArrayRelativeV"),
                     tag.getDouble("ArrayRelativeNormal"));
         }
+        if (tag.contains("PendingVelX")) {
+            pendingVelocity = new Vec3(tag.getDouble("PendingVelX"), tag.getDouble("PendingVelY"), tag.getDouble("PendingVelZ"));
+        }
+        if (tag.contains("PendingAccelX")) {
+            pendingAcceleration = new Vec3(tag.getDouble("PendingAccelX"), tag.getDouble("PendingAccelY"), tag.getDouble("PendingAccelZ"));
+        }
+        launched = tag.getBoolean("Launched");
+
     }
 
     @Override
@@ -254,6 +290,14 @@ public abstract class MagicBallEntity extends MagicEntity {
             tag.putDouble("ArrayRelativeV", arrayRelativePosition.v());
             tag.putDouble("ArrayRelativeNormal", arrayRelativePosition.normal());
         }
+        tag.putDouble("PendingVelX", pendingVelocity.x);
+        tag.putDouble("PendingVelY", pendingVelocity.y);
+        tag.putDouble("PendingVelZ", pendingVelocity.z);
+        tag.putDouble("PendingAccelX", pendingAcceleration.x);
+        tag.putDouble("PendingAccelY", pendingAcceleration.y);
+        tag.putDouble("PendingAccelZ", pendingAcceleration.z);
+        tag.putBoolean("Launched", launched);
+
     }
 
     public boolean inSphere(Vec3 target, double radius) {
