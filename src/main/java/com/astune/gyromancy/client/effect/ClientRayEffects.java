@@ -451,7 +451,11 @@ public final class ClientRayEffects {
                 && Minecraft.getInstance().level.getEntity(effect.sourceEntityId)
                 instanceof WandProjectionCanvasEntity projection) {
             SurfaceFrame frame = projection.renderSurfaceFrame(partialTick);
-            return projectionGeometry(frame, effect.sourceU.length(), effect.sourceV.length());
+            double entranceScale = projection.renderEntranceScale(partialTick);
+            return projectionGeometry(
+                    frame,
+                    effect.sourceU.length() * entranceScale,
+                    effect.sourceV.length() * entranceScale);
         }
         return new EffectGeometry(
                 effect.center, effect.sourceNormal.normalize(),

@@ -9,10 +9,14 @@ The entry point is `MagicArrayDetector.onCanvasUpdate`.
 1. The server receives `ServerCanvasUpdateEvent`.
 2. It reads `CanvasData` from the event.
 3. It calls `ManaPixelDetector.scanForMana(level, pos, data)`.
-4. A pixel becomes a seed only when:
+4. A normal pixel becomes a seed only when:
    - it has the `gyromancy:mana` effect layer;
-   - it does not already have `gyromancy:symbol_id`.
-5. If any seeds are found, `FloodFillScheduler.submitBatch(serverLevel, seeds)` is called.
+   - it does not already have `gyromancy:glyph_id`.
+5. `ServerCanvasUpdateEvent.Pre` may also record erased pixels as revalidation
+   triggers and carry old glyph ids as batch metadata; it does not invalidate
+   glyphs immediately.
+6. The post-update handler submits normal seeds and revalidation triggers to
+   one `FloodFillScheduler` batch.
 
 Normal Painter brushes do not enter the symbol system. `ManaPixelDetector.isManaPixel` only checks `gyromancy:mana`; opaque pixels are not used as a fallback.
 
@@ -26,6 +30,7 @@ A batch can contain many seeds, but the extractor emits one 8-connected componen
 - `worldX/worldY`: world-space coordinates flattened onto the canvas plane.
 - `minWorldX/maxWorldX/minWorldY/maxWorldY`: the glyph bounding box.
 - `blockCount`: number of blocks touched by the glyph.
+- `affectedGlyphIds`: existing glyph ids encountered while traversing the batch.
 
 When one component is complete, `FloodFillScheduler` fires the `onGlyphExtracted` callback into `MagicArrayDetector`. If disconnected seeds remain, the scheduler continues with the next component.
 
@@ -230,7 +235,9 @@ The circle is stored as a `PositionedGlyph` with `OUTER_CIRCLE` role, using the 
 2. `GlyphMarker.markConsumed()` — writes `glyph_id` + `symbol_id` effect layers.
 3. `MagicArrayManager.registerGlyph()` + `GlyphChunkStorage.store()`.
 
-This ensures circle redraws are caught by the normal `symbol_id` diff in `ServerCanvasUpdateEvent.Pre`, which triggers glyph invalidation.
+When a circle is redrawn, the flood batch traverses the old marked stroke,
+collects its `glyph_id`, and invalidates it immediately before matching the new
+batch.
 
 ### 10.2 Structural Validation
 

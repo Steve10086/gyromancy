@@ -6,6 +6,7 @@ import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FloodFillExtractorTest {
 
@@ -31,5 +32,22 @@ class FloodFillExtractorTest {
                 new BlockPos(10, 21, 31),
                 FloodFillExtractor.adjacentBlockForEdge(
                         base, Direction.EAST, new Vec3(11.0, 21.1, 31.1)));
+    }
+
+    @Test
+    void absorbedFloodStateCarriesRevalidationMetadata() {
+        PixelPos origin = new PixelPos(BlockPos.ZERO, Direction.NORTH, 0, 0, 1);
+        PixelPos trigger = new PixelPos(BlockPos.ZERO, Direction.NORTH, 1, 0, 1);
+        FloodFillExtractor.FloodFillState primary =
+                new FloodFillExtractor.FloodFillState(1, origin);
+        FloodFillExtractor.FloodFillState absorbed =
+                new FloodFillExtractor.FloodFillState(2, trigger);
+
+        absorbed.revalidationSeeds.add(trigger);
+        absorbed.affectedGlyphIds.add(42);
+        primary.absorb(absorbed);
+
+        assertTrue(primary.revalidationSeeds.contains(trigger));
+        assertEquals(java.util.Set.of(42), primary.affectedGlyphIds);
     }
 }

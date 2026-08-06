@@ -3,10 +3,12 @@ package com.astune.gyromancy.wand;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-/** Tick-level smoothing shared by a projection's position and free direction. */
+/** Tick-level target smoothing shared by every component of a projection pose. */
 final class WandProjectionMotion {
-    static final double POSITION_RESPONSE = 0.8;
-    static final double DIRECTION_RESPONSE = 0.8;
+    static final double POSITION_RESPONSE = 0.95;
+    static final double DIRECTION_RESPONSE = 0.95;
+    static final float ROLL_RESPONSE = 1.0F;
+    static final float ROLL_DEGREES_PER_TICK = 8.0F;
     static final double TELEPORT_SNAP_DISTANCE = 8.0;
     private static final double PARALLEL_DOT = 0.9995;
 
@@ -22,6 +24,19 @@ final class WandProjectionMotion {
 
     static Vec3 smoothDirection(Vec3 current, Vec3 target) {
         return interpolateDirection(current, target, DIRECTION_RESPONSE);
+    }
+
+    static float advanceRollTarget(float currentTarget, float degrees) {
+        return Mth.wrapDegrees(currentTarget + degrees);
+    }
+
+    static float smoothRoll(float current, float target) {
+        return interpolateRoll(current, target, ROLL_RESPONSE);
+    }
+
+    static float interpolateRoll(float previous, float current, float progress) {
+        return Mth.wrapDegrees(Mth.rotLerp(
+                Mth.clamp(progress, 0.0F, 1.0F), previous, current));
     }
 
     static Vec3 interpolateDirection(Vec3 current, Vec3 target, double progress) {

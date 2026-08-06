@@ -38,7 +38,7 @@ public final class CanvasClientState {
         return snapshot == null ? null : snapshot.document();
     }
 
-    static ResourceLocation textureLocation(CanvasEntity entity) {
+    public static ResourceLocation textureLocation(CanvasEntity entity) {
         Snapshot snapshot = SNAPSHOTS.get(entity.getId());
         return snapshot == null ? null : snapshot.textureLocation(
                 entity instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity);

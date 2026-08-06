@@ -11,6 +11,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SyncArrayPacketTest {
     @Test
@@ -44,6 +46,7 @@ class SyncArrayPacketTest {
                     decodedArray.parts().getFirst();
 
             assertEquals(array.id(), decodedArray.id());
+            assertTrue(decoded.fullSnapshot());
             assertEquals(array.color(), decodedArray.color());
             assertEquals(73, decodedArray.compilationEffectTicks());
             assertEquals(1_234_567L, decodedArray.compilationEffectEndTick());
@@ -52,6 +55,21 @@ class SyncArrayPacketTest {
             assertEquals(part.surface(), decodedPart.surface());
             assertEquals(42, decodedPart.sourceEntityId());
             assertArrayEquals(part.mask(), decodedPart.mask());
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
+    void codecPreservesPartialGeometrySnapshotMode() {
+        ByteBuf buffer = Unpooled.buffer();
+        try {
+            SyncArrayPacket.STREAM_CODEC.encode(
+                    buffer, new SyncArrayPacket(List.of(), false));
+            SyncArrayPacket decoded = SyncArrayPacket.STREAM_CODEC.decode(buffer);
+
+            assertFalse(decoded.fullSnapshot());
+            assertEquals(List.of(), decoded.arrays());
         } finally {
             buffer.release();
         }

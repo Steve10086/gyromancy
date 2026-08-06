@@ -569,18 +569,20 @@ Both are fused into `SymbolDef` as fields; the `SYMBOLS` configuration array is 
 **Event handlers:**
 | Event | Action |
 |-------|--------|
-| `ServerCanvasUpdateEvent.Pre` | Diffs old/new `symbol_id` layers → invalidates changed glyphs |
-| `ServerCanvasUpdateEvent` | Scans for new mana seeds → submits to `FloodFillScheduler` |
+| `ServerCanvasUpdateEvent.Pre` | Records erased/overwritten positions and old glyph ids as flood metadata |
+| `ServerCanvasUpdateEvent` | Merges normal unclaimed seeds and revalidation triggers → submits one flood batch |
 | `PlayerEvent.PlayerLoggedInEvent` | Sends `SyncGlyphPacket` |
 | `ChunkEvent.Load` (via `Gyromancy`) | Restores persisted chunk glyphs into `MagicArrayManager` |
 | `ServerTickEvent.Post` (via `Gyromancy`) | Retries recently placed canvas block entities until `CanvasData.faces()` is available |
 
 **Extraction callback (from FloodFillScheduler):**
-1. `SymbolRecognizer.recognize()` the extracted glyph
-2. `InteriorValidator.hasRawManaInside()` — reject if not clean
-3. `GlyphMarker.markConsumed()` — consume pixels
-4. Store as `PositionedGlyph` in `MagicArrayManager` and `GlyphChunkStorage`
-5. Sync via `SyncCanvasPacket` + `SyncGlyphPacket`
+1. Collect `affectedGlyphIds` from every extracted component
+2. Disable those glyphs and tear down bound arrays
+3. `SymbolRecognizer.recognize()` each non-empty extracted glyph
+4. `InteriorValidator.hasRawManaInside()` — reject if not clean
+5. `GlyphMarker.markConsumed()` — consume pixels
+6. Store as `PositionedGlyph` in `MagicArrayManager` and `GlyphChunkStorage`
+7. Sync via `SyncCanvasPacket` + `SyncGlyphPacket`
 
 **OUTER_CIRCLE handler (`handleCircleMatch`) — array lifecycle:**
 - Circle is stored as a `PositionedGlyph` (role=`OUTER_CIRCLE`) for invalidation binding
@@ -589,7 +591,7 @@ Both are fused into `SymbolDef` as fields; the `SYMBOLS` configuration array is 
 - **Stage 2 (dispatch):** creates `ArrayObject(circleGlyph, centerGlyph, runeGlyphs)`, calls center symbol's `CenterEffect`, stores returned scratchData in the array object, registers via `MagicArrayManager.registerArrayObj()`
 
 **Glyph invalidation — array teardown:**
-- When any glyph is invalidated (`symbol_id` change, block replacement), `invalidateGlyphs` checks if the glyph is bound to an `ArrayObject` via `MagicArrayManager.getArrayForGlyph()`
+- When a flood batch reports an affected glyph (or a block is replaced), `invalidateGlyphs` checks if the glyph is bound to an `ArrayObject` via `MagicArrayManager.getArrayForGlyph()`
 - If bound: fires the center symbol's `EndEffect(scratchData)` and unregisters the array
 - Only the triggering glyph is cleaned up — runes and center symbol survive independently
 - A new circle drawn over the old area will find the surviving inner glyphs and re-form the array

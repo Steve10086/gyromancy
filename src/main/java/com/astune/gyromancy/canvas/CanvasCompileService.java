@@ -266,7 +266,11 @@ public final class CanvasCompileService {
      */
     public static void refreshWorldGeometry(ServerLevel level, CanvasEntity canvas) {
         refreshRetainedGlyphGeometry(level, canvas);
-        MagicArrayDetector.syncWorldState(level);
+        if (canvas instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity) {
+            MagicArrayDetector.syncProjectionGeometry(level, canvas);
+        } else {
+            MagicArrayDetector.syncWorldState(level);
+        }
     }
 
     private static PositionedGlyph registerGlyph(ServerLevel level, CanvasEntity canvas,

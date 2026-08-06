@@ -36,8 +36,24 @@ public final class FloodFillExtractor {
             double[] worldX, double[] worldY,
             double minWorldX, double maxWorldX,
             double minWorldY, double maxWorldY,
-            int blockCount
-    ) {}
+            int blockCount,
+            Set<Integer> affectedGlyphIds
+    ) {
+        public ExtractedGlyph(
+                Set<PixelPos> pixels,
+                double[] worldX, double[] worldY,
+                double minWorldX, double maxWorldX,
+                double minWorldY, double maxWorldY,
+                int blockCount) {
+            this(pixels, worldX, worldY, minWorldX, maxWorldX,
+                    minWorldY, maxWorldY, blockCount, Set.of());
+        }
+
+        public ExtractedGlyph {
+            pixels = Set.copyOf(pixels);
+            affectedGlyphIds = Set.copyOf(affectedGlyphIds);
+        }
+    }
 
     public static class FloodFillState {
         public final int stateId;
@@ -47,6 +63,12 @@ public final class FloodFillExtractor {
         public final Set<PixelPos> processed;
         public final Set<BlockPos> involvedBlocks;
         public final Set<PixelPos> initialSeeds;
+        /** Empty pixels which trigger revalidation of their mana neighbors. */
+        public final Set<PixelPos> revalidationSeeds;
+        /** Old face geometry used only when the edited face no longer exists. */
+        public final Map<PixelPos, CanvasFace> revalidationFaces;
+        /** Existing glyph ids touched by this batch's flood fill. */
+        public final Set<Integer> affectedGlyphIds;
         public final List<ExtractedGlyph> completedGlyphs;
         public final List<Double> worldXs = new ArrayList<>();
         public final List<Double> worldYs = new ArrayList<>();
@@ -65,6 +87,9 @@ public final class FloodFillExtractor {
             this.processed = new HashSet<>();
             this.involvedBlocks = new HashSet<>();
             this.initialSeeds = new HashSet<>();
+            this.revalidationSeeds = new HashSet<>();
+            this.revalidationFaces = new HashMap<>();
+            this.affectedGlyphIds = new HashSet<>();
             this.initialSeeds.add(origin);
             this.completedGlyphs = new ArrayList<>();
         }
@@ -77,6 +102,9 @@ public final class FloodFillExtractor {
             this.worldYs.addAll(other.worldYs);
             this.involvedBlocks.addAll(other.involvedBlocks);
             this.initialSeeds.addAll(other.initialSeeds);
+            this.revalidationSeeds.addAll(other.revalidationSeeds);
+            this.revalidationFaces.putAll(other.revalidationFaces);
+            this.affectedGlyphIds.addAll(other.affectedGlyphIds);
             this.completedGlyphs.addAll(other.completedGlyphs);
             this.minWorldX = Math.min(this.minWorldX, other.minWorldX);
             this.maxWorldX = Math.max(this.maxWorldX, other.maxWorldX);
@@ -184,14 +212,23 @@ public final class FloodFillExtractor {
             CanvasFace face = getFacesAt(level, curr.pos(), curr.face()).stream()
                     .findFirst().orElse(null);
             if (face == null) {
+                CanvasFace oldFace = state.revalidationFaces.get(curr);
+                if (oldFace != null) enqueueNeighbors(level, state, curr, oldFace);
                 state.processed.add(curr);
                 continue;
             }
 
-            if (!ManaPixelDetector.isUnclaimedManaPixel(face, curr.x(), curr.y())) {
+            if (!ManaPixelDetector.isManaPixel(face, curr.x(), curr.y())) {
+                if (state.revalidationSeeds.contains(curr)) {
+                    enqueueNeighbors(level, state, curr, face);
+                }
                 state.processed.add(curr);
                 continue;
             }
+
+            int glyphId = face.getEffectValue(ManaPixelDetector.GLYPH_ID_KEY,
+                    curr.x(), curr.y());
+            if (glyphId > 0) state.affectedGlyphIds.add(glyphId);
 
             if (state.dominantFace == null) state.dominantFace = face.primaryFace();
 
@@ -222,40 +259,19 @@ public final class FloodFillExtractor {
             state.minWorldY = Math.min(state.minWorldY, w2d[1]);
             state.maxWorldY = Math.max(state.maxWorldY, w2d[1]);
 
-            // 8-connected neighbors
-            int pw = face.pixels().getWidth();
-            int ph = face.pixels().getHeight();
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dx = -1; dx <= 1; dx++) {
-                    if (dx == 0 && dy == 0) continue;
-                    int nx = curr.x() + dx;
-                    int ny = curr.y() + dy;
-
-                    if (nx >= 0 && nx < pw && ny >= 0 && ny < ph) {
-                        PixelPos nb = new PixelPos(curr.pos(), curr.face(), nx, ny, 0);
-                        if (!state.visited.contains(nb) && !state.processed.contains(nb)) state.queue.add(nb);
-                    } else {
-                        List<PixelPos> adjacents = findAdjacentByCorner(level, curr, face, nx, ny);
-                        if (!adjacents.isEmpty()) {
-                            Gyromancy.LOGGER.debug("[FloodFill] edge ({},{}) -> ({},{}) from {} -> {} adj",
-                                    curr.x(), curr.y(), nx, ny, curr.pos(), adjacents.size());
-                        }
-                        for (PixelPos adj : adjacents) {
-                            if (!state.visited.contains(adj) && !state.processed.contains(adj)) {
-                                state.queue.add(adj);
-                            }
-                        }
-                    }
-                }
-            }
+            enqueueNeighbors(level, state, curr, face);
         }
 
         // Dead loop guard: no progress -> cancel
         if (state.visited.size() == visitedBefore) {
             Gyromancy.LOGGER.debug("[FloodFill] No progress this round - canceling state #{}", state.stateId);
-            return enqueueNextComponent(level, state)
-                    ? new ExtractionResult(null, state)
-                    : new ExtractionResult(null, null);
+            if (enqueueNextComponent(level, state)) {
+                return new ExtractionResult(null, state);
+            }
+            if (!state.affectedGlyphIds.isEmpty()) {
+                return new ExtractionResult(buildGlyph(state), null);
+            }
+            return new ExtractionResult(null, null);
         }
 
         ExtractedGlyph glyph = buildGlyph(state);
@@ -304,7 +320,7 @@ public final class FloodFillExtractor {
         for (int i = 0; i < n; i++) { wx[i] = state.worldXs.get(i); wy[i] = state.worldYs.get(i); }
         return new ExtractedGlyph(Set.copyOf(state.visited), wx, wy,
                 state.minWorldX, state.maxWorldX, state.minWorldY, state.maxWorldY,
-                state.involvedBlocks.size());
+                state.involvedBlocks.size(), Set.copyOf(state.affectedGlyphIds));
     }
 
     private static FloodFillState resetForNextGroup(FloodFillState state) {
@@ -343,11 +359,42 @@ public final class FloodFillExtractor {
         for (CanvasFace adjFace : getFacesAt(level, adjPos, face.primaryFace())) {
             PixelPos mapped = pixelFromWorld(worldNeighbor, adjPos, adjFace);
             if (mapped != null
-                    && ManaPixelDetector.isUnclaimedManaPixel(adjFace, mapped.x(), mapped.y())) {
+                    && ManaPixelDetector.isManaPixel(adjFace, mapped.x(), mapped.y())) {
                 results.add(mapped);
             }
         }
         return new ArrayList<>(results);
+    }
+
+    private static void enqueueNeighbors(
+            ServerLevel level, FloodFillState state, PixelPos curr, CanvasFace face) {
+        int pw = face.pixels().getWidth();
+        int ph = face.pixels().getHeight();
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = curr.x() + dx;
+                int ny = curr.y() + dy;
+
+                if (nx >= 0 && nx < pw && ny >= 0 && ny < ph) {
+                    PixelPos nb = new PixelPos(curr.pos(), curr.face(), nx, ny, 0);
+                    if (!state.visited.contains(nb) && !state.processed.contains(nb)) {
+                        state.queue.add(nb);
+                    }
+                } else {
+                    List<PixelPos> adjacents = findAdjacentByCorner(level, curr, face, nx, ny);
+                    if (!adjacents.isEmpty()) {
+                        Gyromancy.LOGGER.debug("[FloodFill] edge ({},{}) -> ({},{}) from {} -> {} adj",
+                                curr.x(), curr.y(), nx, ny, curr.pos(), adjacents.size());
+                    }
+                    for (PixelPos adj : adjacents) {
+                        if (!state.visited.contains(adj) && !state.processed.contains(adj)) {
+                            state.queue.add(adj);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     static BlockPos adjacentBlockForEdge(BlockPos base, Direction face, Vec3 worldNeighbor) {

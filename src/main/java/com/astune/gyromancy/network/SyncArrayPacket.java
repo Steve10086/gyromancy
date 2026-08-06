@@ -18,7 +18,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPayload {
+public record SyncArrayPacket(List<ArrayData> arrays, boolean fullSnapshot) implements CustomPacketPayload {
     private static final double BEAM_HEIGHT = 1.0;
     private static final Set<UUID> knownArrays = ConcurrentHashMap.newKeySet();
 
@@ -28,6 +28,7 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
     public static final StreamCodec<ByteBuf, SyncArrayPacket> STREAM_CODEC = new StreamCodec<>() {
         @Override
         public SyncArrayPacket decode(ByteBuf buf) {
+            boolean fullSnapshot = buf.readBoolean();
             int count = buf.readInt();
             java.util.ArrayList<ArrayData> arrays = new java.util.ArrayList<>(count);
             for (int i = 0; i < count; i++) {
@@ -54,11 +55,12 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                 arrays.add(new ArrayData(
                         id, color, compilationEffectTicks, compilationEffectEndTick, parts));
             }
-            return new SyncArrayPacket(arrays);
+            return new SyncArrayPacket(arrays, fullSnapshot);
         }
 
         @Override
         public void encode(ByteBuf buf, SyncArrayPacket packet) {
+            buf.writeBoolean(packet.fullSnapshot());
             buf.writeInt(packet.arrays().size());
             for (ArrayData array : packet.arrays()) {
                 buf.writeLong(array.id().getMostSignificantBits());
@@ -85,7 +87,8 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
 
     public static void handleClient(SyncArrayPacket packet, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
-            Set<UUID> next = new HashSet<>();
+            Set<UUID> next = packet.fullSnapshot()
+                    ? new HashSet<>() : new HashSet<>(knownArrays);
             for (ArrayData array : packet.arrays()) {
                 next.add(array.id());
                 knownArrays.add(array.id());
@@ -108,9 +111,11 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
                     }
                 }
             }
-            Set<UUID> removed = new HashSet<>(knownArrays);
-            removed.removeAll(next);
-            removed.forEach(ClientRayEffects::stopLifecycle);
+            if (packet.fullSnapshot()) {
+                Set<UUID> removed = new HashSet<>(knownArrays);
+                removed.removeAll(next);
+                removed.forEach(ClientRayEffects::stopLifecycle);
+            }
             knownArrays.retainAll(next);
         });
     }
@@ -122,6 +127,10 @@ public record SyncArrayPacket(List<ArrayData> arrays) implements CustomPacketPay
 
     public static void resetClientState() {
         knownArrays.clear();
+    }
+
+    public SyncArrayPacket(List<ArrayData> arrays) {
+        this(arrays, true);
     }
 
     private static Vec3 readVec3(ByteBuf buf) {

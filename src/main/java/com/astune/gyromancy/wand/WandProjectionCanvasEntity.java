@@ -38,6 +38,10 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
             SynchedEntityData.defineId(WandProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_PROJECTION_OFFSET =
             SynchedEntityData.defineId(WandProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_ROLL_DEGREES =
+            SynchedEntityData.defineId(WandProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Long> DATA_SPAWN_GAME_TICK =
+            SynchedEntityData.defineId(WandProjectionCanvasEntity.class, EntityDataSerializers.LONG);
     private UUID owner;
     private int clientLerpSteps;
     private double clientLerpX;
@@ -45,6 +49,10 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
     private double clientLerpZ;
     private boolean clientNormalSyncPending;
     private Vec3 previousRenderNormal;
+    private Float previousRenderRoll;
+    private float appliedProjectionRoll;
+    private float projectionRollTarget;
+    private boolean projectionRollTargetInitialized;
 
     public WandProjectionCanvasEntity(EntityType<? extends WandProjectionCanvasEntity> type,
                                       Level level) {
@@ -65,9 +73,11 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         canvas.setPos(center);
         canvas.setDocumentInternal(document, false);
         canvas.setDirection(facing);
-        canvas.setProjectedNormal(viewDirection.normalize());
+        canvas.setProjectedOrientation(viewDirection.normalize(), 0.0F);
+        canvas.setRollTarget(0.0F);
         canvas.setProjectionView(viewYaw, viewPitch);
         canvas.entityData.set(DATA_PROJECTION_OFFSET, projectionOffset);
+        canvas.entityData.set(DATA_SPAWN_GAME_TICK, level.getGameTime());
         canvas.setPos(center);
         canvas.recalculateBoundingBox();
         return canvas;
@@ -126,6 +136,8 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         compound.putDouble("surface_normal_y", surfaceNormal().y);
         compound.putDouble("surface_normal_z", surfaceNormal().z);
         compound.putFloat("projection_offset", entityData.get(DATA_PROJECTION_OFFSET));
+        compound.putFloat("surface_roll", projectionRoll());
+        compound.putLong("spawn_game_tick", entityData.get(DATA_SPAWN_GAME_TICK));
     }
 
     @Override
@@ -133,13 +145,19 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         super.readAdditionalSaveData(compound);
         owner = compound.hasUUID("wand_owner") ? compound.getUUID("wand_owner") : null;
         if (compound.contains("surface_normal_x")) {
-            setProjectedNormal(new Vec3(
+            float roll = compound.getFloat("surface_roll");
+            setProjectedOrientation(new Vec3(
                     compound.getDouble("surface_normal_x"),
                     compound.getDouble("surface_normal_y"),
-                    compound.getDouble("surface_normal_z")));
+                    compound.getDouble("surface_normal_z")),
+                    roll);
+            setRollTarget(roll);
         }
         if (compound.contains("projection_offset")) {
             entityData.set(DATA_PROJECTION_OFFSET, compound.getFloat("projection_offset"));
+        }
+        if (compound.contains("spawn_game_tick")) {
+            entityData.set(DATA_SPAWN_GAME_TICK, compound.getLong("spawn_game_tick"));
         }
     }
 
@@ -165,18 +183,39 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         builder.define(DATA_NORMAL_Y, 0.0F);
         builder.define(DATA_NORMAL_Z, -1.0F);
         builder.define(DATA_PROJECTION_OFFSET, 1.0F);
+        builder.define(DATA_ROLL_DEGREES, 0.0F);
+        builder.define(DATA_SPAWN_GAME_TICK, Long.MIN_VALUE);
     }
 
     public void setProjectedNormal(Vec3 normal) {
+        setProjectedOrientation(normal, projectionRoll());
+    }
+
+    public float projectionRoll() {
+        return appliedProjectionRoll;
+    }
+
+    private float projectionRollTarget() {
+        return entityData.get(DATA_ROLL_DEGREES);
+    }
+
+    private void setRollTarget(float rollDegrees) {
+        entityData.set(DATA_ROLL_DEGREES, Mth.wrapDegrees(rollDegrees));
+    }
+
+    private void setProjectedOrientation(Vec3 normal, float rollDegrees) {
         Vec3 normalized = normal.normalize();
         entityData.set(DATA_NORMAL_X, (float) normalized.x);
         entityData.set(DATA_NORMAL_Y, (float) normalized.y);
         entityData.set(DATA_NORMAL_Z, (float) normalized.z);
-        applyProjectedNormal(normalized);
+        applyProjectedOrientation(normalized, rollDegrees);
     }
 
-    private void applyProjectedNormal(Vec3 normal) {
-        SurfaceFrame frame = SurfaceFrame.facing(position(), normal, new Vec3(0.0, 1.0, 0.0));
+    private void applyProjectedOrientation(Vec3 normal, float rollDegrees) {
+        SurfaceFrame frame = WandProjectionVisuals.rolledFrame(
+                SurfaceFrame.facing(position(), normal, new Vec3(0.0, 1.0, 0.0)),
+                rollDegrees);
+        appliedProjectionRoll = Mth.wrapDegrees(rollDegrees);
         setSurfaceOrientation(frame.normal(), frame.axisU(), frame.axisV());
     }
 
@@ -186,7 +225,23 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         Vec3 previous = previousRenderNormal == null ? current : previousRenderNormal;
         Vec3 rendered = WandProjectionMotion.interpolateDirection(
                 previous, current, partialTick);
-        return SurfaceFrame.facing(renderCenter(partialTick), rendered, new Vec3(0.0, 1.0, 0.0));
+        float currentRoll = projectionRoll();
+        float previousRoll = previousRenderRoll == null ? currentRoll : previousRenderRoll;
+        float renderedRoll = WandProjectionMotion.interpolateRoll(
+                previousRoll, currentRoll, partialTick);
+        return WandProjectionVisuals.rolledFrame(
+                SurfaceFrame.facing(
+                        renderCenter(partialTick), rendered, new Vec3(0.0, 1.0, 0.0)),
+                renderedRoll);
+    }
+
+    /** Render-only scale; compiler geometry always remains at full size. */
+    public float renderEntranceScale(float partialTick) {
+        long spawnTick = entityData.get(DATA_SPAWN_GAME_TICK);
+        double age = spawnTick == Long.MIN_VALUE
+                ? tickCount + partialTick
+                : level().getGameTime() + partialTick - spawnTick;
+        return WandProjectionVisuals.entranceScale(age);
     }
 
     /** Exact interpolated center shared by the canvas and its client effects. */
@@ -200,9 +255,11 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
     @Override
     public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
         super.onSyncedDataUpdated(key);
-        if (DATA_NORMAL_X.equals(key) || DATA_NORMAL_Y.equals(key) || DATA_NORMAL_Z.equals(key)) {
+        if (DATA_NORMAL_X.equals(key) || DATA_NORMAL_Y.equals(key)
+                || DATA_NORMAL_Z.equals(key) || DATA_ROLL_DEGREES.equals(key)) {
             if (level().isClientSide) {
-                // All three components are sent in one metadata update. Defer
+                // All normal components and the roll target are sent as entity
+                // metadata. Defer
                 // reading them until tick so no mixed intermediate normal can
                 // reach the renderer.
                 clientNormalSyncPending = true;
@@ -241,6 +298,7 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
     public void tick() {
         if (level().isClientSide) {
             previousRenderNormal = surfaceNormal();
+            previousRenderRoll = appliedProjectionRoll;
         }
         super.tick();
         if (level().isClientSide) {
@@ -260,13 +318,18 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
                 view.scale(entityData.get(DATA_PROJECTION_OFFSET)));
         Vec3 nextCenter = WandProjectionMotion.smoothPosition(position(), targetCenter);
         Vec3 nextNormal = WandProjectionMotion.smoothDirection(surfaceNormal(), view);
-        boolean geometryChanged = position().distanceToSqr(nextCenter) > 1.0E-12
-                || surfaceNormal().distanceToSqr(nextNormal) > 1.0E-12;
+        if (!projectionRollTargetInitialized) {
+            projectionRollTarget = projectionRoll();
+            projectionRollTargetInitialized = true;
+        }
+        projectionRollTarget = WandProjectionMotion.advanceRollTarget(
+                projectionRollTarget, WandProjectionMotion.ROLL_DEGREES_PER_TICK);
+        setRollTarget(projectionRollTarget);
+        float nextRoll = WandProjectionMotion.smoothRoll(
+                projectionRoll(), projectionRollTarget);
         setProjectionView(player.getYRot() + 180.0F, player.getXRot());
-        if (!geometryChanged) return;
-
         setPos(nextCenter);
-        setProjectedNormal(nextNormal);
+        setProjectedOrientation(nextNormal, nextRoll);
         CanvasCompileService.refreshWorldGeometry(serverLevel, this);
     }
 
@@ -279,12 +342,21 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
                     getZ() + (clientLerpZ - getZ()) / divisor);
             clientLerpSteps--;
         }
-        if (!clientNormalSyncPending) return;
-        clientNormalSyncPending = false;
-        Vec3 synced = new Vec3(
-                entityData.get(DATA_NORMAL_X), entityData.get(DATA_NORMAL_Y),
-                entityData.get(DATA_NORMAL_Z));
-        if (synced.lengthSqr() > 1.0E-12) applyProjectedNormal(synced.normalize());
+        Vec3 nextNormal = surfaceNormal();
+        if (clientNormalSyncPending) {
+            clientNormalSyncPending = false;
+            Vec3 synced = new Vec3(
+                    entityData.get(DATA_NORMAL_X), entityData.get(DATA_NORMAL_Y),
+                    entityData.get(DATA_NORMAL_Z));
+            if (synced.lengthSqr() > 1.0E-12) nextNormal = synced.normalize();
+        }
+
+        float nextRoll = WandProjectionMotion.smoothRoll(
+                projectionRoll(), projectionRollTarget());
+        if (nextNormal.distanceToSqr(surfaceNormal()) > 1.0E-12
+                || Math.abs(Mth.wrapDegrees(nextRoll - projectionRoll())) > 1.0E-5F) {
+            applyProjectedOrientation(nextNormal, nextRoll);
+        }
     }
 
     @Override

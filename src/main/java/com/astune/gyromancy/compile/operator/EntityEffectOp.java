@@ -38,7 +38,7 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
     }
 
     public RuntimeHandle activateAt(OpRuntimeContext context, Vec3 origin) {
-        return ((PersistentOp) this).activate(context.at(origin));
+        return ((PersistentOp) this).activate(context.at(origin, new Vec3(0, 1, 0))); // worldY
     }
 
     protected List<EmitOp.Emission> emissions() {

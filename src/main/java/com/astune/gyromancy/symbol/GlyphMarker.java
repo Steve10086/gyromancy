@@ -16,8 +16,8 @@ import java.util.Set;
  * Marks matched glyph pixels as consumed in CanvasFace effect layers.
  *
  * <p>The glyph_id effect value is a unique glyph instance id. The symbol_id
- * effect value is the symbol registry id + 1. Flood-fill ownership is decided
- * exclusively by glyph_id through {@link ManaPixelDetector#isMarked}.
+ * effect value is the symbol registry id + 1. Flood-fill seeds are restricted
+ * by glyph_id, while traversal may encounter marked mana and collect its owner.
  */
 public final class GlyphMarker {
 

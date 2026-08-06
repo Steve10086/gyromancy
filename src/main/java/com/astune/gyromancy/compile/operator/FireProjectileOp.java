@@ -13,6 +13,7 @@ import com.astune.gyromancy.array.compile.RegisteredOp;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.entity.ball.FireballEntity;
+import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import com.astune.gyromancy.symbol.CenterSymbol;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -23,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 @RegisteredOp
-public final class FireProjectileOp extends EntityEffectOp {
+public final class FireProjectileOp extends ProjectileEntityOp {
     private static final int ELEMENT_EXCHANGE_INTERVAL = 10;
     private static final double FIRE_VOLUME_LOSS = 0.1;
     private static final double FIRE_EQUILIBRIUM = 100.0;
@@ -82,7 +83,8 @@ public final class FireProjectileOp extends EntityEffectOp {
         return new CompileResult.Success<>(new FireProjectileOp(boundary, matchedInputs, inputs));
     }
 
-    public static FireballEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
+    @Override
+    public FireballEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
         FireballEntity entity = new FireballEntity(level, pos, velocity, acceleration, size);
         entity.setPayload(defaultPayload());
         return entity;
@@ -98,36 +100,19 @@ public final class FireProjectileOp extends EntityEffectOp {
     }
 
     @Override
-    public RuntimeHandle activate(OpRuntimeContext ctx) {
-        ServerLevel level = ctx.level();
-        PositionedGlyph centerGlyph = primaryRune();
-        if (centerGlyph == null) return new RuntimeHandle(Map.of());
-        EmitResult result = new EmitResult();
-        Vec3 center = ctx.origin() != null ? ctx.origin() : CenterSymbol.glyphCenter(level, centerGlyph);
-        Vec3 normal = CenterSymbol.faceNormal(centerGlyph);
-        for (EmitOp.Emission emission : emissions()) {
-            float size = Math.max(0.1F, scale() * emission.sizeScale());
-            Vec3 pos = center.add(normal.scale(size * 2.0));
-            Vec3 acceleration = emission.hasMotion() ? new Vec3(0.0, -0.04 * 0.5, 0.0) : Vec3.ZERO;
-            FireballEntity fireball = create(level, pos, emission.velocity(), acceleration, size);
-            fireball.setPayload(payloadFor(this));
-            EntityEmitter.INSTANCE.emit(level, ID, fireball, result);
-        }
-        return result.toRuntimeHandle();
-    }
-
-    @Override
     public void deactivate(OpRuntimeContext ctx, Map<String, Object> scratchData) {
         ServerLevel level = ctx.level();
         CenterSymbol.boundEntity(level, scratchData, CenterSymbol.FIREBALL_KEY)
                 .ifPresent(entity -> entity.discard());
     }
 
-    private static List<EntityPayload> payloadFor(FireProjectileOp node) {
-        return node.payload(defaultPayload());
+    @Override
+    protected List<EntityPayload> payloadFor() {
+        return payload(defaultPayload());
     }
-
-    private PositionedGlyph primaryRune() {
+    @Override
+    public ResourceLocation getId(){return ID;}
+    protected PositionedGlyph primaryRune() {
         for (var input : matchedInputs()) {
             if (input instanceof OpInput.Rune rune && "fire".equals(rune.symbolName())) return rune.glyph();
         }

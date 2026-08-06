@@ -10,6 +10,7 @@ import com.astune.gyromancy.client.canvas.CanvasEditorKeyMappings;
 import com.astune.gyromancy.client.effect.ClientRayEffects;
 import com.astune.gyromancy.client.effect.FlipbookEffect;
 import com.astune.gyromancy.client.effect.VortexOrbitEffect;
+import com.astune.gyromancy.client.effect.WandProjectionGlowRenderer;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.client.Minecraft;
@@ -101,6 +102,9 @@ public class GyromancyClient {
 
         NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(
                 FlipbookEffect::onRenderLevelStage);
+
+        NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(
+                WandProjectionGlowRenderer::onRenderLevelStage);
 
         // ── Vortex effect tick (game-time guard inside) ──
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST,

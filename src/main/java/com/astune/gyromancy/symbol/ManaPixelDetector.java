@@ -46,9 +46,9 @@ public final class ManaPixelDetector {
     }
 
     /**
-     * Returns whether a pixel may start or participate in a new flood fill.
-     * The symbol layer is descriptive metadata and may be refreshed independently,
-     * so only glyph_id decides whether existing mana is already owned.
+     * Returns whether a pixel may start a new flood fill.
+     * Existing marked mana is traversable once a flood has started; only the
+     * seed scan uses this predicate to enforce the glyph ownership constraint.
      */
     public static boolean isUnclaimedManaPixel(CanvasFace face, int x, int y) {
         return isUnclaimedMana(

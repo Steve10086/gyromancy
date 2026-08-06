@@ -1,5 +1,6 @@
 package com.astune.gyromancy.wand;
 
+import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
@@ -58,5 +59,22 @@ class WandProjectionMotionTest {
         assertEquals(1.0,
                 WandProjectionMotion.interpolateDirection(previous, current, 0.5).length(),
                 1.0E-9);
+    }
+
+    @Test
+    void rollTargetAdvancesIndependentlyFromTheSmoothedPose() {
+        float target = WandProjectionMotion.advanceRollTarget(179.0F, 2.0F);
+        float next = WandProjectionMotion.smoothRoll(170.0F, target);
+
+        assertEquals(-179.0F, target, 1.0E-6F);
+        assertTrue(Mth.wrapDegrees(next - 170.0F) > 0.0F);
+        assertTrue(Mth.wrapDegrees(target - next) > 0.0F);
+    }
+
+    @Test
+    void renderRollInterpolationUsesTheShortestWrappedArc() {
+        float halfway = WandProjectionMotion.interpolateRoll(179.0F, -179.0F, 0.5F);
+
+        assertEquals(180.0F, Math.abs(halfway), 1.0E-6F);
     }
 }

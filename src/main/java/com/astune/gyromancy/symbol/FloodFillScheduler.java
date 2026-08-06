@@ -5,6 +5,7 @@ import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractionResult;
 import com.astune.gyromancy.symbol.FloodFillExtractor.FloodFillState;
+import com.astune.painter.api.CanvasFace;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -48,16 +49,47 @@ public final class FloodFillScheduler {
     // ═══════════════════════════════════════════════════════════════
 
     public static void submitBatch(ServerLevel level, List<PixelPos> seeds) {
-        if (seeds.isEmpty()) return;
+        submitBatch(level, seeds, List.of(), Set.of());
+    }
+
+    /**
+     * Submits normal unclaimed seeds together with empty pixels that should
+     * revalidate their surrounding mana component. Revalidation never starts
+     * from a claimed mana pixel; the extractor only uses those pixels while
+     * traversing from one of these seeds.
+     */
+    public static void submitBatch(
+            ServerLevel level,
+            List<PixelPos> seeds,
+            List<PixelPos> revalidationSeeds,
+            Set<Integer> affectedGlyphIds) {
+        submitBatch(level, seeds, revalidationSeeds, affectedGlyphIds, Map.of());
+    }
+
+    public static void submitBatch(
+            ServerLevel level,
+            List<PixelPos> seeds,
+            List<PixelPos> revalidationSeeds,
+            Set<Integer> affectedGlyphIds,
+            Map<PixelPos, CanvasFace> revalidationFaces) {
+        if (seeds.isEmpty() && revalidationSeeds.isEmpty()) return;
+
+        List<PixelPos> batchSeeds = new ArrayList<>(seeds.size() + revalidationSeeds.size());
+        batchSeeds.addAll(seeds);
+        batchSeeds.addAll(revalidationSeeds);
 
         int id = nextStateId++;
-        FloodFillState state = new FloodFillState(id, seeds.getFirst());
-        state.initialSeeds.addAll(seeds);
+        FloodFillState state = new FloodFillState(id, batchSeeds.getFirst());
+        state.initialSeeds.addAll(batchSeeds);
+        state.revalidationSeeds.addAll(revalidationSeeds);
+        state.revalidationFaces.putAll(revalidationFaces);
+        state.affectedGlyphIds.addAll(affectedGlyphIds);
 
         allSeeds.put(id, state);
         pendingTasks.add(new PendingTask(level, state));
 
-        Gyromancy.LOGGER.debug("[FloodFillScheduler] Batch #{}: {} seeds", id, seeds.size());
+        Gyromancy.LOGGER.debug("[FloodFillScheduler] Batch #{}: {} seed(s), {} revalidation trigger(s)",
+                id, seeds.size(), revalidationSeeds.size());
     }
 
     public static void onGlyphExtracted(BiConsumer<ServerLevel, ExtractedGlyph> callback) {
