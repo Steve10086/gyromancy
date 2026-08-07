@@ -119,9 +119,8 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool {
                 editorSizeMultiplier,
                 (x, y, color, effect) -> preview[y * rasterWidth + x] =
                         editorPreviewColor(color, effect, editorErasePreview));
-        context.renderToolPreview(
+        context.renderPreview(
                 graphics,
-                "stamp",
                 preview,
                 canvasLeft,
                 canvasTop,
@@ -235,16 +234,6 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool {
                                    Player player) {
         editorResizing = false;
         if (context.isToolActionActive()) context.finishToolAction();
-    }
-
-    @Override
-    public double editorRotationDegrees() {
-        return editorRotationDegrees;
-    }
-
-    @Override
-    public double editorSizeMultiplier() {
-        return editorSizeMultiplier;
     }
 
     private void applyEditorStamp(EditorContext context,

@@ -32,7 +32,7 @@ public interface CanvasPenTool extends CanvasEditorTool {
         if (stroke == null) return true;
 
         context.beginHistoryAction();
-        context.beginPenStroke(stroke, button);
+        context.beginToolAction(button);
         paintLine(context, stack, player, mouseX, mouseY, mouseX, mouseY, button);
         context.updateChanged();
         context.updateActionButtons();

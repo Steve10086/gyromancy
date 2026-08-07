@@ -2,6 +2,7 @@ package com.astune.gyromancy.item;
 
 import com.astune.gyromancy.api.canvas.CanvasPenTool;
 import com.astune.gyromancy.api.canvas.CanvasEditorTool.EditorContext;
+import com.astune.gyromancy.network.CompassRadiusPacket;
 import com.astune.gyromancy.registry.ModDataComponents;
 import com.astune.painter.api.BlendMode;
 import com.astune.painter.api.CanvasFace;
@@ -22,6 +23,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -199,9 +201,8 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
                 }
             }
         }
-        context.renderToolPreview(
+        context.renderPreview(
                 graphics,
-                "compass",
                 preview,
                 canvasLeft,
                 canvasTop,
@@ -288,7 +289,13 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
         }
         double scroll = scrollY != 0.0 ? scrollY : -scrollX;
         if (scroll == 0.0 || !adjustRadius(stack, scroll)) return false;
-        context.syncCompassRadius(stack);
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.gui != null) {
+            minecraft.gui.setOverlayMessage(stack.getHoverName(), false);
+        }
+        PacketDistributor.sendToServer(new CompassRadiusPacket(
+                player.getInventory().selected,
+                getRadius(stack)));
         updateEditorPointForRadius(context, stack);
         return true;
     }

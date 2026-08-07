@@ -2,11 +2,7 @@ package com.astune.gyromancy.client.canvas;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.canvas.CanvasEditorTool;
-import com.astune.gyromancy.api.canvas.CanvasPenTool;
-import com.astune.gyromancy.api.canvas.CanvasStampTool;
 import com.astune.gyromancy.canvas.CanvasDocument;
-import com.astune.gyromancy.item.CompassItem;
-import com.astune.gyromancy.network.CompassRadiusPacket;
 import com.astune.gyromancy.network.SubmitCanvasEditPacket;
 import com.astune.gyromancy.network.SubmitCanvasInventoryPacket;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -61,8 +57,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private final CanvasViewState viewState = new CanvasViewState();
     private final CanvasHotbarScroll hotbarScroll = new CanvasHotbarScroll();
     private CanvasDynamicTexture canvasTexture;
-    private CanvasDynamicTexture stampPreviewTexture;
-    private CanvasDynamicTexture compassPreviewTexture;
+    private CanvasDynamicTexture previewTexture;
     private CanvasRunePreview runePreview = CanvasRunePreview.empty();
     private CompletableFuture<RunePreviewTaskResult> runePreviewTask;
     private long runePreviewGeneration;
@@ -286,18 +281,6 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                     0xFFE8E8E8);
             secondaryInfoY += 11;
         }
-        CanvasEditorTool selectedTool = selectedEditorTool();
-        if (selectedTool instanceof CanvasStampTool stampTool) {
-            graphics.drawString(
-                    font,
-                    Component.translatable(
-                            "screen.gyromancy.canvas.stamp_transform",
-                            Math.round(stampTool.editorRotationDegrees()),
-                            Math.round(stampTool.editorSizeMultiplier() * 100.0)),
-                    viewportX - leftPos,
-                    secondaryInfoY - topPos,
-                    0xFFD7C79A);
-        }
     }
 
     private void renderCanvas(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -347,40 +330,22 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         graphics.disableScissor();
     }
 
-    private void ensureStampPreviewTexture(int width,
-                                           int height,
-                                           int[] preview) {
-        if (stampPreviewTexture == null
-                || stampPreviewTexture.width() != width
-                || stampPreviewTexture.height() != height) {
-            closeStampPreviewTexture();
-            stampPreviewTexture = CanvasDynamicTexture.createOverlay(
+    private void ensurePreviewTexture(int width,
+                                      int height,
+                                      int[] preview) {
+        if (previewTexture == null
+                || previewTexture.width() != width
+                || previewTexture.height() != height) {
+            closePreviewTexture();
+            previewTexture = CanvasDynamicTexture.createOverlay(
                     "editor_preview/" + entityId,
-                    width,
+                     width,
                     height,
                     preview,
                     false);
             return;
         }
-        stampPreviewTexture.replacePixels(preview);
-    }
-
-    private void ensureCompassPreviewTexture(int width,
-                                             int height,
-                                             int[] preview) {
-        if (compassPreviewTexture == null
-                || compassPreviewTexture.width() != width
-                || compassPreviewTexture.height() != height) {
-            closeCompassPreviewTexture();
-            compassPreviewTexture = CanvasDynamicTexture.createOverlay(
-                    "editor_compass_preview/" + entityId,
-                    width,
-                    height,
-                    preview,
-                    false);
-            return;
-        }
-        compassPreviewTexture.replacePixels(preview);
+        previewTexture.replacePixels(preview);
     }
 
     private int[] canvasPixelAt(double mouseX,
@@ -744,8 +709,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         if (canvasTexture != null) {
             canvasTexture.close();
         }
-        closeStampPreviewTexture();
-        closeCompassPreviewTexture();
+        closePreviewTexture();
         canvasTexture = CanvasDynamicTexture.create(
                 "editor/" + entityId,
                 scale,
@@ -812,17 +776,10 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private record RunePreviewTaskResult(
             long generation, CanvasRunePreview preview) {}
 
-    private void closeStampPreviewTexture() {
-        if (stampPreviewTexture != null) {
-            stampPreviewTexture.close();
-            stampPreviewTexture = null;
-        }
-    }
-
-    private void closeCompassPreviewTexture() {
-        if (compassPreviewTexture != null) {
-            compassPreviewTexture.close();
-            compassPreviewTexture = null;
+    private void closePreviewTexture() {
+        if (previewTexture != null) {
+            previewTexture.close();
+            previewTexture = null;
         }
     }
 
@@ -920,11 +877,6 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     }
 
     @Override
-    public void beginPenStroke(CanvasPenTool.Stroke stroke, int button) {
-        beginToolAction(button);
-    }
-
-    @Override
     public void writePixel(int x, int y, int color, int effect) {
         if (x < 0 || x >= rasterWidth() || y < 0 || y >= rasterHeight()) return;
         int index = y * rasterWidth() + x;
@@ -946,26 +898,16 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     }
 
     @Override
-    public void renderToolPreview(GuiGraphics graphics,
-                                  String key,
-                                  int[] pixels,
-                                  int canvasLeft,
-                                  int canvasTop,
-                                  int canvasWidth,
-                                  int canvasHeight) {
-        CanvasDynamicTexture texture;
-        if ("stamp".equals(key)) {
-            ensureStampPreviewTexture(rasterWidth(), rasterHeight(), pixels);
-            texture = stampPreviewTexture;
-        } else if ("compass".equals(key)) {
-            ensureCompassPreviewTexture(rasterWidth(), rasterHeight(), pixels);
-            texture = compassPreviewTexture;
-        } else {
-            return;
-        }
-        texture.uploadIfDirty();
+    public void renderPreview(GuiGraphics graphics,
+                              int[] pixels,
+                              int canvasLeft,
+                              int canvasTop,
+                              int canvasWidth,
+                              int canvasHeight) {
+        ensurePreviewTexture(rasterWidth(), rasterHeight(), pixels);
+        previewTexture.uploadIfDirty();
         graphics.blit(
-                texture.location(),
+                previewTexture.location(),
                 canvasLeft,
                 canvasTop,
                 canvasWidth,
@@ -1025,16 +967,6 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                     minecraft.player.getMainHandItem(),
                     minecraft.player);
         }
-    }
-
-    @Override
-    public void syncCompassRadius(ItemStack stack) {
-        if (minecraft == null || minecraft.player == null) return;
-        minecraft.gui.setOverlayMessage(stack.getHoverName(), false);
-        PacketDistributor.sendToServer(new CompassRadiusPacket(
-                minecraft.player.getInventory().selected,
-                CompassItem.getRadius(stack)));
-        hotbarScroll.reset();
     }
 
     private CanvasEditorTool selectedEditorTool() {
@@ -1098,8 +1030,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
             canvasTexture.close();
             canvasTexture = null;
         }
-        closeStampPreviewTexture();
-        closeCompassPreviewTexture();
+        closePreviewTexture();
         super.removed();
     }
 

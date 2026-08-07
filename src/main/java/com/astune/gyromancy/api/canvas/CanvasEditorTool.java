@@ -187,8 +187,6 @@ public interface CanvasEditorTool {
 
         void finishToolAction();
 
-        void beginPenStroke(CanvasPenTool.Stroke stroke, int button);
-
         void writePixel(int x, int y, int color, int effect);
 
         void visitLine(int startX,
@@ -197,13 +195,12 @@ public interface CanvasEditorTool {
                        int endY,
                        PixelVisitor visitor);
 
-        void renderToolPreview(GuiGraphics graphics,
-                               String key,
-                               int[] pixels,
-                               int canvasLeft,
-                               int canvasTop,
-                               int canvasWidth,
-                               int canvasHeight);
+        void renderPreview(GuiGraphics graphics,
+                           int[] pixels,
+                           int canvasLeft,
+                           int canvasTop,
+                           int canvasWidth,
+                           int canvasHeight);
 
         boolean isViewModifierActive();
 
@@ -224,8 +221,6 @@ public interface CanvasEditorTool {
         void updateActionButtons();
 
         void invalidateRunePreview();
-
-        void syncCompassRadius(ItemStack stack);
 
         @FunctionalInterface
         interface PixelVisitor {
