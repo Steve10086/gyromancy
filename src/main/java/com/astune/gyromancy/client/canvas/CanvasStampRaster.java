@@ -3,10 +3,10 @@ package com.astune.gyromancy.client.canvas;
 import com.astune.gyromancy.canvas.CanvasDocument;
 
 /** Pure coordinate conversion for placing stamp documents in an editor raster. */
-final class CanvasStampRaster {
+public final class CanvasStampRaster {
     private CanvasStampRaster() {}
 
-    static void visit(CanvasDocument stamp,
+    public static void visit(CanvasDocument stamp,
                       int targetPhysicalWidth,
                       int targetPhysicalHeight,
                       int targetRasterWidth,
@@ -20,7 +20,7 @@ final class CanvasStampRaster {
                 centerX, centerY, 0.0, 1.0, visitor);
     }
 
-    static void visit(CanvasDocument stamp,
+    public static void visit(CanvasDocument stamp,
                       int targetPhysicalWidth,
                       int targetPhysicalHeight,
                       int targetRasterWidth,
@@ -86,7 +86,7 @@ final class CanvasStampRaster {
     }
 
     @FunctionalInterface
-    interface PixelVisitor {
+    public interface PixelVisitor {
         void visit(int x, int y, int color, int effect);
     }
 }

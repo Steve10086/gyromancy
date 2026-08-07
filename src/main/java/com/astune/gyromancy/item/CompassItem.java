@@ -1,6 +1,7 @@
 package com.astune.gyromancy.item;
 
 import com.astune.gyromancy.api.canvas.CanvasPenTool;
+import com.astune.gyromancy.api.canvas.CanvasEditorTool.EditorContext;
 import com.astune.gyromancy.registry.ModDataComponents;
 import com.astune.painter.api.BlendMode;
 import com.astune.painter.api.CanvasFace;
@@ -9,6 +10,7 @@ import com.astune.painter.api.PaintPattern;
 import com.astune.painter.api.PaintProviders;
 import com.astune.painter.api.PixelProvider;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -54,6 +56,15 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
     private static final double EPSILON = 1.0E-6;
     private static final double FACE_EPSILON = 1.0E-5;
     private static final double TWO_PI = Math.PI * 2.0;
+
+    private boolean editorStrokeActive;
+    private int editorStrokeButton = -1;
+    private double editorCenterMouseX;
+    private double editorCenterMouseY;
+    private double editorLastAngle;
+    private double editorLastPointX;
+    private double editorLastPointY;
+    private boolean editorLastPointValid;
 
     @Nullable
     private static DrawingState active;
@@ -144,6 +155,262 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
     public Optional<CanvasPenTool.Stroke> canvasStroke(ItemStack stack, Player player) {
         return Optional.of(new CanvasPenTool.Stroke(DEFAULT_CANVAS_COLOR, DEFAULT_CANVAS_EFFECT));
     }
+
+    @Override
+    public void renderEditorPreview(EditorContext context,
+                                    ItemStack stack,
+                                    Player player,
+                                    GuiGraphics graphics,
+                                    double mouseX,
+                                    double mouseY,
+                                    int canvasLeft,
+                                    int canvasTop,
+                                    int canvasWidth,
+                                    int canvasHeight) {
+        if (!editorStrokeActive && !context.isOverCanvas(mouseX, mouseY)) return;
+        int rasterWidth = context.rasterWidth();
+        int rasterHeight = context.rasterHeight();
+        double centerMouseX = editorStrokeActive ? editorCenterMouseX : mouseX;
+        double centerMouseY = editorStrokeActive ? editorCenterMouseY : mouseY;
+        int[] center = context.canvasPixelAt(centerMouseX, centerMouseY);
+        double radiusPixels = getCanvasRadius(stack)
+                * rasterWidth / (double) context.physicalWidth();
+        double lineThickness = 1.0;
+        int[] preview = new int[rasterWidth * rasterHeight];
+        int minX = Math.max(0,
+                (int) Math.floor(center[0] - radiusPixels - lineThickness));
+        int maxX = Math.min(rasterWidth,
+                (int) Math.ceil(center[0] + radiusPixels + lineThickness + 1.0));
+        int minY = Math.max(0,
+                (int) Math.floor(center[1] - radiusPixels - lineThickness));
+        int maxY = Math.min(rasterHeight,
+                (int) Math.ceil(center[1] + radiusPixels + lineThickness + 1.0));
+        int previewColor = editorStrokeActive && editorStrokeButton == 1
+                ? 0x80FF5555
+                : 0x80F6D365;
+        double thickness = lineThickness * 0.5;
+        for (int y = minY; y < maxY; y++) {
+            double deltaY = y + 0.5 - center[1];
+            for (int x = minX; x < maxX; x++) {
+                double deltaX = x + 0.5 - center[0];
+                double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                if (Math.abs(distance - radiusPixels) <= thickness) {
+                    preview[y * rasterWidth + x] = previewColor;
+                }
+            }
+        }
+        context.renderToolPreview(
+                graphics,
+                "compass",
+                preview,
+                canvasLeft,
+                canvasTop,
+                canvasWidth,
+                canvasHeight);
+    }
+
+    @Override
+    public boolean editorMouseClicked(EditorContext context,
+                                      ItemStack stack,
+                                      Player player,
+                                      double mouseX,
+                                      double mouseY,
+                                      int button) {
+        if (!context.carriedItemEmpty()
+                || !context.isOverCanvas(mouseX, mouseY)
+                || (button != 0 && button != 1)) {
+            return false;
+        }
+        CanvasPenTool.Stroke stroke = canvasStroke(stack, player).orElse(null);
+        if (stroke == null) return true;
+
+        context.beginHistoryAction();
+        context.beginToolAction(button);
+        editorStrokeActive = true;
+        editorStrokeButton = button;
+        int[] center = context.canvasPixelAt(mouseX, mouseY);
+        editorCenterMouseX = context.displayX()
+                + center[0] * context.displayWidth() / context.rasterWidth();
+        editorCenterMouseY = context.displayY()
+                + center[1] * context.displayHeight() / context.rasterHeight();
+        editorLastAngle = 0.0;
+        editorLastPointValid = false;
+        paintEditorAngle(context, stack, player, 0.0, button);
+        return true;
+    }
+
+    @Override
+    public boolean editorMouseDragged(EditorContext context,
+                                      ItemStack stack,
+                                      Player player,
+                                      double mouseX,
+                                      double mouseY,
+                                      int button,
+                                      double dragX,
+                                      double dragY) {
+        if (!editorStrokeActive
+                || !context.isToolActionActive()
+                || button != editorStrokeButton) {
+            return false;
+        }
+        double deltaX = mouseX - editorCenterMouseX;
+        double deltaY = mouseY - editorCenterMouseY;
+        if (deltaX * deltaX + deltaY * deltaY < EPSILON) return true;
+        double angle = unwrapEditorAngle(
+                Math.atan2(deltaY, deltaX), editorLastAngle);
+        paintEditorAngle(context, stack, player, angle, button);
+        return true;
+    }
+
+    @Override
+    public boolean editorMouseReleased(EditorContext context,
+                                       ItemStack stack,
+                                       Player player,
+                                       double mouseX,
+                                       double mouseY,
+                                       int button) {
+        if (!editorStrokeActive || (button != 0 && button != 1)) return false;
+        finishEditorAction(context, stack, player);
+        return true;
+    }
+
+    @Override
+    public boolean editorMouseScrolled(EditorContext context,
+                                       ItemStack stack,
+                                       Player player,
+                                       double mouseX,
+                                       double mouseY,
+                                       double scrollX,
+                                       double scrollY) {
+        if (!context.isOverViewport(mouseX, mouseY)
+                || !context.isViewModifierActive()) {
+            return false;
+        }
+        double scroll = scrollY != 0.0 ? scrollY : -scrollX;
+        if (scroll == 0.0 || !adjustRadius(stack, scroll)) return false;
+        context.syncCompassRadius(stack);
+        updateEditorPointForRadius(context, stack);
+        return true;
+    }
+
+    @Override
+    public void editorViewChanged(EditorContext context,
+                                  ItemStack stack,
+                                  Player player) {
+        updateEditorPointForRadius(context, stack);
+    }
+
+    @Override
+    public void finishEditorAction(EditorContext context,
+                                   ItemStack stack,
+                                   Player player) {
+        editorStrokeActive = false;
+        editorStrokeButton = -1;
+        editorLastPointValid = false;
+        if (context.isToolActionActive()) context.finishToolAction();
+    }
+
+    private void paintEditorAngle(EditorContext context,
+                                  ItemStack stack,
+                                  Player player,
+                                  double angle,
+                                  int button) {
+        double radiusPixels = getCanvasRadius(stack)
+                * context.displayWidth() / context.physicalWidth();
+        double angleDelta = angle - editorLastAngle;
+        int rasterWidth = context.rasterWidth();
+        int rasterHeight = context.rasterHeight();
+        double rasterRadius = getCanvasRadius(stack)
+                * rasterWidth / (double) context.physicalWidth();
+        double samplingRadius = Math.min(
+                Math.max(1.0, rasterRadius),
+                Math.hypot(rasterWidth, rasterHeight));
+        int sampleCount = Math.max(1, (int) Math.ceil(
+                Math.abs(angleDelta) * samplingRadius * 2.0));
+        for (int sample = 1; sample <= sampleCount; sample++) {
+            double sampleAngle = editorLastAngle
+                    + angleDelta * sample / sampleCount;
+            paintEditorSample(
+                    context,
+                    stack,
+                    player,
+                    sampleAngle,
+                    button,
+                    radiusPixels,
+                    rasterWidth,
+                    rasterHeight);
+        }
+        editorLastAngle = angle;
+        context.updateChanged();
+        context.updateActionButtons();
+    }
+
+    private void paintEditorSample(EditorContext context,
+                                   ItemStack stack,
+                                   Player player,
+                                   double angle,
+                                   int button,
+                                   double radiusPixels,
+                                   int rasterWidth,
+                                   int rasterHeight) {
+        double pointX = editorCenterMouseX + Math.cos(angle) * radiusPixels;
+        double pointY = editorCenterMouseY + Math.sin(angle) * radiusPixels;
+        boolean pointValid = context.isOverCanvas(pointX, pointY);
+        if (pointValid) {
+            int[] point = context.canvasPixelAt(pointX, pointY);
+            if (editorLastPointValid) {
+                int[] previous = context.canvasPixelAt(
+                        editorLastPointX, editorLastPointY);
+                context.visitLine(
+                        previous[0],
+                        previous[1],
+                        point[0],
+                        point[1],
+                        (x, y) -> writeEditorPixel(context, stack, player, x, y, button));
+            } else {
+                writeEditorPixel(context, stack, player, point[0], point[1], button);
+            }
+        }
+        editorLastPointX = pointX;
+        editorLastPointY = pointY;
+        editorLastPointValid = pointValid;
+    }
+
+    private void writeEditorPixel(EditorContext context,
+                                  ItemStack stack,
+                                  Player player,
+                                  int x,
+                                  int y,
+                                  int button) {
+        CanvasPenTool.Stroke stroke = canvasStroke(
+                stack, player).orElse(null);
+        if (stroke == null) return;
+        context.writePixel(
+                x,
+                y,
+                button == 0 ? stroke.color() : 0,
+                button == 0 ? stroke.effect() : 0);
+    }
+
+    private void updateEditorPointForRadius(EditorContext context,
+                                             ItemStack stack) {
+        if (!editorStrokeActive) return;
+        double radiusPixels = getCanvasRadius(stack)
+                * context.displayWidth() / context.physicalWidth();
+        editorLastPointX = editorCenterMouseX
+                + Math.cos(editorLastAngle) * radiusPixels;
+        editorLastPointY = editorCenterMouseY
+                + Math.sin(editorLastAngle) * radiusPixels;
+        editorLastPointValid = context.isOverCanvas(
+                editorLastPointX, editorLastPointY);
+    }
+
+    private static double unwrapEditorAngle(double angle, double previous) {
+        while (angle - previous > Math.PI) angle -= TWO_PI;
+        while (angle - previous < -Math.PI) angle += TWO_PI;
+        return angle;
+    }
+
 
     @Nullable
     @Override

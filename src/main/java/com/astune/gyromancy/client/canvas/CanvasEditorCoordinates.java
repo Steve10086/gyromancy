@@ -11,7 +11,7 @@ public final class CanvasEditorCoordinates {
     private CanvasEditorCoordinates() {}
 
     public static int matrixColumnForScreenColumn(int screenColumn, int width) {
-        return screenColumn;
+        return width - 1 - screenColumn;
     }
 
     public static int screenColumnForMatrixColumn(int matrixColumn, int width) {

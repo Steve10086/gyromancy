@@ -9,6 +9,14 @@ import java.util.Optional;
 /** An editor tool which places a complete raster pattern in one action. */
 public interface CanvasStampTool extends CanvasEditorTool {
 
+    default double editorRotationDegrees() {
+        return 0.0;
+    }
+
+    default double editorSizeMultiplier() {
+        return 1.0;
+    }
+
     /**
      * Resolves the pattern supplied by this particular stack.
      *

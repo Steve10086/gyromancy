@@ -1,12 +1,15 @@
 package com.astune.gyromancy.item;
 
 import com.astune.gyromancy.api.canvas.CanvasStampTool;
+import com.astune.gyromancy.api.canvas.CanvasEditorTool.EditorContext;
 import com.astune.gyromancy.api.canvas.StampCanvasMaterial;
 import com.astune.gyromancy.canvas.CanvasDocument;
+import com.astune.gyromancy.client.canvas.CanvasStampRaster;
 import com.astune.gyromancy.network.StampEditorSnapshotPacket;
 import com.astune.gyromancy.registry.ModDataComponents;
 import com.astune.painter.api.*;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -21,6 +24,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import java.util.Map;
@@ -29,6 +33,18 @@ import java.util.Optional;
 public class StampItem extends Item implements IPaintProvider, CanvasStampTool {
     private static final String MANA_KEY = "gyromancy:mana";
     private static final int MANA_VALUE = 10;
+    private static final double MIN_EDITOR_SIZE = 0.125;
+    private static final double MAX_EDITOR_SIZE = 8.0;
+    private static final double EDITOR_RESIZE_PIXELS_PER_DOUBLING = 96.0;
+
+    private boolean editorRotateKeyHeld;
+    private boolean editorResizeModifierHeld;
+    private boolean editorResizing;
+    private boolean editorErasePreview;
+    private double editorRotationDegrees;
+    private double editorSizeMultiplier = 1.0;
+    private double editorResizeAnchorMouseX;
+    private double editorResizeAnchorSize;
 
     public StampItem() {
         super(new Properties()
@@ -72,6 +88,220 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool {
         }
         return Optional.empty();
     }
+
+    @Override
+    public void renderEditorPreview(EditorContext context,
+                                    ItemStack stack,
+                                    Player player,
+                                    GuiGraphics graphics,
+                                    double mouseX,
+                                    double mouseY,
+                                    int canvasLeft,
+                                    int canvasTop,
+                                    int canvasWidth,
+                                    int canvasHeight) {
+        CanvasDocument stamp = canvasStamp(stack, player).orElse(null);
+        if (stamp == null || !context.isOverCanvas(mouseX, mouseY)) return;
+
+        int rasterWidth = context.rasterWidth();
+        int rasterHeight = context.rasterHeight();
+        int[] center = context.canvasPixelAt(mouseX, mouseY);
+        int[] preview = new int[rasterWidth * rasterHeight];
+        CanvasStampRaster.visit(
+                stamp,
+                context.physicalWidth(),
+                context.physicalHeight(),
+                rasterWidth,
+                rasterHeight,
+                center[0],
+                center[1],
+                editorRotationDegrees,
+                editorSizeMultiplier,
+                (x, y, color, effect) -> preview[y * rasterWidth + x] =
+                        editorPreviewColor(color, effect, editorErasePreview));
+        context.renderToolPreview(
+                graphics,
+                "stamp",
+                preview,
+                canvasLeft,
+                canvasTop,
+                canvasWidth,
+                canvasHeight);
+    }
+
+    @Override
+    public boolean editorMouseClicked(EditorContext context,
+                                      ItemStack stack,
+                                      Player player,
+                                      double mouseX,
+                                      double mouseY,
+                                      int button) {
+        if (!context.carriedItemEmpty()
+                || !context.isOverCanvas(mouseX, mouseY)
+                || (button != 0 && button != 1)) {
+            return false;
+        }
+        CanvasDocument stamp = canvasStamp(stack, player).orElse(null);
+        if (button == 0 && editorResizeModifierHeld && stamp != null) {
+            context.beginToolAction(0);
+            editorResizing = true;
+            editorResizeAnchorMouseX = mouseX;
+            editorResizeAnchorSize = editorSizeMultiplier;
+            return true;
+        }
+        if (stamp == null) return true;
+
+        editorErasePreview = button == 1;
+        applyEditorStamp(context, mouseX, mouseY, button, stamp);
+        return true;
+    }
+
+    @Override
+    public boolean editorMouseDragged(EditorContext context,
+                                      ItemStack stack,
+                                      Player player,
+                                      double mouseX,
+                                      double mouseY,
+                                      int button,
+                                      double dragX,
+                                      double dragY) {
+        if (!editorResizing || button != 0) return false;
+        updateEditorSize(mouseX);
+        return true;
+    }
+
+    @Override
+    public boolean editorMouseReleased(EditorContext context,
+                                       ItemStack stack,
+                                       Player player,
+                                       double mouseX,
+                                       double mouseY,
+                                       int button) {
+        if (editorResizing && button == 0) {
+            updateEditorSize(mouseX);
+            editorResizing = false;
+            context.finishToolAction();
+            return true;
+        }
+        if (button == 1) editorErasePreview = false;
+        return false;
+    }
+
+    @Override
+    public boolean editorKeyPressed(EditorContext context,
+                                    ItemStack stack,
+                                    Player player,
+                                    int keyCode,
+                                    int scanCode,
+                                    int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_R) {
+            if (!editorRotateKeyHeld) {
+                double direction = (modifiers & GLFW.GLFW_MOD_SHIFT) != 0
+                        ? -45.0 : 45.0;
+                editorRotationDegrees = normalizeDegrees(
+                        editorRotationDegrees + direction);
+                editorRotateKeyHeld = true;
+            }
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_X) {
+            editorResizeModifierHeld = true;
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean editorKeyReleased(EditorContext context,
+                                     ItemStack stack,
+                                     Player player,
+                                     int keyCode,
+                                     int scanCode,
+                                     int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_R && editorRotateKeyHeld) {
+            editorRotateKeyHeld = false;
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_X && editorResizeModifierHeld) {
+            editorResizeModifierHeld = false;
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void finishEditorAction(EditorContext context,
+                                   ItemStack stack,
+                                   Player player) {
+        editorResizing = false;
+        if (context.isToolActionActive()) context.finishToolAction();
+    }
+
+    @Override
+    public double editorRotationDegrees() {
+        return editorRotationDegrees;
+    }
+
+    @Override
+    public double editorSizeMultiplier() {
+        return editorSizeMultiplier;
+    }
+
+    private void applyEditorStamp(EditorContext context,
+                                  double mouseX,
+                                  double mouseY,
+                                  int button,
+                                  CanvasDocument stamp) {
+        int[] center = context.canvasPixelAt(mouseX, mouseY);
+        context.beginHistoryAction();
+        CanvasStampRaster.visit(
+                stamp,
+                context.physicalWidth(),
+                context.physicalHeight(),
+                context.rasterWidth(),
+                context.rasterHeight(),
+                center[0],
+                center[1],
+                editorRotationDegrees,
+                editorSizeMultiplier,
+                (x, y, color, effect) -> context.writePixel(
+                        x,
+                        y,
+                        button == 0 ? color : 0,
+                        button == 0 ? effect : 0));
+        context.finishToolAction();
+        context.updateChanged();
+        context.updateActionButtons();
+    }
+
+    private void updateEditorSize(double mouseX) {
+        double exponent = (mouseX - editorResizeAnchorMouseX)
+                / EDITOR_RESIZE_PIXELS_PER_DOUBLING;
+        editorSizeMultiplier = Math.max(
+                MIN_EDITOR_SIZE,
+                Math.min(
+                        MAX_EDITOR_SIZE,
+                        editorResizeAnchorSize * Math.pow(2.0, exponent)));
+    }
+
+    private static int editorPreviewColor(int color,
+                                          int effect,
+                                          boolean erasing) {
+        int sourceAlpha = color >>> 24;
+        if (sourceAlpha == 0 && effect != 0) sourceAlpha = 0xFF;
+        int alpha = Math.max(40, Math.min(128,
+                (int) Math.round(sourceAlpha * 0.45)));
+        int rgb = erasing
+                ? 0x00FF5555
+                : (sourceAlpha == 0 ? 0x00FFFFFF : color & 0x00FFFFFF);
+        return alpha << 24 | rgb;
+    }
+
+    private static double normalizeDegrees(double degrees) {
+        double normalized = degrees % 360.0;
+        return normalized < 0.0 ? normalized + 360.0 : normalized;
+    }
+
 
     @Override
     public boolean shouldPaint(Player player, BlockHitResult result){

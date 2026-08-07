@@ -1,6 +1,7 @@
 package com.astune.gyromancy.client.canvas;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.canvas.CanvasEditorTool;
 import com.astune.gyromancy.api.canvas.CanvasPenTool;
 import com.astune.gyromancy.api.canvas.CanvasStampTool;
 import com.astune.gyromancy.canvas.CanvasDocument;
@@ -21,7 +22,6 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,7 +30,8 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 /** Simple pixel editor for an entity-backed canvas. */
-public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEditorMenu> {
+public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEditorMenu>
+        implements CanvasEditorTool.EditorContext {
     private static final int MARGIN = 12;
     private static final int TOP_MARGIN = 24;
     private static final int SIDE_GAP = 8;
@@ -42,12 +43,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private static final int EXPANDED_INVENTORY_HEIGHT =
             HOTBAR_HEIGHT * EXPANDED_INVENTORY_ROWS;
     private static final int INVENTORY_TOGGLE_SIZE = 6;
-    private static final double MIN_STAMP_SIZE = 0.125;
-    private static final double MAX_STAMP_SIZE = 8.0;
-    private static final double STAMP_RESIZE_PIXELS_PER_DOUBLING = 96.0;
     private static final long RUNE_PREVIEW_INTERVAL_NANOS = 75_000_000L;
-    private static final int COMPASS_PREVIEW_COLOR = 0x80F6D365;
-    private static final int COMPASS_ERASE_PREVIEW_COLOR = 0x80FF5555;
     private static final ResourceLocation HOTBAR_SPRITE =
             ResourceLocation.withDefaultNamespace("hud/hotbar");
     private static final ResourceLocation HOTBAR_SELECTION_SPRITE =
@@ -76,29 +72,11 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private int[] colors;
     private int[] effects;
     private boolean changed;
-    private boolean strokeActive;
-    private CanvasPenTool.Stroke activeStroke;
-    private int strokeButton = -1;
-    private int lastStrokeX = -1;
-    private int lastStrokeY = -1;
-    private boolean compassStrokeActive;
-    private int compassStrokeButton = -1;
-    private double compassCenterMouseX;
-    private double compassCenterMouseY;
-    private double compassLastAngle;
-    private double compassLastPointX;
-    private double compassLastPointY;
-    private boolean compassLastPointValid;
-    private boolean panning;
+    private CanvasEditorTool activeEditorTool;
+    private boolean toolActionActive;
+    private int toolActionButton = -1;
     private boolean viewModifierHeld;
-    private boolean stampRotateKeyHeld;
-    private boolean stampResizeModifierHeld;
-    private boolean stampResizing;
-    private boolean stampErasePreview;
-    private double stampRotationDegrees;
-    private double stampSizeMultiplier = 1.0;
-    private double stampResizeAnchorMouseX;
-    private double stampResizeAnchorSize;
+    private boolean panning;
     private boolean inventoryExpanded;
     private boolean sessionSubmitted;
     private int panelX;
@@ -308,13 +286,14 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                     0xFFE8E8E8);
             secondaryInfoY += 11;
         }
-        if (hasSelectedStampTool()) {
+        CanvasEditorTool selectedTool = selectedEditorTool();
+        if (selectedTool instanceof CanvasStampTool stampTool) {
             graphics.drawString(
                     font,
                     Component.translatable(
                             "screen.gyromancy.canvas.stamp_transform",
-                            Math.round(stampRotationDegrees),
-                            Math.round(stampSizeMultiplier * 100.0)),
+                            Math.round(stampTool.editorRotationDegrees()),
+                            Math.round(stampTool.editorSizeMultiplier() * 100.0)),
                     viewportX - leftPos,
                     secondaryInfoY - topPos,
                     0xFFD7C79A);
@@ -350,61 +329,22 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 canvasTexture.height());
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
-        renderStampPreview(
-                graphics, mouseX, mouseY,
-                canvasLeft, canvasTop,
-                canvasRight - canvasLeft,
-                canvasBottom - canvasTop);
-        renderCompassPreview(
-                graphics, mouseX, mouseY,
-                canvasLeft, canvasTop,
-                canvasRight - canvasLeft,
-                canvasBottom - canvasTop);
+        CanvasEditorTool tool = selectedEditorTool();
+        if (tool != null && minecraft != null && minecraft.player != null) {
+            tool.renderEditorPreview(
+                    this,
+                    minecraft.player.getMainHandItem(),
+                    minecraft.player,
+                    graphics,
+                    mouseX,
+                    mouseY,
+                    canvasLeft,
+                    canvasTop,
+                    canvasRight - canvasLeft,
+                    canvasBottom - canvasTop);
+        }
         RenderSystem.disableBlend();
         graphics.disableScissor();
-    }
-
-    private void renderStampPreview(GuiGraphics graphics,
-                                    double mouseX,
-                                    double mouseY,
-                                    int canvasLeft,
-                                    int canvasTop,
-                                    int canvasWidth,
-                                    int canvasHeight) {
-        CanvasDocument stamp = selectedStamp();
-        if (stamp == null || !isOverCanvas(mouseX, mouseY)) return;
-
-        int rasterWidth = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        int rasterHeight = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        int[] center = canvasPixelAt(mouseX, mouseY, rasterWidth, rasterHeight);
-        int[] preview = new int[rasterWidth * rasterHeight];
-        CanvasStampRaster.visit(
-                stamp,
-                physicalWidth,
-                physicalHeight,
-                rasterWidth,
-                rasterHeight,
-                center[0],
-                center[1],
-                stampRotationDegrees,
-                stampSizeMultiplier,
-                (x, y, color, effect) -> preview[y * rasterWidth + x] =
-                        stampPreviewColor(color, effect, stampErasePreview));
-
-        ensureStampPreviewTexture(rasterWidth, rasterHeight, preview);
-        stampPreviewTexture.uploadIfDirty();
-        graphics.blit(
-                stampPreviewTexture.location(),
-                canvasLeft,
-                canvasTop,
-                canvasWidth,
-                canvasHeight,
-                0.0F,
-                0.0F,
-                rasterWidth,
-                rasterHeight,
-                rasterWidth,
-                rasterHeight);
     }
 
     private void ensureStampPreviewTexture(int width,
@@ -425,69 +365,6 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         stampPreviewTexture.replacePixels(preview);
     }
 
-    private void renderCompassPreview(GuiGraphics graphics,
-                                      double mouseX,
-                                      double mouseY,
-                                      int canvasLeft,
-                                      int canvasTop,
-                                      int canvasWidth,
-                                      int canvasHeight) {
-        if (selectedCompass() == null) return;
-        if (!compassStrokeActive && !isOverCanvas(mouseX, mouseY)) return;
-
-        int rasterWidth = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        int rasterHeight = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        double centerMouseX = compassStrokeActive
-                ? compassCenterMouseX : mouseX;
-        double centerMouseY = compassStrokeActive
-                ? compassCenterMouseY : mouseY;
-        int[] center = canvasPixelAt(
-                centerMouseX, centerMouseY, rasterWidth, rasterHeight);
-        double radiusPixels = CompassItem.getCanvasRadius(
-                minecraft.player.getMainHandItem())
-                * rasterWidth / (double) physicalWidth;
-        double lineThickness = 1.0;
-        int[] preview = new int[rasterWidth * rasterHeight];
-        int minX = Math.max(0,
-                (int) Math.floor(center[0] - radiusPixels - lineThickness));
-        int maxX = Math.min(rasterWidth,
-                (int) Math.ceil(center[0] + radiusPixels + lineThickness + 1.0));
-        int minY = Math.max(0,
-                (int) Math.floor(center[1] - radiusPixels - lineThickness));
-        int maxY = Math.min(rasterHeight,
-                (int) Math.ceil(center[1] + radiusPixels + lineThickness + 1.0));
-        int previewColor = compassStrokeActive
-                && compassStrokeButton == 1
-                ? COMPASS_ERASE_PREVIEW_COLOR
-                : COMPASS_PREVIEW_COLOR;
-        double thickness = lineThickness * 0.5;
-        for (int y = minY; y < maxY; y++) {
-            double deltaY = y + 0.5 - center[1];
-            for (int x = minX; x < maxX; x++) {
-                double deltaX = x + 0.5 - center[0];
-                double distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-                if (Math.abs(distance - radiusPixels) <= thickness) {
-                    preview[y * rasterWidth + x] = previewColor;
-                }
-            }
-        }
-
-        ensureCompassPreviewTexture(rasterWidth, rasterHeight, preview);
-        compassPreviewTexture.uploadIfDirty();
-        graphics.blit(
-                compassPreviewTexture.location(),
-                canvasLeft,
-                canvasTop,
-                canvasWidth,
-                canvasHeight,
-                0.0F,
-                0.0F,
-                rasterWidth,
-                rasterHeight,
-                rasterWidth,
-                rasterHeight);
-    }
-
     private void ensureCompassPreviewTexture(int width,
                                              int height,
                                              int[] preview) {
@@ -506,17 +383,35 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         compassPreviewTexture.replacePixels(preview);
     }
 
-    private static int stampPreviewColor(int color,
-                                         int effect,
-                                         boolean erasing) {
-        int sourceAlpha = color >>> 24;
-        if (sourceAlpha == 0 && effect != 0) sourceAlpha = 0xFF;
-        int alpha = Math.max(40, Math.min(128,
-                (int) Math.round(sourceAlpha * 0.45)));
-        int rgb = erasing
-                ? 0x00FF5555
-                : (sourceAlpha == 0 ? 0x00FFFFFF : color & 0x00FFFFFF);
-        return alpha << 24 | rgb;
+    private int[] canvasPixelAt(double mouseX,
+                                double mouseY,
+                                int rasterWidth,
+                                int rasterHeight) {
+        CanvasViewState.DisplayRect display = displayRect();
+        int screenX = Math.min(rasterWidth - 1,
+                Math.max(0, (int) ((mouseX - display.x())
+                        * rasterWidth / display.width())));
+        int matrixX = screenX;
+        int y = Math.min(rasterHeight - 1,
+                Math.max(0, (int) ((mouseY - display.y())
+                        * rasterHeight / display.height())));
+        return new int[]{matrixX, y};
+    }
+
+    @Override
+    public int[] canvasPixelAt(double mouseX, double mouseY) {
+        return canvasPixelAt(mouseX, mouseY, rasterWidth(), rasterHeight());
+    }
+
+    @Override
+    public boolean isOverCanvas(double mouseX, double mouseY) {
+        return isOverViewport(mouseX, mouseY) && displayRect().contains(mouseX, mouseY);
+    }
+
+    @Override
+    public boolean isOverViewport(double mouseX, double mouseY) {
+        return mouseX >= viewportX && mouseX < viewportX + viewportWidth
+                && mouseY >= viewportY && mouseY < viewportY + viewportHeight;
     }
 
     @Override
@@ -525,93 +420,60 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
             toggleInventory();
             return true;
         }
-        if (menu.getCarried().isEmpty()
-                && button == 0
-                && stampResizeModifierHeld
-                && selectedStamp() != null
-                && isOverCanvas(mouseX, mouseY)) {
-            finishStroke();
-            stampResizing = true;
-            stampResizeAnchorMouseX = mouseX;
-            stampResizeAnchorSize = stampSizeMultiplier;
-            return true;
-        }
-        if (menu.getCarried().isEmpty()
-                && button == 0 && isOverViewport(mouseX, mouseY)
-                && isViewModifierActive()) {
-            finishStroke();
-            panning = true;
-            return true;
-        }
-        if (menu.getCarried().isEmpty()
-                && isOverCanvas(mouseX, mouseY)
-                && (button == 0 || button == 1)) {
-            finishStroke();
-            if (selectedCompass() != null) {
-                beginCompassStroke(mouseX, mouseY, button);
-            } else {
-                CanvasPenTool.Stroke selectedStroke = selectedPenStroke();
-                if (selectedStroke != null) {
-                    history.beginAction();
-                    strokeActive = true;
-                    activeStroke = selectedStroke;
-                    strokeButton = button;
-                    paint(mouseX, mouseY, button);
-                } else {
-                    CanvasDocument stamp = selectedStamp();
-                    if (stamp != null) {
-                        stampErasePreview = button == 1;
-                        applyStamp(mouseX, mouseY, button, stamp);
-                    }
-                }
+        CanvasEditorTool tool = selectedEditorTool();
+        if (tool != null && minecraft != null && minecraft.player != null) {
+            ItemStack stack = minecraft.player.getMainHandItem();
+            if (tool.editorViewMouseClicked(this, mouseX, mouseY, button)
+                    || tool.editorMouseClicked(
+                            this, stack, minecraft.player,
+                            mouseX, mouseY, button)) {
+                activeEditorTool = tool;
+                return true;
             }
-            updateActionButtons();
-            return true;
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button,
-                                double dragX, double dragY) {
-        if (stampResizing && button == 0) {
-            updateStampSize(mouseX);
-            return true;
-        }
-        if (panning && button == 0) {
-            viewState.panBy(dragX, dragY, fittedCanvasRect(), viewportRect());
-            return true;
-        }
-        if (compassStrokeActive) {
-            paintCompass(mouseX, mouseY, button);
-            return true;
-        }
-        if (strokeActive) {
-            paint(mouseX, mouseY, button);
-            return true;
+    public boolean mouseDragged(double mouseX,
+                                double mouseY,
+                                int button,
+                                double dragX,
+                                double dragY) {
+        CanvasEditorTool tool = activeEditorTool != null
+                ? activeEditorTool : selectedEditorTool();
+        if (tool != null && minecraft != null && minecraft.player != null) {
+            ItemStack stack = minecraft.player.getMainHandItem();
+            if (tool.editorViewMouseDragged(
+                    this, mouseX, mouseY, button, dragX, dragY)
+                    || tool.editorMouseDragged(
+                            this, stack, minecraft.player,
+                            mouseX, mouseY, button, dragX, dragY)) {
+                return true;
+            }
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (stampResizing && button == 0) {
-            updateStampSize(mouseX);
-            stampResizing = false;
-            return true;
+        CanvasEditorTool tool = activeEditorTool != null
+                ? activeEditorTool : selectedEditorTool();
+        if (tool != null && minecraft != null && minecraft.player != null) {
+            ItemStack stack = minecraft.player.getMainHandItem();
+            boolean handled = tool.editorViewMouseReleased(
+                    this, mouseX, mouseY, button)
+                    || tool.editorMouseReleased(
+                            this, stack, minecraft.player,
+                            mouseX, mouseY, button);
+            if (handled) {
+                activeEditorTool = null;
+                return true;
+            }
         }
-        if (button == 1) stampErasePreview = false;
-        if (panning && button == 0) {
-            panning = false;
-            return true;
-        }
-        if (compassStrokeActive && (button == 0 || button == 1)) {
+        if (activeEditorTool != null) {
             finishStroke();
-            return true;
-        }
-        if (strokeActive && (button == 0 || button == 1)) {
-            finishStroke();
-            return true;
+            activeEditorTool = null;
         }
         return super.mouseReleased(mouseX, mouseY, button);
     }
@@ -634,316 +496,22 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     }
 
     @Override
-    protected boolean hasClickedOutside(double mouseX,
-                                        double mouseY,
-                                        int guiLeft,
-                                        int guiTop,
-                                        int mouseButton) {
-        return false;
-    }
-
-    private boolean paint(double mouseX, double mouseY, int button) {
-        if (!strokeActive || activeStroke == null || button != strokeButton) return false;
-        if (!isOverCanvas(mouseX, mouseY)) {
-            resetStrokePosition();
-            return false;
-        }
-        int rasterWidth = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        int rasterHeight = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        CanvasViewState.DisplayRect display = displayRect();
-        int screenX = Math.min(rasterWidth - 1,
-                Math.max(0, (int) ((mouseX - display.x()) * rasterWidth / display.width())));
-        int x = CanvasEditorCoordinates.matrixColumnForScreenColumn(screenX, rasterWidth);
-        int y = Math.min(rasterHeight - 1,
-                Math.max(0, (int) ((mouseY - display.y()) * rasterHeight / display.height())));
-        int startX = lastStrokeX < 0 ? x : lastStrokeX;
-        int startY = lastStrokeY < 0 ? y : lastStrokeY;
-        CanvasStrokeInterpolator.visitLine(
-                startX, startY, x, y,
-                (pixelX, pixelY) -> applyStrokePixel(
-                        pixelX, pixelY, rasterWidth, button));
-        lastStrokeX = x;
-        lastStrokeY = y;
-        updateChanged();
-        updateActionButtons();
-        return true;
-    }
-
-    private void beginCompassStroke(double mouseX, double mouseY, int button) {
-        if (minecraft == null || minecraft.player == null) return;
-        ItemStack selected = minecraft.player.getMainHandItem();
-        if (!(selected.getItem() instanceof CompassItem compass)) return;
-        CanvasPenTool.Stroke selectedStroke = compass.canvasStroke(
-                selected, minecraft.player).orElse(null);
-        if (selectedStroke == null) return;
-
-        history.beginAction();
-        activeStroke = selectedStroke;
-        strokeActive = false;
-        strokeButton = -1;
-        compassStrokeActive = true;
-        compassStrokeButton = button;
-        int rasterWidth = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        int rasterHeight = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        int[] center = canvasPixelAt(mouseX, mouseY, rasterWidth, rasterHeight);
-        CanvasViewState.DisplayRect display = displayRect();
-        compassCenterMouseX = display.x()
-                + center[0] * display.width() / rasterWidth;
-        compassCenterMouseY = display.y()
-                + center[1] * display.height() / rasterHeight;
-        compassLastAngle = 0.0;
-        compassLastPointValid = false;
-
-        paintCompassAngle(0.0, button);
-    }
-
-    private boolean paintCompass(double mouseX, double mouseY, int button) {
-        if (!compassStrokeActive
-                || activeStroke == null
-                || button != compassStrokeButton) {
-            return false;
-        }
-        double deltaX = mouseX - compassCenterMouseX;
-        double deltaY = mouseY - compassCenterMouseY;
-        if (deltaX * deltaX + deltaY * deltaY < 1.0e-6) return true;
-
-        double angle = unwrapCompassAngle(
-                Math.atan2(deltaY, deltaX), compassLastAngle);
-        paintCompassAngle(angle, button);
-        return true;
-    }
-
-    private void paintCompassAngle(double angle, int button) {
-        CanvasViewState.DisplayRect display = displayRect();
-        double radiusPixels = compassRadiusPixels(display);
-        double angleDelta = angle - compassLastAngle;
-        int rasterWidth = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        int rasterHeight = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        double rasterRadius = CompassItem.getCanvasRadius(
-                minecraft.player.getMainHandItem())
-                * rasterWidth / (double) physicalWidth;
-        double samplingRadius = Math.min(
-                Math.max(1.0, rasterRadius),
-                Math.hypot(rasterWidth, rasterHeight));
-        int sampleCount = Math.max(1, (int) Math.ceil(
-                Math.abs(angleDelta) * samplingRadius * 2.0));
-        boolean touchedCanvas = false;
-        for (int sample = 1; sample <= sampleCount; sample++) {
-            double sampleAngle = compassLastAngle
-                    + angleDelta * sample / sampleCount;
-            if (paintCompassSample(
-                    sampleAngle, button, display, radiusPixels,
-                    rasterWidth, rasterHeight)) {
-                touchedCanvas = true;
-            }
-        }
-
-        compassLastAngle = angle;
-        if (touchedCanvas) {
-            updateChanged();
-            updateActionButtons();
-        }
-    }
-
-    private boolean paintCompassSample(double angle,
-                                       int button,
-                                       CanvasViewState.DisplayRect display,
-                                       double radiusPixels,
-                                       int rasterWidth,
-                                       int rasterHeight) {
-        double pointX = compassCenterMouseX + Math.cos(angle) * radiusPixels;
-        double pointY = compassCenterMouseY + Math.sin(angle) * radiusPixels;
-        boolean pointValid = display.contains(pointX, pointY);
-        if (pointValid) {
-            int[] point = canvasPixelAt(pointX, pointY, rasterWidth, rasterHeight);
-            if (compassLastPointValid) {
-                int[] previous = canvasPixelAt(
-                        compassLastPointX, compassLastPointY,
-                        rasterWidth, rasterHeight);
-                CanvasStrokeInterpolator.visitLine(
-                        previous[0], previous[1], point[0], point[1],
-                        (pixelX, pixelY) -> applyStrokePixel(
-                                pixelX, pixelY, rasterWidth, button));
-            } else {
-                applyStrokePixel(point[0], point[1], rasterWidth, button);
-            }
-        }
-
-        compassLastPointX = pointX;
-        compassLastPointY = pointY;
-        compassLastPointValid = pointValid;
-        return pointValid;
-    }
-
-    private double compassRadiusPixels(CanvasViewState.DisplayRect display) {
-        if (minecraft == null || minecraft.player == null || physicalWidth <= 0) {
-            return 0.0;
-        }
-        return CompassItem.getCanvasRadius(minecraft.player.getMainHandItem())
-                * display.width() / physicalWidth;
-    }
-
-    private void updateCompassPointForRadius() {
-        if (!compassStrokeActive) return;
-        double angle = compassLastAngle;
-        CanvasViewState.DisplayRect display = displayRect();
-        double radiusPixels = compassRadiusPixels(display);
-        compassLastPointX = compassCenterMouseX + Math.cos(angle) * radiusPixels;
-        compassLastPointY = compassCenterMouseY + Math.sin(angle) * radiusPixels;
-        compassLastPointValid = display.contains(
-                compassLastPointX, compassLastPointY);
-    }
-
-    private static double unwrapCompassAngle(double angle, double previous) {
-        double fullTurn = Math.PI * 2.0;
-        while (angle - previous > Math.PI) angle -= fullTurn;
-        while (angle - previous < -Math.PI) angle += fullTurn;
-        return angle;
-    }
-
-    private void applyStrokePixel(int x, int y, int rasterWidth, int button) {
-        int index = y * rasterWidth + x;
-        int nextColor = button == 0 ? activeStroke.color() : 0;
-        int nextEffect = button == 0 ? activeStroke.effect() : 0;
-        if (colors[index] != nextColor || effects[index] != nextEffect) {
-            history.recordChange(index, colors[index], effects[index], nextColor, nextEffect);
-            colors[index] = nextColor;
-            effects[index] = nextEffect;
-            invalidateRunePreview();
-            if (canvasTexture != null) {
-                canvasTexture.setCanvasPixel(x, y, nextColor);
-            }
-        }
-    }
-
-    private CanvasPenTool.Stroke selectedPenStroke() {
-        if (minecraft == null || minecraft.player == null) return null;
-        ItemStack selected = minecraft.player.getMainHandItem();
-        if (!(selected.getItem() instanceof CanvasPenTool pen)) return null;
-        return pen.canvasStroke(selected, minecraft.player).orElse(null);
-    }
-
-    private CanvasDocument selectedStamp() {
-        if (minecraft == null || minecraft.player == null) return null;
-        ItemStack selected = minecraft.player.getMainHandItem();
-        if (!(selected.getItem() instanceof CanvasStampTool stamp)) return null;
-        return stamp.canvasStamp(selected, minecraft.player).orElse(null);
-    }
-
-    private void applyStamp(double mouseX,
-                            double mouseY,
-                            int button,
-                            CanvasDocument stamp) {
-        int rasterWidth = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        int rasterHeight = CanvasDocument.PIXELS_PER_BLOCK * scale;
-        int[] center = canvasPixelAt(
-                mouseX, mouseY, rasterWidth, rasterHeight);
-
-        history.beginAction();
-        CanvasStampRaster.visit(
-                stamp,
-                physicalWidth,
-                physicalHeight,
-                rasterWidth,
-                rasterHeight,
-                center[0],
-                center[1],
-                stampRotationDegrees,
-                stampSizeMultiplier,
-                (x, y, color, effect) -> applyStampPixel(
-                        x, y, rasterWidth, button, color, effect));
-        history.commitAction();
-        updateChanged();
-    }
-
-    private void applyStampPixel(int x,
-                                 int y,
-                                 int rasterWidth,
-                                 int button,
-                                 int stampColor,
-                                 int stampEffect) {
-        int index = y * rasterWidth + x;
-        int nextColor = button == 0 ? stampColor : 0;
-        int nextEffect = button == 0 ? stampEffect : 0;
-        if (colors[index] == nextColor && effects[index] == nextEffect) return;
-        history.recordChange(
-                index, colors[index], effects[index], nextColor, nextEffect);
-        colors[index] = nextColor;
-        effects[index] = nextEffect;
-        invalidateRunePreview();
-        if (canvasTexture != null) {
-            canvasTexture.setCanvasPixel(x, y, nextColor);
-        }
-    }
-
-    private int[] canvasPixelAt(double mouseX,
-                                double mouseY,
-                                int rasterWidth,
-                                int rasterHeight) {
-        CanvasViewState.DisplayRect display = displayRect();
-        int screenX = Math.min(rasterWidth - 1,
-                Math.max(0, (int) ((mouseX - display.x())
-                        * rasterWidth / display.width())));
-        int matrixX = CanvasEditorCoordinates.matrixColumnForScreenColumn(
-                screenX, rasterWidth);
-        int y = Math.min(rasterHeight - 1,
-                Math.max(0, (int) ((mouseY - display.y())
-                        * rasterHeight / display.height())));
-        return new int[]{matrixX, y};
-    }
-
-    private void updateStampSize(double mouseX) {
-        double exponent = (mouseX - stampResizeAnchorMouseX)
-                / STAMP_RESIZE_PIXELS_PER_DOUBLING;
-        stampSizeMultiplier = Math.max(
-                MIN_STAMP_SIZE,
-                Math.min(MAX_STAMP_SIZE,
-                        stampResizeAnchorSize * Math.pow(2.0, exponent)));
-    }
-
-    private boolean isOverCanvas(double mouseX, double mouseY) {
-        return isOverViewport(mouseX, mouseY) && displayRect().contains(mouseX, mouseY);
-    }
-
-    private boolean isOverViewport(double mouseX, double mouseY) {
-        return mouseX >= viewportX && mouseX < viewportX + viewportWidth
-                && mouseY >= viewportY && mouseY < viewportY + viewportHeight;
-    }
-
-    @Override
     public boolean mouseScrolled(double mouseX,
                                  double mouseY,
                                  double scrollX,
                                  double scrollY) {
-        if (isOverViewport(mouseX, mouseY)
-                && isViewModifierActive()
-                && selectedCompass() != null) {
-            double scroll = scrollY != 0.0 ? scrollY : -scrollX;
-            if (scroll != 0.0 && minecraft != null && minecraft.player != null) {
-                ItemStack selected = minecraft.player.getMainHandItem();
-                if (CompassItem.adjustRadius(selected, scroll)) {
-                    minecraft.gui.setOverlayMessage(selected.getHoverName(), false);
-                    PacketDistributor.sendToServer(new CompassRadiusPacket(
-                            minecraft.player.getInventory().selected,
-                            CompassItem.getRadius(selected)));
-                    updateCompassPointForRadius();
-                    hotbarScroll.reset();
-                    return true;
-                }
-            }
-        }
-        if (isOverViewport(mouseX, mouseY)
-                && isViewModifierActive()) {
-            double scroll = scrollY != 0.0 ? scrollY : -scrollX;
-            if (scroll != 0.0) {
+        CanvasEditorTool tool = selectedEditorTool();
+        if (tool != null && minecraft != null && minecraft.player != null) {
+            ItemStack stack = minecraft.player.getMainHandItem();
+            if (tool.editorMouseScrolled(
+                    this, stack, minecraft.player,
+                    mouseX, mouseY, scrollX, scrollY)) {
                 hotbarScroll.reset();
-                double anchorX = Math.max(viewportX,
-                        Math.min(viewportX + viewportWidth, mouseX));
-                double anchorY = Math.max(viewportY,
-                        Math.min(viewportY + viewportHeight, mouseY));
-                viewState.zoomAt(
-                        scroll, anchorX, anchorY,
-                        fittedCanvasRect(), viewportRect());
+                return true;
+            }
+            if (tool.editorViewMouseScrolled(
+                    this, mouseX, mouseY, scrollX, scrollY)) {
+                hotbarScroll.reset();
                 return true;
             }
         }
@@ -963,18 +531,15 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         if (CanvasEditorKeyMappings.matchesViewModifier(keyCode, scanCode)) {
             viewModifierHeld = true;
         }
-        if (hasSelectedStampTool() && keyCode == GLFW.GLFW_KEY_R) {
-            if (!stampRotateKeyHeld) {
-                double direction = (modifiers & GLFW.GLFW_MOD_SHIFT) != 0
-                        ? -45.0 : 45.0;
-                stampRotationDegrees = normalizeDegrees(
-                        stampRotationDegrees + direction);
-                stampRotateKeyHeld = true;
-            }
-            return true;
-        }
-        if (hasSelectedStampTool() && keyCode == GLFW.GLFW_KEY_X) {
-            stampResizeModifierHeld = true;
+        CanvasEditorTool tool = selectedEditorTool();
+        if (tool != null && minecraft != null && minecraft.player != null
+                && tool.editorKeyPressed(
+                        this,
+                        minecraft.player.getMainHandItem(),
+                        minecraft.player,
+                        keyCode,
+                        scanCode,
+                        modifiers)) {
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
@@ -982,30 +547,21 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
 
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        CanvasEditorTool tool = selectedEditorTool();
+        if (tool != null && minecraft != null && minecraft.player != null
+                && tool.editorKeyReleased(
+                        this,
+                        minecraft.player.getMainHandItem(),
+                        minecraft.player,
+                        keyCode,
+                        scanCode,
+                        modifiers)) {
+            return true;
+        }
         if (CanvasEditorKeyMappings.matchesViewModifier(keyCode, scanCode)) {
             viewModifierHeld = false;
         }
-        if (keyCode == GLFW.GLFW_KEY_R && stampRotateKeyHeld) {
-            stampRotateKeyHeld = false;
-            return true;
-        }
-        if (keyCode == GLFW.GLFW_KEY_X && stampResizeModifierHeld) {
-            stampResizeModifierHeld = false;
-            return true;
-        }
         return super.keyReleased(keyCode, scanCode, modifiers);
-    }
-
-    private boolean hasSelectedStampTool() {
-        return minecraft != null
-                && minecraft.player != null
-                && minecraft.player.getMainHandItem().getItem()
-                instanceof CanvasStampTool;
-    }
-
-    private static double normalizeDegrees(double degrees) {
-        double normalized = degrees % 360.0;
-        return normalized < 0.0 ? normalized + 360.0 : normalized;
     }
 
     @Override
@@ -1022,35 +578,27 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         return false;
     }
 
-    private boolean isViewModifierActive() {
+    @Override
+    public boolean isViewModifierActive() {
         return viewModifierHeld
                 || CanvasEditorKeyMappings.isViewModifierDown()
                 || (CanvasEditorKeyMappings.usesDefaultViewModifier() && hasShiftDown());
     }
 
-    private CompassItem selectedCompass() {
-        if (minecraft == null || minecraft.player == null) return null;
-        return minecraft.player.getMainHandItem().getItem() instanceof CompassItem compass
-                ? compass : null;
-    }
-
     private void finishStroke() {
-        if (!strokeActive && !compassStrokeActive) return;
-        history.commitAction();
-        strokeActive = false;
-        compassStrokeActive = false;
-        activeStroke = null;
-        strokeButton = -1;
-        compassStrokeButton = -1;
-        compassLastPointValid = false;
-        resetStrokePosition();
+        CanvasEditorTool tool = activeEditorTool != null
+                ? activeEditorTool : selectedEditorTool();
+        if (tool != null && minecraft != null && minecraft.player != null) {
+            tool.finishEditorAction(
+                    this,
+                    minecraft.player.getMainHandItem(),
+                    minecraft.player);
+        } else if (toolActionActive) {
+            finishToolAction();
+        }
+        activeEditorTool = null;
         if (runePreviewDirty) nextRunePreviewNanos = 0L;
         updateActionButtons();
-    }
-
-    private void resetStrokePosition() {
-        lastStrokeX = -1;
-        lastStrokeY = -1;
     }
 
     private void undo() {
@@ -1097,13 +645,15 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         updateActionButtons();
     }
 
-    private void updateChanged() {
+    @Override
+    public void updateChanged() {
         changed = scale != initialScale
                 || !Arrays.equals(colors, initialColors)
                 || !Arrays.equals(effects, initialEffects);
     }
 
-    private void updateActionButtons() {
+    @Override
+    public void updateActionButtons() {
         if (undoButton != null) undoButton.active = history.canUndo();
         if (redoButton != null) redoButton.active = history.canRedo();
         if (clearButton != null) clearButton.active = hasCanvasContent();
@@ -1203,7 +753,8 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 false);
     }
 
-    private void invalidateRunePreview() {
+    @Override
+    public void invalidateRunePreview() {
         runePreviewGeneration++;
         runePreviewDirty = true;
     }
@@ -1286,6 +837,210 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
 
     private CanvasViewState.DisplayRect displayRect() {
         return viewState.displayRect(fittedCanvasRect());
+    }
+
+    @Override
+    public int entityId() {
+        return entityId;
+    }
+
+    @Override
+    public int physicalWidth() {
+        return physicalWidth;
+    }
+
+    @Override
+    public int physicalHeight() {
+        return physicalHeight;
+    }
+
+    @Override
+    public int rasterWidth() {
+        return CanvasDocument.PIXELS_PER_BLOCK * scale;
+    }
+
+    @Override
+    public int rasterHeight() {
+        return CanvasDocument.PIXELS_PER_BLOCK * scale;
+    }
+
+    @Override
+    public double displayX() {
+        return displayRect().x();
+    }
+
+    @Override
+    public double displayY() {
+        return displayRect().y();
+    }
+
+    @Override
+    public double displayWidth() {
+        return displayRect().width();
+    }
+
+    @Override
+    public double displayHeight() {
+        return displayRect().height();
+    }
+
+    @Override
+    public boolean carriedItemEmpty() {
+        return menu.getCarried().isEmpty();
+    }
+
+    @Override
+    public void beginHistoryAction() {
+        history.beginAction();
+    }
+
+    @Override
+    public void beginToolAction(int button) {
+        toolActionActive = true;
+        toolActionButton = button;
+    }
+
+    @Override
+    public boolean isToolActionActive() {
+        return toolActionActive;
+    }
+
+    @Override
+    public int toolActionButton() {
+        return toolActionButton;
+    }
+
+    @Override
+    public void finishToolAction() {
+        history.commitAction();
+        toolActionActive = false;
+        toolActionButton = -1;
+        updateChanged();
+        updateActionButtons();
+    }
+
+    @Override
+    public void beginPenStroke(CanvasPenTool.Stroke stroke, int button) {
+        beginToolAction(button);
+    }
+
+    @Override
+    public void writePixel(int x, int y, int color, int effect) {
+        if (x < 0 || x >= rasterWidth() || y < 0 || y >= rasterHeight()) return;
+        int index = y * rasterWidth() + x;
+        if (colors[index] == color && effects[index] == effect) return;
+        history.recordChange(index, colors[index], effects[index], color, effect);
+        colors[index] = color;
+        effects[index] = effect;
+        invalidateRunePreview();
+        if (canvasTexture != null) canvasTexture.setCanvasPixel(x, y, color);
+    }
+
+    @Override
+    public void visitLine(int startX,
+                          int startY,
+                          int endX,
+                          int endY,
+                          CanvasEditorTool.EditorContext.PixelVisitor visitor) {
+        CanvasStrokeInterpolator.visitLine(startX, startY, endX, endY, visitor::accept);
+    }
+
+    @Override
+    public void renderToolPreview(GuiGraphics graphics,
+                                  String key,
+                                  int[] pixels,
+                                  int canvasLeft,
+                                  int canvasTop,
+                                  int canvasWidth,
+                                  int canvasHeight) {
+        CanvasDynamicTexture texture;
+        if ("stamp".equals(key)) {
+            ensureStampPreviewTexture(rasterWidth(), rasterHeight(), pixels);
+            texture = stampPreviewTexture;
+        } else if ("compass".equals(key)) {
+            ensureCompassPreviewTexture(rasterWidth(), rasterHeight(), pixels);
+            texture = compassPreviewTexture;
+        } else {
+            return;
+        }
+        texture.uploadIfDirty();
+        graphics.blit(
+                texture.location(),
+                canvasLeft,
+                canvasTop,
+                canvasWidth,
+                canvasHeight,
+                0.0F,
+                0.0F,
+                rasterWidth(),
+                rasterHeight(),
+                rasterWidth(),
+                rasterHeight());
+    }
+
+    @Override
+    public boolean isViewPanning() {
+        return panning;
+    }
+
+    @Override
+    public void beginViewPan() {
+        finishStroke();
+        panning = true;
+    }
+
+    @Override
+    public void endViewPan() {
+        panning = false;
+    }
+
+    @Override
+    public void panView(double deltaX, double deltaY) {
+        viewState.panBy(deltaX, deltaY, fittedCanvasRect(), viewportRect());
+        viewChanged();
+    }
+
+    @Override
+    public void zoomView(double scroll, double mouseX, double mouseY) {
+        double anchorX = Math.max(viewportX,
+                Math.min(viewportX + viewportWidth, mouseX));
+        double anchorY = Math.max(viewportY,
+                Math.min(viewportY + viewportHeight, mouseY));
+        viewState.zoomAt(
+                scroll,
+                anchorX,
+                anchorY,
+                fittedCanvasRect(),
+                viewportRect());
+        viewChanged();
+    }
+
+    @Override
+    public void viewChanged() {
+        CanvasEditorTool tool = activeEditorTool != null
+                ? activeEditorTool : selectedEditorTool();
+        if (tool != null && minecraft != null && minecraft.player != null) {
+            tool.editorViewChanged(
+                    this,
+                    minecraft.player.getMainHandItem(),
+                    minecraft.player);
+        }
+    }
+
+    @Override
+    public void syncCompassRadius(ItemStack stack) {
+        if (minecraft == null || minecraft.player == null) return;
+        minecraft.gui.setOverlayMessage(stack.getHoverName(), false);
+        PacketDistributor.sendToServer(new CompassRadiusPacket(
+                minecraft.player.getInventory().selected,
+                CompassItem.getRadius(stack)));
+        hotbarScroll.reset();
+    }
+
+    private CanvasEditorTool selectedEditorTool() {
+        if (minecraft == null || minecraft.player == null) return null;
+        return minecraft.player.getMainHandItem().getItem()
+                instanceof CanvasEditorTool tool ? tool : null;
     }
 
     @Override
