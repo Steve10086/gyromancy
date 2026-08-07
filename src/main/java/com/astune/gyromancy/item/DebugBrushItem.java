@@ -19,7 +19,7 @@ import java.util.Optional;
  * A debug brush that paints single-pixel mana dots (effect value 10).
  *
  * <p>Each painted pixel writes {@code gyromancy:mana = 10} to the
- * CanvasFace effect layer via a custom {@link BlendFunction}.
+ * CanvasFace effect layer.
  *
  * <p>Fixed parameters:
  * <ul>

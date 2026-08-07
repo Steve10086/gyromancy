@@ -1,6 +1,7 @@
 package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.item.CompassItem;
 import com.astune.gyromancy.item.DebugBrushItem;
 import com.astune.gyromancy.item.InkBottleItem;
 import com.astune.gyromancy.item.PenItem;
@@ -27,6 +28,9 @@ public final class ModItems {
 
     /** Main-hand pen that reads offhand ink and paints on canvas blocks */
     public static final DeferredItem<PenItem> PEN = ITEMS.register("pen", PenItem::new);
+
+    /** Compass that paints a radius-controlled circle or arc. */
+    public static final DeferredItem<CompassItem> COMPASS = ITEMS.register("compass", CompassItem::new);
 
     /** Offhand ink bottle providing color, mana, and effect layers */
     public static final DeferredItem<InkBottleItem> INK_BOTTLE = ITEMS.register("ink_bottle",

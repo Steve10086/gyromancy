@@ -1,5 +1,6 @@
 package com.astune.gyromancy.symbol;
 
+import com.astune.gyromancy.api.symbol.PixelPos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;

@@ -1,6 +1,7 @@
 package com.astune.gyromancy.mixin;
 
 import com.astune.gyromancy.client.PaintCameraController;
+import com.astune.gyromancy.item.CompassItem;
 import com.astune.painter.api.IPaintProvider;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Direction;
@@ -21,11 +22,19 @@ public abstract class PaintInputHandlerMixin {
     @Inject(method = "onRenderFrame", at = @At("HEAD"))
     private static void gyromancy$refreshPaintCameraHit(RenderFrameEvent.Pre event, CallbackInfo ci) {
         PaintCameraController.updatePointerHitResult(Minecraft.getInstance());
+        if (!PaintCameraController.isActive()) {
+            CompassItem.updateHitResult(Minecraft.getInstance());
+        }
     }
 
     @Inject(method = "traceHit", at = @At("HEAD"), cancellable = true)
     private static void gyromancy$tracePaintCameraHit(Minecraft minecraft, Vec3 target,
                                                       CallbackInfoReturnable<BlockHitResult> cir) {
+        BlockHitResult compassHit = CompassItem.hitForTrace(target);
+        if (compassHit != null) {
+            cir.setReturnValue(compassHit);
+            return;
+        }
         BlockHitResult hit = PaintCameraController.hitOnActivePlane(target);
         if (hit != null) {
             cir.setReturnValue(hit);
@@ -35,6 +44,11 @@ public abstract class PaintInputHandlerMixin {
     @Inject(method = "traceNormalDir", at = @At("HEAD"), cancellable = true)
     private static void gyromancy$tracePaintCameraNormal(Vec3 point, Vec3 normal, Player player,
                                                         CallbackInfoReturnable<BlockHitResult> cir) {
+        BlockHitResult compassHit = CompassItem.hitForNormalTrace(point, normal, player);
+        if (compassHit != null) {
+            cir.setReturnValue(compassHit);
+            return;
+        }
         BlockHitResult hit = PaintCameraController.hitOnActivePlane(point);
         if (hit != null) {
             cir.setReturnValue(hit);

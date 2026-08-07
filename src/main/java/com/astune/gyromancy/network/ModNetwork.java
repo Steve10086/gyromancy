@@ -62,5 +62,11 @@ public final class ModNetwork {
                 SubmitStampCarvingPacket.STREAM_CODEC,
                 SubmitStampCarvingPacket::handleServer
         );
+
+        registrar.playToServer(
+                CompassRadiusPacket.TYPE,
+                CompassRadiusPacket.STREAM_CODEC,
+                CompassRadiusPacket::handleServer
+        );
     }
 }

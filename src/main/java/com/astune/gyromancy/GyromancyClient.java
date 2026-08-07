@@ -4,6 +4,8 @@ import javax.annotation.Nullable;
 
 import com.astune.gyromancy.client.ElementDebugRenderer;
 import com.astune.gyromancy.client.PaintCameraController;
+import com.astune.gyromancy.item.CompassItem;
+import com.astune.gyromancy.network.CompassRadiusPacket;
 import com.astune.gyromancy.client.array.ArrayClientState;
 import com.astune.gyromancy.client.canvas.CanvasClientState;
 import com.astune.gyromancy.client.canvas.CanvasEditorKeyMappings;
@@ -14,6 +16,7 @@ import com.astune.gyromancy.client.effect.WandProjectionGlowRenderer;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -23,6 +26,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
@@ -30,6 +34,7 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.client.event.ViewportEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 @Mod(value = Gyromancy.MODID, dist = Dist.CLIENT)
 public class GyromancyClient {
@@ -111,6 +116,22 @@ public class GyromancyClient {
                 (RenderFrameEvent.Pre e) -> PaintCameraController.onRenderFramePre(e));
         NeoForge.EVENT_BUS.<ClientTickEvent.Post>addListener(
                 PaintCameraController::onClientTick);
+        NeoForge.EVENT_BUS.<InputEvent.MouseScrollingEvent>addListener(event -> {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.player != null && minecraft.screen == null
+                    && Screen.hasShiftDown()) {
+                double scroll = event.getScrollDeltaY() != 0.0
+                        ? event.getScrollDeltaY() : -event.getScrollDeltaX();
+                if (CompassItem.adjustRadius(minecraft.player.getMainHandItem(), scroll)) {
+                    minecraft.gui.setOverlayMessage(
+                            minecraft.player.getMainHandItem().getHoverName(), false);
+                    PacketDistributor.sendToServer(new CompassRadiusPacket(
+                            minecraft.player.getInventory().selected,
+                            CompassItem.getRadius(minecraft.player.getMainHandItem())));
+                    event.setCanceled(true);
+                }
+            }
+        });
         NeoForge.EVENT_BUS.addListener(CanvasClientState::onEntityLeave);
         NeoForge.EVENT_BUS.addListener(CanvasClientState::onLogout);
         NeoForge.EVENT_BUS.addListener(ArrayClientState::onLogout);

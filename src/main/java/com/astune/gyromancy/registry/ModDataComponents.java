@@ -46,6 +46,15 @@ public final class ModDataComponents {
                             .build()
             );
 
+    /** Persistent radius selected on compass items. */
+    public static final Supplier<DataComponentType<Double>> COMPASS_RADIUS =
+            DATA_COMPONENTS.register("compass_radius", () ->
+                    DataComponentType.<Double>builder()
+                            .persistent(Codec.DOUBLE)
+                            .networkSynchronized(ByteBufCodecs.DOUBLE)
+                            .build()
+            );
+
     /** Remaining ink charges on a pen item */
     public static final Supplier<DataComponentType<Integer>> INK_REMAINING =
             DATA_COMPONENTS.register("ink_remaining", () ->
