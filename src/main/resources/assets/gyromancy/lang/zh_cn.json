@@ -34,6 +34,8 @@
   "symbol.gyromancy.wind": "风",
   "item.gyromancy.compass": "圆规（半径：%s 格）",
   "item.gyromancy.compass.radius": "半径：%.2f 格",
+  "item.gyromancy.compass.pen": "已存储：%s",
+  "item.gyromancy.compass.pen.empty": "已存储：空置",
   "item.gyromancy.compass.help": "Shift+滚轮调整半径；按住右键并转动视角绘制",
   "item.gyromancy.stamp": "奥术印章",
   "item.gyromancy.stamp.mode": "模式：%s",

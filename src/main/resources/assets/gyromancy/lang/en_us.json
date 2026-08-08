@@ -4,6 +4,8 @@
   "item.gyromancy.pen": "Mana Pen",
   "item.gyromancy.compass": "Compass (Radius: %s)",
   "item.gyromancy.compass.radius": "Radius: %.2f blocks",
+  "item.gyromancy.compass.pen": "Stored: %s",
+  "item.gyromancy.compass.pen.empty": "Stored: Empty",
   "item.gyromancy.compass.help": "Shift-scroll to change radius; hold right-click and turn to draw",
   "item.gyromancy.ink_bottle": "Ink Bottle",
   "item.gyromancy.ink_bottle.filled": "%s Ink Bottle",

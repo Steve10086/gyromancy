@@ -2,5 +2,13 @@
   "parent": "minecraft:item/generated",
   "textures": {
     "layer0": "gyromancy:item/compass"
-  }
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "gyromancy:stored_pen": 1.0
+      },
+      "model": "gyromancy:item/compass_full"
+    }
+  ]
 }

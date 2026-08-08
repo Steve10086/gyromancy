@@ -1,24 +1,31 @@
 package com.astune.gyromancy.item;
 
 import com.astune.gyromancy.api.canvas.CanvasPenTool;
+import com.astune.gyromancy.api.canvas.CanvasEditorTool;
 import com.astune.gyromancy.api.canvas.CanvasEditorTool.EditorContext;
 import com.astune.gyromancy.network.CompassRadiusPacket;
 import com.astune.gyromancy.registry.ModDataComponents;
-import com.astune.painter.api.BlendMode;
 import com.astune.painter.api.CanvasFace;
 import com.astune.painter.api.IPaintProvider;
 import com.astune.painter.api.PaintPattern;
 import com.astune.painter.api.PaintProviders;
-import com.astune.painter.api.PixelProvider;
+import com.astune.painter.api.blend.BlendFunction;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.inventory.ClickAction;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.inventory.tooltip.BundleTooltip;
+import net.minecraft.world.item.component.BundleContents;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -26,10 +33,8 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -40,15 +45,7 @@ import java.util.Optional;
  * synthetic block hits on the circumference, keeping its normal brush
  * pipeline responsible for rasterisation and network updates.
  */
-public final class CompassItem extends Item implements IPaintProvider, CanvasPenTool {
-    private static final int DEFAULT_CANVAS_COLOR = 0xFF24132F;
-    private static final int DEFAULT_CANVAS_EFFECT = 1;
-    private static final int WHITE = 0xFFFFFFFF;
-    private static final double BRUSH_DIAMETER = 1.0 / 16.0;
-    private static final double BRUSH_RADIUS = BRUSH_DIAMETER / 2.0;
-    private static final double STEP = 0.02;
-    private static final String MANA_KEY = "gyromancy:mana";
-    private static final int MANA_VALUE = 10;
+public final class CompassItem extends Item implements IPaintProvider, CanvasEditorTool {
 
     public static final double DEFAULT_RADIUS = 1.0;
     public static final double MIN_RADIUS = 0.1;
@@ -75,13 +72,116 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
         super(new Properties()
                 .stacksTo(1)
                 .component(ModDataComponents.COMPASS_RADIUS.get(), DEFAULT_RADIUS)
-                .component(com.astune.painter.registry.ModDataComponents.CURRENT_COLOR.get(), WHITE)
-                .component(com.astune.painter.registry.ModDataComponents.BRUSH_SIZE.get(), BRUSH_DIAMETER)
-                .component(com.astune.painter.registry.ModDataComponents.FEATHER_STRENGTH.get(), 0.0f)
-                .component(com.astune.painter.registry.ModDataComponents.OPACITY.get(), 1.0f)
-                .component(com.astune.painter.registry.ModDataComponents.BLEND_MODE.get(), BlendMode.OVERWRITE.name())
-                .component(com.astune.painter.registry.ModDataComponents.STEP_SIZE.get(), STEP));
+                .component(ModDataComponents.COMPASS_PEN.get(), CompassContents.EMPTY));
         PaintProviders.register(this, this);
+    }
+
+    public static ItemStack getStoredPen(ItemStack compass) {
+        return storedContents(compass).pen();
+    }
+
+    public static boolean hasStoredPen(ItemStack compass) {
+        return storedContents(compass).pen().getItem() instanceof PenItem;
+    }
+
+    public static void setStoredPen(ItemStack compass, ItemStack pen) {
+        if (!(compass.getItem() instanceof CompassItem)) return;
+        if (!pen.isEmpty() && !(pen.getItem() instanceof PenItem)) return;
+        compass.set(ModDataComponents.COMPASS_PEN.get(), storedContents(compass).withPen(pen));
+    }
+
+    private static CompassContents storedContents(ItemStack compass) {
+        return compass.getOrDefault(ModDataComponents.COMPASS_PEN.get(), CompassContents.EMPTY);
+    }
+
+    private static ItemStack storedPen(ItemStack compass) {
+        return storedContents(compass).pen();
+    }
+
+    @Nullable
+    private static PenItem storedPenItem(ItemStack compass) {
+        return storedPen(compass).getItem() instanceof PenItem pen ? pen : null;
+    }
+
+    private static Optional<CanvasPenTool.Stroke> penStroke(ItemStack compass, Player player) {
+        PenItem pen = storedPenItem(compass);
+        return pen == null
+                ? Optional.empty()
+                : pen.canvasStroke(storedPen(compass), player);
+    }
+
+    /** Handles right-clicking a carried compass onto a pen or an empty slot. */
+    @Override
+    public boolean overrideStackedOnOther(ItemStack compass,
+                                          Slot slot,
+                                          ClickAction action,
+                                          Player player) {
+        if (action != ClickAction.SECONDARY) return false;
+
+        ItemStack target = slot.getItem();
+        if (!hasStoredPen(compass)
+                && target.getItem() instanceof PenItem
+                && slot.mayPickup(player)) {
+            setStoredPen(compass, target);
+            slot.set(ItemStack.EMPTY);
+            return true;
+        }
+
+        ItemStack stored = getStoredPen(compass);
+        if (!stored.isEmpty() && target.isEmpty() && slot.mayPlace(stored)) {
+            slot.set(stored);
+            setStoredPen(compass, ItemStack.EMPTY);
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean returnStoredPenToInventory(Player player, ItemStack compass) {
+        ItemStack stored = getStoredPen(compass);
+        Inventory inventory = player.getInventory();
+        if (stored.isEmpty()
+                || !canAddToInventory(inventory, stored)
+                || !inventory.add(stored)) {
+            return false;
+        }
+        setStoredPen(compass, ItemStack.EMPTY);
+        inventory.setChanged();
+        player.containerMenu.broadcastChanges();
+        return true;
+    }
+
+    private static boolean canAddToInventory(Inventory inventory, ItemStack stack) {
+        int remaining = stack.getCount();
+        for (ItemStack existing : inventory.items) {
+            if (existing.isEmpty()
+                    || !ItemStack.isSameItemSameComponents(existing, stack)) {
+                continue;
+            }
+            remaining -= Math.max(0, existing.getMaxStackSize() - existing.getCount());
+            if (remaining <= 0) return true;
+        }
+        for (ItemStack existing : inventory.items) {
+            if (!existing.isEmpty()) continue;
+            remaining -= stack.getMaxStackSize();
+            if (remaining <= 0) return true;
+        }
+        return false;
+    }
+
+    @Override
+    public InteractionResultHolder<ItemStack> use(Level level,
+                                                  Player player,
+                                                  InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (!player.isShiftKeyDown() || !hasStoredPen(stack)) {
+            return InteractionResultHolder.pass(stack);
+        }
+        if (level.isClientSide) {
+            return InteractionResultHolder.sidedSuccess(stack, true);
+        }
+        return returnStoredPenToInventory(player, stack)
+                ? InteractionResultHolder.sidedSuccess(stack, false)
+                : InteractionResultHolder.fail(stack);
     }
 
     /** Adjusts the persistent radius of a compass stack by the scroll amount. */
@@ -115,6 +215,7 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
         Player player = minecraft.player;
         if (player == null || minecraft.level == null
                 || !(player.getMainHandItem().getItem() instanceof CompassItem)
+                || !hasStoredPen(player.getMainHandItem())
                 || !minecraft.options.keyUse.isDown()) {
             active = null;
             return;
@@ -148,17 +249,6 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
     }
 
     @Override
-    public Integer getColor(ItemStack stack, Player player, Level level,
-                            BlockPos pos, CanvasFace face, int pixelX, int pixelY) {
-        return WHITE;
-    }
-
-    @Override
-    public Optional<CanvasPenTool.Stroke> canvasStroke(ItemStack stack, Player player) {
-        return Optional.of(new CanvasPenTool.Stroke(DEFAULT_CANVAS_COLOR, DEFAULT_CANVAS_EFFECT));
-    }
-
-    @Override
     public void renderEditorPreview(EditorContext context,
                                     ItemStack stack,
                                     Player player,
@@ -169,6 +259,7 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
                                     int canvasTop,
                                     int canvasWidth,
                                     int canvasHeight) {
+        if (storedPenItem(stack) == null) return;
         if (!editorStrokeActive && !context.isOverCanvas(mouseX, mouseY)) return;
         int rasterWidth = context.rasterWidth();
         int rasterHeight = context.rasterHeight();
@@ -222,7 +313,7 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
                 || (button != 0 && button != 1)) {
             return false;
         }
-        CanvasPenTool.Stroke stroke = canvasStroke(stack, player).orElse(null);
+        CanvasPenTool.Stroke stroke = penStroke(stack, player).orElse(null);
         if (stroke == null) return true;
 
         context.beginHistoryAction();
@@ -389,7 +480,7 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
                                   int x,
                                   int y,
                                   int button) {
-        CanvasPenTool.Stroke stroke = canvasStroke(
+        CanvasPenTool.Stroke stroke = penStroke(
                 stack, player).orElse(null);
         if (stroke == null) return;
         context.writePixel(
@@ -421,38 +512,60 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
 
     @Nullable
     @Override
+    public Integer getColor(ItemStack stack, Player player, Level level,
+                            BlockPos pos, CanvasFace face, int pixelX, int pixelY) {
+        PenItem pen = storedPenItem(stack);
+        return pen == null ? null
+                : pen.getColor(storedPen(stack), player, level, pos, face, pixelX, pixelY);
+    }
+
+    @Nullable
+    @Override
     public PaintPattern getPattern(ItemStack stack, Player player, Level level,
                                    BlockPos pos, Vec3 hitLoc) {
-        final double radius = BRUSH_RADIUS;
-        return new PaintPattern(BRUSH_DIAMETER, BRUSH_DIAMETER, new PixelProvider() {
-            @Override
-            public BlendMode getBlendMode() {
-                return BlendMode.OVERWRITE;
-            }
-
-            @Nullable
-            @Override
-            public Integer getPixel(double dx, double dy) {
-                double cx = dx - radius;
-                double cy = dy - radius;
-                return Math.sqrt(cx * cx + cy * cy) <= radius ? WHITE : null;
-            }
-
-            @Override
-            public Map<String, Integer> getEffectValues(double dx, double dy) {
-                double cx = dx - radius;
-                double cy = dy - radius;
-                if (Math.sqrt(cx * cx + cy * cy) > radius) {
-                    return Collections.emptyMap();
-                }
-                return Collections.singletonMap(MANA_KEY, MANA_VALUE);
-            }
-        });
+        PenItem pen = storedPenItem(stack);
+        return pen == null ? null
+                : pen.getPattern(storedPen(stack), player, level, pos, hitLoc);
     }
 
     @Override
     public Double getStep() {
-        return STEP;
+        ItemStack compass = currentCompassStack();
+        PenItem pen = storedPenItem(compass);
+        return pen == null ? 0.02 : pen.getStep();
+    }
+
+    @Override
+    public boolean onPaintTick(ItemStack stack, Player player, Level level) {
+        PenItem pen = storedPenItem(stack);
+        return pen != null && pen.onPaintTick(storedPen(stack), player, level);
+    }
+
+    @Override
+    public int getPaintInterval() {
+        PenItem pen = storedPenItem(currentCompassStack());
+        return pen == null ? 1 : pen.getPaintInterval();
+    }
+
+    @Nullable
+    @Override
+    public BlendFunction getCustomBlendFunction(ItemStack stack) {
+        PenItem pen = storedPenItem(stack);
+        return pen == null ? null : pen.getCustomBlendFunction(storedPen(stack));
+    }
+
+    @Override
+    public boolean shouldPaint(Player player) {
+        ItemStack compass = compassInMainHand(player);
+        PenItem pen = storedPenItem(compass);
+        return pen != null && pen.shouldPaint(player);
+    }
+
+    @Override
+    public boolean shouldPaint(Player player, @Nullable BlockHitResult result) {
+        ItemStack compass = compassInMainHand(player);
+        PenItem pen = storedPenItem(compass);
+        return pen != null && pen.shouldPaint(player, result);
     }
 
     @Override
@@ -464,7 +577,13 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
             Vec3 origin = hitLocation.subtract(axis1.scale(0.5)).subtract(axis2.scale(0.5));
             return new Vec3[]{origin, axis1, axis2};
         }
-        return IPaintProvider.super.transformPatternAxes(player, hitLocation, direction, width, height);
+        ItemStack compass = compassInMainHand(player);
+        PenItem pen = storedPenItem(compass);
+        return pen == null
+                ? IPaintProvider.super.transformPatternAxes(
+                        player, hitLocation, direction, width, height)
+                : pen.transformPatternAxes(
+                        player, hitLocation, direction, width, height);
     }
 
     @Override
@@ -473,7 +592,20 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
         super.appendHoverText(stack, context, tooltip, flag);
         double radius = stack.getOrDefault(ModDataComponents.COMPASS_RADIUS.get(), DEFAULT_RADIUS);
         tooltip.add(Component.translatable("item.gyromancy.compass.radius", radius));
+        ItemStack pen = getStoredPen(stack);
+        tooltip.add(pen.isEmpty()
+                ? Component.translatable("item.gyromancy.compass.pen.empty")
+                : Component.translatable("item.gyromancy.compass.pen", pen.getHoverName()));
         tooltip.add(Component.translatable("item.gyromancy.compass.help"));
+    }
+
+    @Override
+    public Optional<net.minecraft.world.inventory.tooltip.TooltipComponent> getTooltipImage(
+            ItemStack stack) {
+        ItemStack pen = getStoredPen(stack);
+        return pen.isEmpty()
+                ? Optional.empty()
+                : Optional.of(new BundleTooltip(new BundleContents(List.of(pen))));
     }
 
     @Override
@@ -486,6 +618,18 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasPen
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return DEFAULT_RADIUS;
         return getRadius(minecraft.player.getMainHandItem());
+    }
+
+    private static ItemStack currentCompassStack() {
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft.player == null
+                ? ItemStack.EMPTY
+                : compassInMainHand(minecraft.player);
+    }
+
+    private static ItemStack compassInMainHand(Player player) {
+        ItemStack stack = player.getMainHandItem();
+        return stack.getItem() instanceof CompassItem ? stack : ItemStack.EMPTY;
     }
 
     private static double clampRadius(double radius) {

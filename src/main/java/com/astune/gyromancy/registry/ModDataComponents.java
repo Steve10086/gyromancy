@@ -5,6 +5,7 @@ import com.astune.gyromancy.api.canvas.StampCanvasMaterial;
 import com.astune.gyromancy.api.ink.InkType;
 import com.astune.gyromancy.api.ink.PenProperties;
 import com.astune.gyromancy.canvas.CanvasDocument;
+import com.astune.gyromancy.item.CompassContents;
 import com.astune.gyromancy.wand.WandContents;
 import com.astune.gyromancy.wand.WandSlotSnapshots;
 import com.astune.painter.api.CanvasFace;
@@ -52,6 +53,15 @@ public final class ModDataComponents {
                     DataComponentType.<Double>builder()
                             .persistent(Codec.DOUBLE)
                             .networkSynchronized(ByteBufCodecs.DOUBLE)
+                            .build()
+            );
+
+    /** The single pen stored by a compass. */
+    public static final Supplier<DataComponentType<CompassContents>> COMPASS_PEN =
+            DATA_COMPONENTS.register("compass_pen", () ->
+                    DataComponentType.<CompassContents>builder()
+                            .persistent(CompassContents.CODEC)
+                            .networkSynchronized(CompassContents.STREAM_CODEC)
                             .build()
             );
 
