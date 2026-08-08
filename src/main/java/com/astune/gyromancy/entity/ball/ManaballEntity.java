@@ -1,6 +1,7 @@
 package com.astune.gyromancy.entity.ball;
 
 import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.entity.field.MagicFieldEntity;
 import com.astune.gyromancy.registry.ModEntities;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.EntityType;
@@ -8,7 +9,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
-public class ManaballEntity extends MagicBallEntity {
+public class ManaballEntity extends MagicFieldEntity {
     private static final float DISCARD_SIZE = 0.1f;
     private static final double RESISTANCE_FACTOR = 0.08;
     private static final double RESISTANCE_CONSTANT = 0.002;
@@ -24,7 +25,7 @@ public class ManaballEntity extends MagicBallEntity {
     public ManaballEntity(Level level, Vec3 pos, Vec3 velocity, double arrowSizeSum,
                           double liftDirection, Vec3 acceleration, float size) {
         this(ModEntities.MANABALL.get(), level);
-        setBallSize(size);
+        setFieldSize(size);
         this.pendingVelocity = launchVelocity(velocity, arrowSizeSum, liftDirection);
         this.pendingAcceleration = acceleration;
         this.acceleration = Vec3.ZERO;
@@ -36,7 +37,7 @@ public class ManaballEntity extends MagicBallEntity {
     protected boolean tickBeforePayload() {
         if (!super.tickBeforePayload()) return false;
         growIntoTargetSize();
-        if (getBallSize() <= DISCARD_SIZE) {
+        if (getFieldSize() <= DISCARD_SIZE) {
             discard();
             return false;
         }
@@ -44,7 +45,6 @@ public class ManaballEntity extends MagicBallEntity {
         launchIfReady();
 
         setDeltaMovement(getDeltaMovement().add(acceleration));
-        moveWithResistance(RESISTANCE_FACTOR, RESISTANCE_CONSTANT);
 
         return true;
     }

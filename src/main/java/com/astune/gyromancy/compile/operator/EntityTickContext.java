@@ -1,6 +1,7 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.element.ElementStorageManager;
+import com.astune.gyromancy.entity.field.MagicFieldEntity;
 import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
@@ -69,6 +70,16 @@ public final class EntityTickContext {
                 entity.velocityThisTick(), entity.getLookAngle(), acceleration, entity.getBoundingBox(),
                 entity.level().isClientSide,
                 entity.isAlive(), entity.isFullyGrown(), entity.hasImpactThisTick(), entity.getBallSize(),
+                entity.getTargetSize(), entity.getAverageElementLevel(), data,
+                entity::discard, entity.level()::addFreshEntity, entity::bindGeneratedEntity,
+                entity::setTargetVolume, entity::setAverageElementLevel);
+    }
+
+    public static EntityTickContext from(MagicFieldEntity entity, Map<String, Object> data, Vec3 acceleration) {
+        return new EntityTickContext(entity, entity.level(), entity.tickCount, entity.position(),
+                entity.velocityThisTick(), entity.getLookAngle(), acceleration, entity.getBoundingBox(),
+                entity.level().isClientSide,
+                entity.isAlive(), entity.isFullyGrown(), entity.hasImpactThisTick(), entity.getFieldSize(),
                 entity.getTargetSize(), entity.getAverageElementLevel(), data,
                 entity::discard, entity.level()::addFreshEntity, entity::bindGeneratedEntity,
                 entity::setTargetVolume, entity::setAverageElementLevel);
