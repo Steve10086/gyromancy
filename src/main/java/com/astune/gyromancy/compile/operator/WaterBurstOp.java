@@ -46,7 +46,6 @@ public final class WaterBurstOp extends TriggerOp {
             pushFrontEntities(ctx);
             fillWithFlowingWater(ctx);
         }
-        ctx.discard();
     }
 
     private static void pushFrontEntities(EntityTickContext ctx) {

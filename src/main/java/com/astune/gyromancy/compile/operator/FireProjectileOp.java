@@ -20,9 +20,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @RegisteredOp
 public final class FireProjectileOp extends ProjectileEntityOp {
@@ -83,28 +81,29 @@ public final class FireProjectileOp extends ProjectileEntityOp {
 
     public static List<EntityPayload> defaultPayload() {
         return List.of(
-                new ExplosionOp(),
                 new ElementVolumeOp(ElementType.FIRE, STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
                         FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL, MANA_TO_VOLUME));
     }
 
     public List<EntityPayload> conditionalPayload() {
-        List<EntityPayload> payload = new ArrayList<>();
+        Set<EntityPayload> payload = new HashSet<>();
         for (OpInput o : inputs){
             if (o instanceof OpInput.Rune rune){
                 switch (rune.symbolName()){
                     case "engaging" -> {
                         payload.add(new ElementConversionOp(ElementType.FIRE, ELEMENT_EXCHANGE_INTERVAL));
                     }
-                    case "split" -> {}
                     case "fix" -> {
                         payload.add(new SmeltOp());
                     }
                 }
             }
         }
-        if (payload.isEmpty()) payload.add(new ExplosionOp());
-        return payload;
+        if (payload.isEmpty()) {
+            payload.add(new ExplosionOp());
+            payload.add(new RemoveOnHitOp());
+        }
+        return payload.stream().toList();
     }
 
     @Override

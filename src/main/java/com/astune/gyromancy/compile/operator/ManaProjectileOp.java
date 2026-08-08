@@ -86,7 +86,7 @@ public final class ManaProjectileOp extends EntityEffectOp {
             Vec3 acceleration = Vec3.ZERO;
             ManaballEntity manaball = new ManaballEntity(level, pos, emission.velocity(),
                     emission.motionSum(), liftDirection, acceleration, size);
-            manaball.setPayload(payloadFor(this));
+            manaball.setPayload(defaultPayload());
             EntityEmitter.INSTANCE.emit(level, ID, manaball, result);
         }
         return result.toRuntimeHandle();
@@ -124,8 +124,10 @@ public final class ManaProjectileOp extends EntityEffectOp {
         return false;
     }
 
-    private static List<EntityPayload> payloadFor(ManaProjectileOp node) {
-        return node.payload(List.of(ElementVolumeOp.stability(ElementType.MANA)));
+    public static List<EntityPayload> defaultPayload() {
+        return List.of(
+                new ElementOp(ElementType.MANA, 2.0f, 0.0f)
+        );
     }
 
     private static List<ParameterRune> toRuneParams(List<OpInput> inputs) {

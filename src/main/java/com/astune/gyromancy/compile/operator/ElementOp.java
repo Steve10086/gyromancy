@@ -22,7 +22,7 @@ import java.util.Optional;
 import static java.lang.Math.max;
 
 @RegisteredOp
-public final class ElementOp extends OnEntityTickOp implements CompiledOp {
+public final class ElementOp extends OnEntityTickOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "element");
     private static final ResourceLocation ENGAGING_SYMBOL =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "engaging");
@@ -39,37 +39,6 @@ public final class ElementOp extends OnEntityTickOp implements CompiledOp {
             Codec.FLOAT.optionalFieldOf("stored_mana", 0.0F)
                     .forGetter(op -> op.storedMana)
     ).apply(instance, ElementOp::new));
-    public static final OpDefinition DEFINITION = new OpDefinition() {
-        @Override
-        public ResourceLocation id() {
-            return ID;
-        }
-
-        @Override
-        public List<OpInputMatcher> match() {
-            return List.of(OpInputMatcher.rune("engaging"));
-        }
-
-        @Override
-        public List<OpInputMatcher> accepted() {
-            return List.of(
-                    OpInputMatcher.rune("fire"),
-                    OpInputMatcher.rune("water"),
-                    OpInputMatcher.rune("mana"),
-                    OpInputMatcher.rune("wind"),
-                    OpInputMatcher.rune("earth"),
-                    OpInputMatcher.rune("light"),
-                    OpInputMatcher.rune("dark"),
-                    OpInputMatcher.rune("space"),
-                    OpInputMatcher.rune("time"));
-        }
-
-        @Override
-        public CompileResult<CompiledOp> compile(PositionedGlyph boundary, List<OpInput> matchedInputs,
-                                               List<OpInput> inputs) {
-            return new CompileResult.Success<>(new ElementOp(boundary, matchedInputs, inputs));
-        }
-    };
 
     private final PositionedGlyph boundary;
     private final List<OpInput> matchedInputs;
@@ -78,24 +47,15 @@ public final class ElementOp extends OnEntityTickOp implements CompiledOp {
     private float manaExpendFactor;
     private float storedMana;
 
-    private ElementOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
-        this.boundary = boundary;
-        this.matchedInputs = List.copyOf(matchedInputs);
-        this.inputs = List.copyOf(inputs);
-        this.absorbedElement = absorbedElementFromContent(inputs);
-        this.manaExpendFactor = 0.0F;
-        this.storedMana = 0.0F;
-    }
-
     public ElementOp() {
         this(ElementType.MANA);
     }
 
     public ElementOp(ElementType absorbedElement) {
-        this(absorbedElement, 0.0F, 0.0F);
+        this(absorbedElement, 1.0F, 0.0F);
     }
 
-    private ElementOp(ElementType absorbedElement, float manaExpendFactor, float storedMana) {
+    public ElementOp(ElementType absorbedElement, float manaExpendFactor, float storedMana) {
         this.boundary = null;
         this.matchedInputs = List.of();
         this.inputs = List.of();
@@ -103,33 +63,12 @@ public final class ElementOp extends OnEntityTickOp implements CompiledOp {
         this.manaExpendFactor = manaExpendFactor;
         this.storedMana = storedMana;
     }
-
-    @Override
-    public ResourceLocation id() {
-        return ID;
-    }
-
-    @Override
-    public PositionedGlyph boundary() {
-        return boundary;
-    }
-
-    @Override
-    public List<OpInput> inputs() {
-        return inputs;
-    }
-
     public List<OpInput> matchedInputs() {
         return matchedInputs;
     }
 
     public ElementType absorbedElement() {
         return absorbedElement;
-    }
-
-    @Override
-    public int color() {
-        return SymbolCatalog.glyphColorFor(ENGAGING_SYMBOL);
     }
 
     @Override
@@ -140,11 +79,6 @@ public final class ElementOp extends OnEntityTickOp implements CompiledOp {
     @Override
     protected Codec<ElementOp> codec() {
         return CODEC;
-    }
-
-    @Override
-    public void contributeEntityPayloads(List<EntityPayload> payloads) {
-        payloads.add(new ElementOp(absorbedElement));
     }
 
     @Override

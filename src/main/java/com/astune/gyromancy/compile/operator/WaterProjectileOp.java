@@ -20,9 +20,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @RegisteredOp
 public final class WaterProjectileOp extends ProjectileEntityOp {
@@ -88,13 +86,14 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
     public static List<EntityPayload> defaultPayload() {
         return List.of(
                 new WaterBurstOp(),
+                new RemoveOnHitOp(),
                 new CarryItemsOp(),
                 new ElementVolumeOp(ElementType.WATER, STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
                         VOLUME_LOSS, EQUILIBRIUM, MAX_VOLUME_LEVEL, MANA_TO_VOLUME)
         );
     }
     public List<EntityPayload> conditionalPayload() {
-        List<EntityPayload> payload = new ArrayList<>();
+        Set<EntityPayload> payload = new HashSet<>();
         for (OpInput o : inputs){
             if (o instanceof OpInput.Rune rune){
                 switch (rune.symbolName()){
@@ -108,7 +107,7 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
                 }
             }
         }
-        return payload;
+        return payload.stream().toList();
     }
 
     @Override
