@@ -18,7 +18,7 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
     private final ResourceLocation id;
     private final PositionedGlyph boundary;
     private final List<OpInput> matchedInputs;
-    private final List<OpInput> inputs;
+    protected final List<OpInput> inputs;
 
     protected EntityEffectOp(ResourceLocation id, ElementType element, PositionedGlyph boundary,
                              List<OpInput> matchedInputs, List<OpInput> inputs) {

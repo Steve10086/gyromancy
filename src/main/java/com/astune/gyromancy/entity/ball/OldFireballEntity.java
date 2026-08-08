@@ -37,8 +37,6 @@ public class OldFireballEntity extends MagicBallEntity {
     private static final double FIRE_VOLUME_LOSS = 0.1;
     private static final double FIRE_EQUILIBRIUM = 1000.0;
     private static final double MAX_VOLUME_FIRE_LEVEL = 200.0;
-    private static final double FIRE_PER_VOLUME = 1000.0;
-    private static final double FIRE_CONVERSION_COST = 10.0;
     private static final double MANA_TO_VOLUME = 0.05;
 
     private Vec3 velocity = Vec3.ZERO;
@@ -48,8 +46,7 @@ public class OldFireballEntity extends MagicBallEntity {
     protected List<? extends EntityPayload> defaultPayload() {
         return List.of(
             new ElementVolumeOp(ElementType.FIRE, FireProjectileOp.STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
-                    FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL, FIRE_PER_VOLUME,
-                    FIRE_CONVERSION_COST, MANA_TO_VOLUME),
+                    FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL, MANA_TO_VOLUME),
             new ElementConversionOp(ElementType.FIRE, ELEMENT_EXCHANGE_INTERVAL),
             new SmeltOp());
     }

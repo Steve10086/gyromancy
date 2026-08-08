@@ -25,7 +25,7 @@ class OnEntityTickOpCodecTest {
                 new RotationOp(-3.0),
                 new ElementOp(ElementType.WATER),
                 new ElementVolumeOp(ElementType.FIRE, "storedMana", 10,
-                        0.1, 1000.0, 200.0, 1000.0, 10.0, 0.05),
+                        0.1, 1000.0, 200.0, 0.05),
                 new ElementConversionOp(ElementType.FIRE, 10));
 
         CompoundTag tag = new CompoundTag();

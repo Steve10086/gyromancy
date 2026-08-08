@@ -20,6 +20,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -29,8 +30,6 @@ public final class FireProjectileOp extends ProjectileEntityOp {
     private static final double FIRE_VOLUME_LOSS = 0.1;
     private static final double FIRE_EQUILIBRIUM = 100.0;
     private static final double MAX_VOLUME_FIRE_LEVEL = 2000.0;
-    private static final double FIRE_PER_VOLUME = 1000.0;
-    private static final double FIRE_CONVERSION_COST = 100.0;
     private static final double MANA_TO_VOLUME = 0.01;
 
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fireball");
@@ -49,7 +48,8 @@ public final class FireProjectileOp extends ProjectileEntityOp {
         public List<OpInputMatcher> accepted() {
             return List.of(
                     OpInputMatcher.rune("arrow"),
-                    OpInputMatcher.rune("revert"),
+                    OpInputMatcher.rune("engaging"),
+                    OpInputMatcher.rune("fix"),
                     OpInputMatcher.op(CompiledOp.class));
         }
 
@@ -70,16 +70,6 @@ public final class FireProjectileOp extends ProjectileEntityOp {
 
     public static CompileResult<CompiledOp> create(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                  List<OpInput> inputs) {
-        boolean reverted = false;
-        for (OpInput input : inputs) {
-            if (!(input instanceof OpInput.Rune rune) || !"revert".equals(rune.symbolName())) continue;
-            if (reverted) {
-                return new CompileResult.Failure<>(List.of(
-                        new com.astune.gyromancy.array.compile.CompileDiagnostic(
-                                "invalid_element_inverse", "Only one revert rune is supported")));
-            }
-            reverted = true;
-        }
         return new CompileResult.Success<>(new FireProjectileOp(boundary, matchedInputs, inputs));
     }
 
@@ -87,6 +77,7 @@ public final class FireProjectileOp extends ProjectileEntityOp {
     public FireballEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
         FireballEntity entity = new FireballEntity(level, pos, velocity, acceleration, size);
         entity.setPayload(defaultPayload());
+        entity.setPayload(conditionalPayload());
         return entity;
     }
 
@@ -94,9 +85,26 @@ public final class FireProjectileOp extends ProjectileEntityOp {
         return List.of(
                 new ExplosionOp(),
                 new ElementVolumeOp(ElementType.FIRE, STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
-                        FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL,
-                        FIRE_PER_VOLUME, FIRE_CONVERSION_COST, MANA_TO_VOLUME),
-                new ElementConversionOp(ElementType.FIRE, ELEMENT_EXCHANGE_INTERVAL));
+                        FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL, MANA_TO_VOLUME));
+    }
+
+    public List<EntityPayload> conditionalPayload() {
+        List<EntityPayload> payload = new ArrayList<>();
+        for (OpInput o : inputs){
+            if (o instanceof OpInput.Rune rune){
+                switch (rune.symbolName()){
+                    case "engaging" -> {
+                        payload.add(new ElementConversionOp(ElementType.FIRE, ELEMENT_EXCHANGE_INTERVAL));
+                    }
+                    case "split" -> {}
+                    case "fix" -> {
+                        payload.add(new SmeltOp());
+                    }
+                }
+            }
+        }
+        if (payload.isEmpty()) payload.add(new ExplosionOp());
+        return payload;
     }
 
     @Override

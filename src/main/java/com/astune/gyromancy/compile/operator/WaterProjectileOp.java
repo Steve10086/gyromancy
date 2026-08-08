@@ -20,6 +20,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -29,8 +30,6 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
     private static final double VOLUME_LOSS = 0.1;
     private static final double EQUILIBRIUM = 1000.0;
     private static final double MAX_VOLUME_LEVEL = 200.0;
-    private static final double ELEMENT_PER_VOLUME = 1000.0;
-    private static final double ELEMENT_CONVERSION_COST = 10.0;
     private static final double MANA_TO_VOLUME = 0.05;
     public static final String STORED_MANA_KEY = "storedMana";
 
@@ -50,6 +49,7 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
         public List<OpInputMatcher> accepted() {
             return List.of(
                     OpInputMatcher.rune("arrow"),
+                    OpInputMatcher.rune("engaging"),
                     OpInputMatcher.op(CompiledOp.class));
         }
 
@@ -81,6 +81,7 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
     public WaterBallEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
         WaterBallEntity entity = new WaterBallEntity(level, pos, velocity, acceleration, size);
         entity.setPayload(defaultPayload());
+        entity.setPayload(conditionalPayload());
         return entity;
     }
 
@@ -89,10 +90,25 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
                 new WaterBurstOp(),
                 new CarryItemsOp(),
                 new ElementVolumeOp(ElementType.WATER, STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
-                        VOLUME_LOSS, EQUILIBRIUM, MAX_VOLUME_LEVEL,
-                        ELEMENT_PER_VOLUME, ELEMENT_CONVERSION_COST, MANA_TO_VOLUME),
-                new ElementConversionOp(ElementType.WATER, ELEMENT_EXCHANGE_INTERVAL)
+                        VOLUME_LOSS, EQUILIBRIUM, MAX_VOLUME_LEVEL, MANA_TO_VOLUME)
         );
+    }
+    public List<EntityPayload> conditionalPayload() {
+        List<EntityPayload> payload = new ArrayList<>();
+        for (OpInput o : inputs){
+            if (o instanceof OpInput.Rune rune){
+                switch (rune.symbolName()){
+                    case "engaging" -> {
+                        payload.add(new ElementConversionOp(ElementType.WATER, ELEMENT_EXCHANGE_INTERVAL));
+                    }
+                    case "split" -> {}
+                    case "fix" -> {
+                        payload.add(new BrewingOp());
+                    }
+                }
+            }
+        }
+        return payload;
     }
 
     @Override

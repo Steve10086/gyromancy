@@ -53,7 +53,7 @@ public final class ElementConversionOp extends OnEntityTickOp {
         List<BlockPos> positions = MagicBallGeometry.containedPositions(ctx.position(), ctx.targetSize());
         if (positions.isEmpty()) return;
 
-        double convertedElement = ctx.consumePendingElementConversion(element) + drainMana(ctx, positions);
+        double convertedElement = drainMana(ctx, positions);
         long elementPerBlock = (long)Math.floor(convertedElement / positions.size());
         if (elementPerBlock <= 0L) return;
 

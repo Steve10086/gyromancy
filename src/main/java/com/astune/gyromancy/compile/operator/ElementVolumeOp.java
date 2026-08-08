@@ -27,8 +27,6 @@ public final class ElementVolumeOp extends OnEntityTickOp {
             Codec.DOUBLE.fieldOf("volume_loss").forGetter(op -> op.volumeLoss),
             Codec.DOUBLE.fieldOf("equilibrium").forGetter(op -> op.equilibrium),
             Codec.DOUBLE.fieldOf("max_volume_element_level").forGetter(op -> op.maxVolumeElementLevel),
-            Codec.DOUBLE.fieldOf("element_per_volume").forGetter(op -> op.elementPerVolume),
-            Codec.DOUBLE.fieldOf("conversion_cost").forGetter(op -> op.conversionCost),
             Codec.DOUBLE.fieldOf("mana_to_volume").forGetter(op -> op.manaToVolume)
     ).apply(instance, ElementVolumeOp::new));
 
@@ -41,28 +39,24 @@ public final class ElementVolumeOp extends OnEntityTickOp {
     private final double volumeLoss;
     private final double equilibrium;
     private final double maxVolumeElementLevel;
-    private final double elementPerVolume;
-    private final double conversionCost;
     private final double manaToVolume;
 
     public ElementVolumeOp(ElementType element, String storedManaKey, int interval,
                            double volumeLoss, double equilibrium, double maxVolumeElementLevel,
-                           double elementPerVolume, double conversionCost, double manaToVolume) {
+                           double manaToVolume) {
         this.element = element;
         this.storedManaKey = storedManaKey;
         this.interval = interval;
         this.volumeLoss = volumeLoss;
         this.equilibrium = equilibrium;
         this.maxVolumeElementLevel = maxVolumeElementLevel;
-        this.elementPerVolume = elementPerVolume;
-        this.conversionCost = conversionCost;
         this.manaToVolume = manaToVolume;
     }
 
     public static ElementVolumeOp stability(ElementType element) {
         return new ElementVolumeOp(element, "", 1,
                 DEFAULT_VOLUME_LOSS_PER_TICK, DEFAULT_EQUILIBRIUM,
-                0.0, 0.0, 0.0, 0.0);
+                0.0, 0.0);
     }
 
     @Override
@@ -92,7 +86,6 @@ public final class ElementVolumeOp extends OnEntityTickOp {
 
         double lostVolume = lostVolume(volume, average);
         volume -= lostVolume;
-        ctx.addPendingElementConversion(element, releasedElement(lostVolume));
         ctx.setAverageElementLevel(average);
 
         if (manaToVolume <= 0.0 || storedManaKey.isEmpty()) {
@@ -131,10 +124,6 @@ public final class ElementVolumeOp extends OnEntityTickOp {
 
     double grownVolume(double volume, long manaToGrow) {
         return volume + manaToGrow * manaToVolume;
-    }
-
-    double releasedElement(double lostVolume) {
-        return Math.max(0.0, elementPerVolume * lostVolume - conversionCost * interval);
     }
 
     private static long drainMana(EntityTickContext ctx, List<BlockPos> positions, long needed) {

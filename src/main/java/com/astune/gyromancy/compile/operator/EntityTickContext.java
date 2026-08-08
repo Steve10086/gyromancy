@@ -1,6 +1,5 @@
 package com.astune.gyromancy.compile.operator;
 
-import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.element.ElementStorageManager;
 import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import net.minecraft.world.entity.Entity;
@@ -8,7 +7,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.EnumMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -36,8 +34,6 @@ public final class EntityTickContext {
     private final BiConsumer<MagicBallEntity, String> bindGeneratedEntity;
     private final DoubleConsumer setTargetVolume;
     private final DoubleConsumer setAverageElementLevel;
-    private final Map<ElementType, Double> pendingElementConversions = new EnumMap<>(ElementType.class);
-
     public EntityTickContext(Entity owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
                              Vec3 facing, Vec3 acceleration, AABB bounds, boolean clientSide, boolean alive,
                              boolean fullyGrown, boolean impact, float size, float targetSize,
@@ -117,15 +113,6 @@ public final class EntityTickContext {
     public void setAverageElementLevel(double averageElementLevel) {
         this.averageElementLevel = averageElementLevel;
         setAverageElementLevel.accept(averageElementLevel);
-    }
-
-    public void addPendingElementConversion(ElementType element, double amount) {
-        if (amount > 0.0) pendingElementConversions.merge(element, amount, Double::sum);
-    }
-
-    public double consumePendingElementConversion(ElementType element) {
-        Double amount = pendingElementConversions.remove(element);
-        return amount == null ? 0.0 : amount;
     }
 
     public void discard() { discard.run(); }
