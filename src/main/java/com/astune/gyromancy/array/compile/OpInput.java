@@ -3,7 +3,9 @@ package com.astune.gyromancy.array.compile;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 
-public sealed interface OpInput permits OpInput.Rune, OpInput.Op {
+import java.util.List;
+
+public sealed interface OpInput permits OpInput.Rune, OpInput.Op, OpInput.RawGroup {
     record Rune(PositionedGlyph glyph) implements OpInput {
         public String symbolName() {
             return glyph.symbolId().getPath();
@@ -11,4 +13,19 @@ public sealed interface OpInput permits OpInput.Rune, OpInput.Op {
     }
 
     record Op(CompiledOp operator) implements OpInput {}
+
+    /**
+     * A nested group which could not compile into an operator. It remains a
+     * passive input so an operator such as ProjectionOp can consume its
+     * boundary and glyph tree without making it executable.
+     */
+    record RawGroup(GroupNode group, List<CompileDiagnostic> failures) implements OpInput {
+        public RawGroup {
+            failures = List.copyOf(failures);
+        }
+
+        public PositionedGlyph boundary() {
+            return group.boundary();
+        }
+    }
 }

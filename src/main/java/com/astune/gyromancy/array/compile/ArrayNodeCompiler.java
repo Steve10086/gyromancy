@@ -37,7 +37,6 @@ public final class ArrayNodeCompiler {
         }
 
         List<OpInput> inputs = new ArrayList<>();
-        List<CompileDiagnostic> diagnostics = new ArrayList<>();
 
         for (ArrayNode child : sequence.children()) {
             if (child instanceof SymbolNode symbol) {
@@ -47,11 +46,13 @@ public final class ArrayNodeCompiler {
                 if (compiled instanceof CompileResult.Success<CompiledOp> success) {
                     inputs.add(new OpInput.Op(success.value()));
                 } else if (compiled instanceof CompileResult.Failure<CompiledOp> failure) {
-                    diagnostics.addAll(failure.diagnostics());
+                    // Preserve the complete failed subtree as a passive
+                    // input. Operators must explicitly accept RawGroup in
+                    // their accepted list before it can reach compile().
+                    inputs.add(new OpInput.RawGroup(nested, failure.diagnostics()));
                 }
             }
         }
-        if (!diagnostics.isEmpty()) return new CompileResult.Failure<>(diagnostics);
 
         return createOp(group.boundary(), List.copyOf(inputs), effects);
     }
@@ -120,6 +121,8 @@ public final class ArrayNodeCompiler {
                 glyphs.add(rune.glyph());
             } else if (input instanceof OpInput.Op child) {
                 collectBoundGlyphs(child.operator(), glyphs);
+            } else if (input instanceof OpInput.RawGroup raw) {
+                glyphs.addAll(ArrayAstBuilder.boundGlyphs(raw.group()));
             }
         }
     }

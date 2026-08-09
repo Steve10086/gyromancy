@@ -1,6 +1,7 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
@@ -13,8 +14,9 @@ import com.astune.gyromancy.array.compile.RegisteredOp;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
-import com.astune.gyromancy.array.runtime.emit.EntityEmitter;
+import com.astune.gyromancy.array.runtime.emit.EmittedObject;
 import com.astune.gyromancy.canvas.CanvasDocument;
+import com.astune.gyromancy.canvas.CanvasEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import com.astune.gyromancy.wand.WandProjectionCanvasEntity;
@@ -30,7 +32,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/** Projects the glyphs enclosed by a wand plane onto a fixed parallel plane. */
+import static java.lang.Math.max;
+
+/** Projects the glyphs enclosed by a canvas outer circle onto a fixed parallel plane. */
 @RegisteredOp
 public final class ProjectionOp implements CompiledOp, PersistentOp {
     public static final ResourceLocation ID =
@@ -52,7 +56,8 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
             return List.of(
                     OpInputMatcher.rune("arrow"),
                     OpInputMatcher.rune("arrow_up"),
-                    OpInputMatcher.boundary(SymbolRole.OUTER_CIRCLE));
+                    OpInputMatcher.boundary(SymbolRole.OUTER_CIRCLE),
+                    OpInputMatcher.rawGroup(SymbolRole.OUTER_CIRCLE));
         }
 
         @Override
@@ -63,7 +68,7 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
                 return new CompileResult.Failure<>(List.of(
                         new com.astune.gyromancy.array.compile.CompileDiagnostic(
                                 "missing_projection_source",
-                                "Projection requires a nested outer circle on a wand projection")));
+                                "Projection requires a nested outer circle on a canvas")));
             }
             return new CompileResult.Success<>(new ProjectionOp(boundary, matchedInputs, inputs));
         }
@@ -108,9 +113,29 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
     @Override
     public RuntimeHandle activate(OpRuntimeContext context) {
         ServerLevel level = context.level();
-        Optional<SourceCircle> source = findSourceCircle(inputs).flatMap(
+        Optional<SourceCircle> sourceInput = findSourceCircle(inputs);
+        if (sourceInput.isEmpty()) {
+            Gyromancy.LOGGER.warn(
+                    "[Projection] Root glyph #{} has no outer-circle source input",
+                    boundary.glyphId());
+            return new RuntimeHandle(Map.of());
+        }
+        Optional<SourceCircle> source = sourceInput.flatMap(
                 circle -> resolveSource(level, circle));
-        if (source.isEmpty()) return new RuntimeHandle(Map.of());
+        if (source.isEmpty()) {
+            SourceCircle sourceCircle = sourceInput.get();
+            String canvasDescription = sourceCircle.circle().sourceCanvasId()
+                    .map(id -> {
+                        var entity = level.getEntity(id);
+                        return entity == null ? id + " (not loaded)"
+                                : id + " (" + entity.getClass().getSimpleName() + ")";
+                    })
+                    .orElse("missing source canvas id");
+            Gyromancy.LOGGER.warn(
+                    "[Projection] Source outer circle #{} has no live source canvas: {}",
+                    sourceCircle.circle().glyphId(), canvasDescription);
+            return new RuntimeHandle(Map.of());
+        }
 
         SourceCircle sourceCircle = source.get();
         MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);
@@ -119,7 +144,12 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
                 .filter(glyph -> inside(sourceCircle.circle(), glyph))
                 .map(PositionedGlyph::glyphUuid)
                 .collect(Collectors.toSet());
-        if (selected.isEmpty()) return new RuntimeHandle(Map.of());
+        if (selected.isEmpty()) {
+            Gyromancy.LOGGER.warn(
+                    "[Projection] Source outer circle #{} contains no glyphs on canvas {}",
+                    sourceCircle.circle().glyphId(), sourceCircle.canvas().getId());
+            return new RuntimeHandle(Map.of());
+        }
 
         CanvasDocument document = WandProjectionService.copySelectedGlyphsForProjection(
                 sourceCircle.canvas().document(), selected);
@@ -132,7 +162,17 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
                 level, targetFrame, document);
 
         EmitResult result = new EmitResult();
-        EntityEmitter.INSTANCE.emit(level, ID, projection, result);
+        if (!level.addFreshEntity(projection)) {
+            Gyromancy.LOGGER.warn(
+                    "[Projection] Failed to add fixed projection for root glyph #{}",
+                    boundary.glyphId());
+            return new RuntimeHandle(Map.of());
+        }
+        // The entity can be added from inside another canvas' onAdded callback,
+        // before the tracker emits StartTracking. Mirror the wand placement
+        // path so an already tracking client receives the raster immediately.
+        projection.broadcastSnapshot();
+        result.add(new EmittedObject(ID, ArrayObject.EntityRef.of(projection)));
         return result.toRuntimeHandle();
     }
 
@@ -142,7 +182,7 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
     }
 
     private Vec3 projectionOffset() {
-        Vec3 offset = Vec3.ZERO;
+        Vec3 offset = boundary.surface().normal().normalize().scale(2.0);
         double arrowSizeSum = 0.0;
         for (OpInput input : inputs) {
             if (!(input instanceof OpInput.Rune rune)) continue;
@@ -163,29 +203,41 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
                 }
             }
         }
-        double speed = offset.length();
+        double speed = max(0, offset.length() - 2);
         offset = offset.add(boundary.surface().normal().scale(
                 (arrowSizeSum - speed) + 0.2 * speed));
         return offset.scale(arrayScale(boundary));
     }
 
     private static float arrayScale(PositionedGlyph circle) {
-        double area = Math.max(0.0, circle.length() * circle.width());
-        return (float) Math.max(0.1F, Math.sqrt(area) * 0.5);
+        double area = max(0.0, circle.length() * circle.width());
+        return (float) max(0.1F, Math.sqrt(area) * 0.5);
     }
 
     private static boolean inside(PositionedGlyph outer, PositionedGlyph glyph) {
-        SurfaceFrame.Coordinates coordinates = outer.surface().project(glyph.center());
-        return coordinates.u() >= outer.minWorldX()
-                && coordinates.u() <= outer.maxWorldX()
-                && coordinates.v() >= outer.minWorldY()
-                && coordinates.v() <= outer.maxWorldY();
+        SurfaceFrame.SurfaceBounds bounds = glyph.boundsOn(outer.surface());
+        if (glyph.role() == SymbolRole.OUTER_CIRCLE) {
+            return bounds.minU() >= outer.minWorldX()
+                    && bounds.maxU() <= outer.maxWorldX()
+                    && bounds.minV() >= outer.minWorldY()
+                    && bounds.maxV() <= outer.maxWorldY();
+        }
+        double u = bounds.centerU();
+        double v = bounds.centerV();
+        return u >= outer.minWorldX() && u <= outer.maxWorldX()
+                && v >= outer.minWorldY() && v <= outer.maxWorldY();
     }
 
     private static Optional<SourceCircle> findSourceCircle(List<OpInput> inputs) {
         for (OpInput input : inputs) {
-            if (!(input instanceof OpInput.Op op)) continue;
-            PositionedGlyph circle = op.operator().boundary();
+            PositionedGlyph circle;
+            if (input instanceof OpInput.Op op) {
+                circle = op.operator().boundary();
+            } else if (input instanceof OpInput.RawGroup raw) {
+                circle = raw.boundary();
+            } else {
+                continue;
+            }
             if (circle != null && circle.role() == SymbolRole.OUTER_CIRCLE) {
                 return Optional.of(new SourceCircle(circle, null));
             }
@@ -195,10 +247,10 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
 
     private static Optional<SourceCircle> resolveSource(ServerLevel level, SourceCircle source) {
         return source.circle().sourceCanvasId()
-                .flatMap(id -> level.getEntity(id) instanceof WandProjectionCanvasEntity canvas
+                .flatMap(id -> level.getEntity(id) instanceof CanvasEntity canvas
                         ? Optional.of(new SourceCircle(source.circle(), canvas))
                         : Optional.empty());
     }
 
-    private record SourceCircle(PositionedGlyph circle, WandProjectionCanvasEntity canvas) {}
+    private record SourceCircle(PositionedGlyph circle, CanvasEntity canvas) {}
 }

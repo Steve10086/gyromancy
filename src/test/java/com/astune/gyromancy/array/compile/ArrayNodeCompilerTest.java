@@ -11,6 +11,7 @@ import com.astune.gyromancy.compile.operator.EntityEffectOp;
 import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.MomentumOp;
 import com.astune.gyromancy.compile.operator.PersistentOp;
+import com.astune.gyromancy.compile.operator.ProjectionOp;
 import com.astune.gyromancy.compile.operator.RotationOp;
 import com.astune.gyromancy.compile.operator.SplitEmitOp;
 import com.astune.gyromancy.compile.operator.WaterProjectileOp;
@@ -329,6 +330,42 @@ class ArrayNodeCompilerTest {
 
         assertEquals("outer", root.id().getPath());
         assertEquals(2, root.matchedInputs().size());
+    }
+
+    @Test
+    void projectionAcceptsFailedNestedGroupAsRawInput() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph star = glyph("star", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 4);
+        PositionedGlyph unsupported = glyph("unsupported", SymbolRole.PARAMETER_RUNE, 5);
+        GroupNode ast = group(outer, new SymbolNode(star), new SymbolNode(split),
+                group(inner, new SymbolNode(unsupported)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast, List.of(ProjectionOp.DEFINITION)));
+        ProjectionOp root = assertInstanceOf(ProjectionOp.class, success.value().root());
+        OpInput.RawGroup raw = assertInstanceOf(OpInput.RawGroup.class, root.inputs().get(2));
+
+        assertEquals(inner, raw.boundary());
+        assertEquals(List.of(outer, star, split, inner, unsupported), success.value().boundGlyphs());
+    }
+
+    @Test
+    void unacceptedRawGroupStillBlocksNormalOperatorCompilation() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph star = glyph("star", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
+        PositionedGlyph unsupported = glyph("unsupported", SymbolRole.PARAMETER_RUNE, 4);
+        GroupNode ast = group(outer, new SymbolNode(star),
+                group(inner, new SymbolNode(unsupported)));
+
+        @SuppressWarnings("unchecked")
+        var failure = (CompileResult.Failure<CompiledArray>) assertInstanceOf(CompileResult.Failure.class,
+                ArrayNodeCompiler.compile(ast, List.of(runeOp("plain", "star"))));
+
+        assertEquals("missing_primary_element", failure.diagnostics().getFirst().code());
     }
 
     @Test
