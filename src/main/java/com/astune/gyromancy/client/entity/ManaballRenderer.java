@@ -42,7 +42,7 @@ public class ManaballRenderer extends EntityRenderer<ManaballEntity> {
             return;
         }
 
-        float size = max(0.1F, entity.getBallSize());
+        float size = max(0.1F, entity.getFieldSize());
 
         // ── body: EntityEffect with fire_ball.fx ──
         EntityEffect body = bodyEffects.get(entity);
@@ -60,11 +60,11 @@ public class ManaballRenderer extends EntityRenderer<ManaballEntity> {
         // ── spawn vortex: VortexOrbitEffect during growth ──
         VortexOrbitEffect vortex = vortexEffects.get(entity);
         if (vortex == null) {
-            float targetSize = Math.max(0.1F, entity.getTargetBallSize());
+            float targetSize = Math.max(0.1F, entity.getTargetFieldSize());
             vortex = new VortexOrbitEffect(SURROUNDING_MANA_FX, entity.level(),
                     entity::position, 30, 3f, 4f, 60, UP_AXIS, 1, 20)
                     .setOffset(0, targetSize * MODEL_Y_OFFSET, 0)
-                    .setSpeed((float) (max(1, 1/max(0.5, entity.getTargetBallSize() - 1))))
+                    .setSpeed((float) (max(1, 1/max(0.5, entity.getTargetFieldSize() - 1))))
                     .setAlive(entity::isAlive);
             vortex.start();
             vortexEffects.put(entity, vortex);

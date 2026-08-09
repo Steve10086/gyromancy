@@ -390,15 +390,14 @@ public final class MagicArrayDetector {
         for (PositionedGlyph glyph : registered) {
             invalidateCompiledAncestors(level, glyph);
         }
-        for (PositionedGlyph glyph : registered) {
-            if (glyph.role() == SymbolRole.OUTER_CIRCLE) {
-                ArrayEffectLifecycle.compileNew(level, glyph);
-            }
-        }
+        // The complete batch is registered before compilation. Only circles
+        // discovered by this submission are compiled, from smallest to
+        // largest, so nested ownership is already known when their ASTs run.
+        ArrayEffectLifecycle.compileCirclesSmallestFirst(level, registered);
         syncGlyphs(level);
     }
 
-    static <T> List<T> circlesLast(
+    public static <T> List<T> circlesLast(
             List<T> values, java.util.function.Predicate<T> isCircle) {
         List<T> ordered = new ArrayList<>(values.size());
         values.stream().filter(isCircle.negate()).forEach(ordered::add);

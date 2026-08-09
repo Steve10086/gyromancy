@@ -29,9 +29,11 @@ public final class OpDefinitionRegistry {
     private static final String OPERATOR_PACKAGE = "com.astune.gyromancy.compile.operator";
     private static final String OPERATOR_PATH = OPERATOR_PACKAGE.replace('.', '/');
     private static final Map<ResourceLocation, OpDefinition> DEFINITIONS = new LinkedHashMap<>();
+    private static boolean DISCOVERY_COMPLETE;
 
     static {
         discoverRegisteredOps();
+        DISCOVERY_COMPLETE = true;
     }
 
     private OpDefinitionRegistry() {}
@@ -44,10 +46,23 @@ public final class OpDefinitionRegistry {
         if (definition == null) throw new IllegalArgumentException("definition cannot be null");
         ResourceLocation id = definition.id();
         if (id == null) throw new IllegalArgumentException("definition id cannot be null");
-        OpDefinition existing = DEFINITIONS.putIfAbsent(id, definition);
+        OpDefinition existing = DEFINITIONS.get(id);
         if (existing != null && existing != definition) {
             throw new IllegalArgumentException("Duplicate op definition: " + id);
         }
+        if (existing != null) return;
+        if (!DISCOVERY_COMPLETE) {
+            DEFINITIONS.put(id, definition);
+            return;
+        }
+
+        // Extensions registered after discovery are explicit overrides for
+        // equal-length matches, so put them before the built-in definitions.
+        Map<ResourceLocation, OpDefinition> reordered = new LinkedHashMap<>();
+        reordered.put(id, definition);
+        reordered.putAll(DEFINITIONS);
+        DEFINITIONS.clear();
+        DEFINITIONS.putAll(reordered);
     }
 
     private static void discoverRegisteredOps() {

@@ -22,7 +22,7 @@ import java.util.Optional;
 import static java.lang.Math.max;
 
 @RegisteredOp
-public final class ElementOp extends OnEntityTickOp {
+public final class ElementOp extends OnEntityTickOp implements CompiledOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "element");
     private static final ResourceLocation ENGAGING_SYMBOL =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "engaging");
@@ -39,6 +39,41 @@ public final class ElementOp extends OnEntityTickOp {
             Codec.FLOAT.optionalFieldOf("stored_mana", 0.0F)
                     .forGetter(op -> op.storedMana)
     ).apply(instance, ElementOp::new));
+
+    public static final OpDefinition DEFINITION = new OpDefinition() {
+        @Override
+        public ResourceLocation id() {
+            return ID;
+        }
+
+        @Override
+        public List<OpInputMatcher> match() {
+            return List.of(OpInputMatcher.rune("engaging"));
+        }
+
+        @Override
+        public List<OpInputMatcher> accepted() {
+            return List.of(
+                    OpInputMatcher.rune("mana"),
+                    OpInputMatcher.rune("fire"),
+                    OpInputMatcher.rune("water"),
+                    OpInputMatcher.rune("earth"),
+                    OpInputMatcher.rune("wind"),
+                    OpInputMatcher.rune("light"),
+                    OpInputMatcher.rune("dark"),
+                    OpInputMatcher.rune("space"),
+                    OpInputMatcher.rune("time"));
+        }
+
+        @Override
+        public CompileResult<CompiledOp> compile(PositionedGlyph boundary,
+                                                  List<OpInput> matchedInputs,
+                                                  List<OpInput> inputs) {
+            return new CompileResult.Success<>(new ElementOp(
+                    boundary, matchedInputs, inputs,
+                    absorbedElementFromContent(inputs), 1.0F, 0.0F));
+        }
+    };
 
     private final PositionedGlyph boundary;
     private final List<OpInput> matchedInputs;
@@ -62,6 +97,42 @@ public final class ElementOp extends OnEntityTickOp {
         this.absorbedElement = absorbedElement;
         this.manaExpendFactor = manaExpendFactor;
         this.storedMana = storedMana;
+    }
+
+    private ElementOp(PositionedGlyph boundary, List<OpInput> matchedInputs,
+                      List<OpInput> inputs, ElementType absorbedElement,
+                      float manaExpendFactor, float storedMana) {
+        this.boundary = boundary;
+        this.matchedInputs = List.copyOf(matchedInputs);
+        this.inputs = List.copyOf(inputs);
+        this.absorbedElement = absorbedElement;
+        this.manaExpendFactor = manaExpendFactor;
+        this.storedMana = storedMana;
+    }
+
+    @Override
+    public ResourceLocation id() {
+        return ID;
+    }
+
+    @Override
+    public PositionedGlyph boundary() {
+        return boundary;
+    }
+
+    @Override
+    public List<OpInput> inputs() {
+        return inputs;
+    }
+
+    @Override
+    public int color() {
+        return SymbolCatalog.glyphColorFor(ENGAGING_SYMBOL);
+    }
+
+    @Override
+    public void contributeEntityPayloads(List<EntityPayload> payloads) {
+        payloads.add(new ElementOp(absorbedElement, manaExpendFactor, storedMana));
     }
     public List<OpInput> matchedInputs() {
         return matchedInputs;

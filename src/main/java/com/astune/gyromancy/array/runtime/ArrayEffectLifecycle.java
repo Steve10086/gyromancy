@@ -4,6 +4,7 @@ import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.compile.ArrayAstBuilder;
 import com.astune.gyromancy.array.compile.ArrayCompileDebug;
 import com.astune.gyromancy.array.compile.ArrayNodeCompiler;
@@ -20,6 +21,8 @@ import net.minecraft.server.level.ServerLevel;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -84,6 +87,31 @@ public final class ArrayEffectLifecycle {
         Gyromancy.LOGGER.info("[MagicArrayDetector] Array activated: root={}, bound={}",
                 circleGlyph.symbolId(), compiled.boundGlyphs().size());
         return Optional.of(arr);
+    }
+
+    /**
+     * Compiles all supplied outer circles in geometry order. All glyphs must
+     * already be registered before this method is called so nested-circle
+     * ownership is complete when the AST is built.
+     */
+    public static void compileCirclesSmallestFirst(
+            ServerLevel level, Collection<PositionedGlyph> glyphs) {
+        compileCirclesSmallestFirst(level, glyphs, null);
+    }
+
+    /** Same as {@link #compileCirclesSmallestFirst(ServerLevel, Collection)} with a stroke filter. */
+    public static void compileCirclesSmallestFirst(
+            ServerLevel level,
+            Collection<PositionedGlyph> glyphs,
+            Predicate<PositionedGlyph> isValidStroke) {
+        glyphs.stream()
+                .filter(glyph -> glyph.role() == SymbolRole.OUTER_CIRCLE)
+                .sorted(Comparator.comparingDouble((PositionedGlyph glyph) -> glyph.bounds().area())
+                        .thenComparingInt(PositionedGlyph::glyphId))
+                .forEach(circle -> {
+                    if (isValidStroke == null) compileNew(level, circle);
+                    else compileNew(level, circle, isValidStroke);
+                });
     }
 
     /**

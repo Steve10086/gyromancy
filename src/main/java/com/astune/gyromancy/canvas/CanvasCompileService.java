@@ -27,6 +27,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -133,8 +134,9 @@ public final class CanvasCompileService {
         List<CanvasGlyph> retained = baseline.glyphs().stream()
                 .filter(glyph -> !invalidatedIds.contains(glyph.glyphUuid()))
                 .toList();
-        List<CanvasGlyph> recognized = recognizeChangedComponents(
-                submitted, diff.compileRegion());
+        List<CanvasGlyph> recognized = MagicArrayDetector.circlesLast(
+                recognizeChangedComponents(submitted, diff.compileRegion()),
+                glyph -> glyph.role() == SymbolRole.OUTER_CIRCLE);
 
         List<CanvasGlyph> nextGlyphs = new ArrayList<>(retained);
         nextGlyphs.addAll(recognized);
@@ -158,11 +160,7 @@ public final class CanvasCompileService {
         for (PositionedGlyph world : recognizedWorld) {
             deactivateAncestorArrays(level, manager, world);
         }
-        for (PositionedGlyph world : recognizedWorld) {
-            if (world.role() == SymbolRole.OUTER_CIRCLE) {
-                ArrayEffectLifecycle.compileNew(level, world);
-            }
-        }
+        ArrayEffectLifecycle.compileCirclesSmallestFirst(level, recognizedWorld);
 
         List<CanvasArrayRecord> arrays =
                 canvasArrayRecords(manager, canvas.getUUID());
@@ -175,7 +173,10 @@ public final class CanvasCompileService {
     public static void onPlaced(ServerLevel level, CanvasEntity canvas) {
         MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);
         List<PositionedGlyph> newlyRegistered = new ArrayList<>();
-        for (CanvasGlyph glyph : canvas.document().glyphs()) {
+        List<CanvasGlyph> orderedGlyphs = MagicArrayDetector.circlesLast(
+                canvas.document().glyphs(),
+                glyph -> glyph.role() == SymbolRole.OUTER_CIRCLE);
+        for (CanvasGlyph glyph : orderedGlyphs) {
             boolean isNew = manager.getGlyph(glyph.glyphUuid()) == null;
             PositionedGlyph world = registerGlyph(level, canvas, glyph);
             if (isNew) newlyRegistered.add(world);
@@ -184,40 +185,17 @@ public final class CanvasCompileService {
         for (PositionedGlyph world : newlyRegistered) {
             deactivateAncestorArrays(level, manager, world);
         }
-        if (canvas instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity) {
-            compileCachedProjectionArrays(level, canvas);
-        } else {
-            for (PositionedGlyph world : newlyRegistered) {
-                if (world.role() == SymbolRole.OUTER_CIRCLE) {
-                    ArrayEffectLifecycle.compileNew(level, world);
-                }
-            }
-        }
+        // Projection canvases use the same runtime path as ordinary canvases:
+        // all glyphs are registered first, then every circle is compiled from
+        // the smallest geometry outward. The persisted array list is only a
+        // compatibility/material cache and is not an activation source.
+        ArrayEffectLifecycle.compileCirclesSmallestFirst(
+                level, manager.getGlyphsForCanvas(canvas.getUUID()));
         List<CanvasArrayRecord> arrays =
                 canvasArrayRecords(manager, canvas.getUUID());
         canvas.replaceDocument(canvas.document().withCompileCache(
                 canvas.document().glyphs(), arrays), false);
         MagicArrayDetector.syncWorldState(level);
-    }
-
-    private static void compileCachedProjectionArrays(
-            ServerLevel level, CanvasEntity canvas) {
-        MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);
-        for (CanvasArrayRecord record : canvas.document().arrays()) {
-            if (record.fingerprint() != CanvasArrayRecord.fingerprint(
-                    record.rootGlyph(), record.boundGlyphs())) {
-                continue;
-            }
-            PositionedGlyph root = manager.getGlyph(record.rootGlyph());
-            if (root == null || root.role() != SymbolRole.OUTER_CIRCLE
-                    || root.sourceCanvasId().filter(canvas.getUUID()::equals).isEmpty()) {
-                continue;
-            }
-            Set<UUID> bound = Set.copyOf(record.boundGlyphs());
-            ArrayEffectLifecycle.compileNew(level, root,
-                    glyph -> bound.contains(glyph.glyphUuid())
-                            && glyph.sourceCanvasId().filter(canvas.getUUID()::equals).isPresent());
-        }
     }
 
     public static void onRemoved(ServerLevel level, CanvasEntity canvas) {
@@ -380,23 +358,25 @@ public final class CanvasCompileService {
         }
 
         List<CanvasArrayRecord> arrays = new ArrayList<>();
-        for (CanvasGlyph glyph : glyphs) {
-            if (glyph.role() != SymbolRole.OUTER_CIRCLE) continue;
-            PositionedGlyph circle = positioned.get(glyph.glyphUuid());
-            CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(
-                    ArrayAstBuilder.build(circle, manager), manager.opDefinitions());
-            if (!(result instanceof CompileResult.Success<CompiledArray> success)
-                    || !(success.value().root() instanceof PersistentOp)) {
-                continue;
-            }
-            List<UUID> bound = success.value().boundGlyphs().stream()
-                    .map(PositionedGlyph::glyphUuid)
-                    .toList();
-            arrays.add(new CanvasArrayRecord(
-                    circle.glyphUuid(), bound,
-                    CanvasArrayRecord.fingerprint(circle.glyphUuid(), bound),
-                    success.value().color()));
-        }
+        positioned.values().stream()
+                .filter(glyph -> glyph.role() == SymbolRole.OUTER_CIRCLE)
+                .sorted(Comparator.comparingDouble((PositionedGlyph glyph) -> glyph.bounds().area())
+                        .thenComparingInt(PositionedGlyph::glyphId))
+                .forEach(circle -> {
+                    CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(
+                            ArrayAstBuilder.build(circle, manager), manager.opDefinitions());
+                    if (!(result instanceof CompileResult.Success<CompiledArray> success)
+                            || !(success.value().root() instanceof PersistentOp)) {
+                        return;
+                    }
+                    List<UUID> bound = success.value().boundGlyphs().stream()
+                            .map(PositionedGlyph::glyphUuid)
+                            .toList();
+                    arrays.add(new CanvasArrayRecord(
+                            circle.glyphUuid(), bound,
+                            CanvasArrayRecord.fingerprint(circle.glyphUuid(), bound),
+                            success.value().color()));
+                });
         return List.copyOf(arrays);
     }
 

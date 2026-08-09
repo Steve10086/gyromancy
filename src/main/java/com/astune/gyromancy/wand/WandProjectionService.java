@@ -3,7 +3,6 @@ package com.astune.gyromancy.wand;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasGlyph;
-import com.astune.gyromancy.canvas.CanvasArrayRecord;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.registry.ModDataComponents;
 import net.minecraft.core.Direction;
@@ -17,6 +16,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -100,17 +100,45 @@ public final class WandProjectionService {
                     glyph.frontX(), glyph.frontY(), glyph.length(), glyph.width(),
                     glyph.minX(), glyph.maxX(), glyph.minY(), glyph.maxY(), glyph.cells());
         }).toList();
-        List<CanvasArrayRecord> arrays = source.arrays().stream()
-                .map(array -> new CanvasArrayRecord(
-                        ids.getOrDefault(array.rootGlyph(), array.rootGlyph()),
-                        array.boundGlyphs().stream()
-                                .map(id -> ids.getOrDefault(id, id)).toList(),
-                        CanvasArrayRecord.fingerprint(
-                                ids.getOrDefault(array.rootGlyph(), array.rootGlyph()),
-                                array.boundGlyphs().stream()
-                                        .map(id -> ids.getOrDefault(id, id)).toList()),
-                        array.color()))
+        // A projection is compiled from its copied glyphs when it appears in
+        // the world. Array records are only a legacy/material cache and must
+        // not become a second activation path.
+        return source.withCompileCache(glyphs, List.of());
+    }
+
+    /**
+     * Copies only selected recognized glyphs into a new projection document.
+     * The raster is filtered as well, so unselected source strokes cannot leak
+     * into the projected plane.
+     */
+    public static CanvasDocument copySelectedGlyphsForProjection(
+            CanvasDocument source, Set<UUID> selectedGlyphIds) {
+        List<CanvasGlyph> glyphs = source.glyphs().stream()
+                .filter(glyph -> selectedGlyphIds.contains(glyph.glyphUuid()))
+                .map(glyph -> {
+                    UUID next = UUID.randomUUID();
+                    return new CanvasGlyph(next, glyph.symbolId(), glyph.confidence(), glyph.role(),
+                            glyph.frontX(), glyph.frontY(), glyph.length(), glyph.width(),
+                            glyph.minX(), glyph.maxX(), glyph.minY(), glyph.maxY(), glyph.cells());
+                })
                 .toList();
-        return source.withCompileCache(glyphs, arrays);
+
+        int[] colors = source.colors();
+        int[] effects = source.strokeEffects();
+        boolean[] selectedCells = new boolean[effects.length];
+        for (CanvasGlyph glyph : source.glyphs()) {
+            if (!selectedGlyphIds.contains(glyph.glyphUuid())) continue;
+            for (int cell : glyph.cells()) {
+                if (cell >= 0 && cell < selectedCells.length) selectedCells[cell] = true;
+            }
+        }
+        for (int i = 0; i < selectedCells.length; i++) {
+            if (!selectedCells[i]) {
+                colors[i] = 0;
+                effects[i] = 0;
+            }
+        }
+        return new CanvasDocument(source.physicalWidth(), source.physicalHeight(),
+                source.resolutionScale(), colors, effects, glyphs, List.of());
     }
 }

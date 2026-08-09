@@ -2,6 +2,7 @@ package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.entity.ball.FireballEntity;
+import com.astune.gyromancy.entity.ball.IlluminationEntity;
 import com.astune.gyromancy.entity.ball.ManaballEntity;
 import com.astune.gyromancy.entity.ball.OldFireballEntity;
 import com.astune.gyromancy.entity.ball.WaterBallEntity;
@@ -34,6 +35,14 @@ public final class ModEntities {
                     .updateInterval(1)
                     .clientTrackingRange(64)
                     .build(Gyromancy.MODID + ":fireball"));
+
+    public static final Supplier<EntityType<IlluminationEntity>> ILLUMINATION =
+            ENTITIES.register("illumination", () -> EntityType.Builder
+                    .<IlluminationEntity>of(IlluminationEntity::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F)
+                    .updateInterval(1)
+                    .clientTrackingRange(64)
+                    .build(Gyromancy.MODID + ":illumination"));
 
     public static final Supplier<EntityType<OldFireballEntity>> OLD_FIREBALL =
             ENTITIES.register("old_fireball", () -> EntityType.Builder

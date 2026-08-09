@@ -83,6 +83,24 @@ public final class WandProjectionCanvasEntity extends CanvasEntity {
         return canvas;
     }
 
+    /** Creates a projection plane that keeps the supplied frame and never follows a player. */
+    public static WandProjectionCanvasEntity createFixed(Level level,
+                                                          SurfaceFrame frame,
+                                                          CanvasDocument document) {
+        WandProjectionCanvasEntity canvas = new WandProjectionCanvasEntity(
+                ModEntities.WAND_PROJECTION.get(), level);
+        canvas.setPos(frame.origin());
+        canvas.setDocumentInternal(document, false);
+        canvas.setDirection(Direction.getNearest(frame.normal()));
+        canvas.setSurfaceOrientation(frame.normal(), frame.axisU(), frame.axisV());
+        canvas.setProjectionView(0.0F, 0.0F);
+        canvas.entityData.set(DATA_PROJECTION_OFFSET, 0.0F);
+        canvas.entityData.set(DATA_SPAWN_GAME_TICK, level.getGameTime());
+        canvas.setPos(frame.origin());
+        canvas.recalculateBoundingBox();
+        return canvas;
+    }
+
     public UUID owner() {
         return owner;
     }
