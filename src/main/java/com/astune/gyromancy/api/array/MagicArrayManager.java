@@ -17,6 +17,9 @@ import java.util.*;
  * Stored as an Attachment on {@code Level} via {@code ModAttachments.ARRAY_MANAGER}.
  */
 public class MagicArrayManager {
+    private static final double SURFACE_DISTANCE_TOLERANCE = 1.0 / 16.0;
+    private static final double SURFACE_ANGLE_TOLERANCE_DEGREES = 5.0;
+
     private static final Codec<UUID> UUID_CODEC = Codec.STRING.xmap(UUID::fromString, UUID::toString);
 
     /**
@@ -382,7 +385,8 @@ public class MagicArrayManager {
     }
 
     private static boolean sameSurface(PositionedGlyph a, PositionedGlyph b) {
-        return a.surface().isCoplanar(b.surface());
+        return a.surface().isCoplanar(
+                b.surface(), SURFACE_DISTANCE_TOLERANCE, SURFACE_ANGLE_TOLERANCE_DEGREES);
     }
 
     // ═══════════════════ phrase5 array objects ═══════════════════

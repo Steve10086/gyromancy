@@ -19,8 +19,8 @@ import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.symbol.SymbolCatalog;
-import com.astune.gyromancy.wand.WandProjectionCanvasEntity;
-import com.astune.gyromancy.wand.WandProjectionService;
+import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
+import com.astune.gyromancy.entity.projection.WandProjectionService;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
@@ -151,14 +151,15 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
             return new RuntimeHandle(Map.of());
         }
 
-        CanvasDocument document = WandProjectionService.copySelectedGlyphsForProjection(
-                sourceCircle.canvas().document(), selected);
-        Vec3 offset = projectionOffset();
         SurfaceFrame sourceFrame = sourceCircle.canvas().surfaceFrame();
+        CanvasDocument document = WandProjectionService.copySelectedGlyphsForProjection(
+                sourceCircle.canvas().document(), selected,
+                sourceCircle.circle(), sourceFrame);
+        Vec3 offset = projectionOffset();
         SurfaceFrame targetFrame = new SurfaceFrame(
                 sourceFrame.origin().add(offset),
                 sourceFrame.axisU(), sourceFrame.axisV(), sourceFrame.normal());
-        WandProjectionCanvasEntity projection = WandProjectionCanvasEntity.createFixed(
+        ProjectionCanvasEntity projection = ProjectionCanvasEntity.createFixed(
                 level, targetFrame, document);
 
         EmitResult result = new EmitResult();
@@ -182,7 +183,7 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
     }
 
     private Vec3 projectionOffset() {
-        Vec3 offset = boundary.surface().normal().normalize().scale(2.0);
+        Vec3 offset = boundary.surface().normal().normalize().scale(2.0 - (double) 1 /16);
         double arrowSizeSum = 0.0;
         for (OpInput input : inputs) {
             if (!(input instanceof OpInput.Rune rune)) continue;
@@ -206,7 +207,7 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
         double speed = max(0, offset.length() - 2);
         offset = offset.add(boundary.surface().normal().scale(
                 (arrowSizeSum - speed) + 0.2 * speed));
-        return offset.scale(arrayScale(boundary));
+        return offset;
     }
 
     private static float arrayScale(PositionedGlyph circle) {

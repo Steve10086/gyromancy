@@ -1,10 +1,10 @@
-package com.astune.gyromancy.wand;
+package com.astune.gyromancy.entity.projection;
 
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
 /** Tick-level target smoothing shared by every component of a projection pose. */
-final class WandProjectionMotion {
+final class CanvasProjectionMotion {
     static final double POSITION_RESPONSE = 0.95;
     static final double DIRECTION_RESPONSE = 0.95;
     static final float ROLL_RESPONSE = 1.0F;
@@ -12,7 +12,7 @@ final class WandProjectionMotion {
     static final double TELEPORT_SNAP_DISTANCE = 8.0;
     private static final double PARALLEL_DOT = 0.9995;
 
-    private WandProjectionMotion() {}
+    private CanvasProjectionMotion() {}
 
     static Vec3 smoothPosition(Vec3 current, Vec3 target) {
         if (current.distanceToSqr(target)

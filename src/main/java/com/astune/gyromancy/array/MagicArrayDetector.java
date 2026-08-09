@@ -10,6 +10,7 @@ import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.canvas.CanvasEntity;
+import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.registry.ModSymbols;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
@@ -596,7 +597,7 @@ public final class MagicArrayDetector {
                 canvas.surfaceFrame().axisAlignedDirection()
                         .orElseGet(() -> Direction.getNearest(canvas.surfaceNormal())),
                 sourceU, sourceV, width, height, mask,
-                canvas instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity
+                canvas instanceof ProjectionCanvasEntity
                         ? canvas.getId() : -1);
     }
 

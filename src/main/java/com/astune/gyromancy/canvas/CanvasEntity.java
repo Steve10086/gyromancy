@@ -188,8 +188,6 @@ public class CanvasEntity extends BlockAttachedEntity {
 
     @Override
     public boolean survives() {
-        if (!level().noCollision(this)) return false;
-
         AABB supportBox = getBoundingBox()
                 .move(Vec3.atLowerCornerOf(direction.getNormal()).scale(-0.5))
                 .deflate(1.0E-7);
@@ -199,8 +197,10 @@ public class CanvasEntity extends BlockAttachedEntity {
                     || DiodeBlock.isDiode(state)
                     || Block.canSupportCenter(level(), supportPos, direction);
         });
-        return supported && level().getEntities(
-                this, getBoundingBox(), entity -> entity instanceof BlockAttachedEntity).isEmpty();
+        // Other attached entities may occupy the same plane (for example a
+        // ProjectionOp result). They are visual surfaces, not a reason for a
+        // supported canvas to fall.
+        return supported;
     }
 
     public CanvasDocument document() {

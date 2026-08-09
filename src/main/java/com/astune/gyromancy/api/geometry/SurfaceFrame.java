@@ -108,6 +108,24 @@ public record SurfaceFrame(Vec3 origin, Vec3 axisU, Vec3 axisV, Vec3 normal) {
                 && Math.abs(signedDistance(other.origin)) <= tolerance;
     }
 
+    /**
+     * Tests whether two free-facing surfaces are close enough to share glyphs.
+     * The distance and angular tolerances are intentionally independent: free
+     * surfaces use their normals as orientation instead of block directions.
+     */
+    public boolean isCoplanar(SurfaceFrame other,
+                              double distanceTolerance,
+                              double angleToleranceDegrees) {
+        if (!Double.isFinite(distanceTolerance) || distanceTolerance < 0.0
+                || !Double.isFinite(angleToleranceDegrees)
+                || angleToleranceDegrees < 0.0 || angleToleranceDegrees > 180.0) {
+            throw new IllegalArgumentException("Invalid coplanar tolerances");
+        }
+        double minimumNormalDot = Math.cos(Math.toRadians(angleToleranceDegrees));
+        return normal.dot(other.normal) >= minimumNormalDot
+                && Math.abs(signedDistance(other.origin)) <= distanceTolerance;
+    }
+
     /** Returns the six-direction adapter only when this frame really is axis aligned. */
     public Optional<Direction> axisAlignedDirection() {
         Direction nearest = Direction.getNearest(normal);

@@ -41,6 +41,7 @@ public final class ExplosionOp extends TriggerOp {
                     power, true, Level.ExplosionInteraction.MOB);
             igniteNearbyBlocks(ctx, power);
         }
+        ctx.owner().discard();
     }
 
     private static void burnEntitiesInPath(EntityTickContext ctx) {

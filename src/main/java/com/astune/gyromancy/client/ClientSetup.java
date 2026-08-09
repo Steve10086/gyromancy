@@ -54,7 +54,7 @@ public final class ClientSetup {
         event.registerEntityRenderer(ModEntities.ICE_BALL.get(), context -> new ElementBallRenderer<>(context, "frozen_core", 0xFFD8F4FF));
         event.registerEntityRenderer(ModEntities.DRY_BALL.get(), context -> new ElementBallRenderer<>(context, "mana_ball", 0xFFD8B36A));
         event.registerEntityRenderer(ModEntities.CANVAS.get(), CanvasEntityRenderer::new);
-        event.registerEntityRenderer(ModEntities.WAND_PROJECTION.get(), CanvasEntityRenderer::new);
+        event.registerEntityRenderer(ModEntities.CANVAS_PROJECTION.get(), CanvasEntityRenderer::new);
     }
 
     @SubscribeEvent

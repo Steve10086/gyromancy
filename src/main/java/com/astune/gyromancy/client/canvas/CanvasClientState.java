@@ -2,6 +2,7 @@ package com.astune.gyromancy.client.canvas;
 
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasEntity;
+import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.astune.gyromancy.network.CanvasSnapshotPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
@@ -41,7 +42,7 @@ public final class CanvasClientState {
     public static ResourceLocation textureLocation(CanvasEntity entity) {
         Snapshot snapshot = SNAPSHOTS.get(entity.getId());
         return snapshot == null ? null : snapshot.textureLocation(
-                entity instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity);
+                entity instanceof ProjectionCanvasEntity);
     }
 
     public static void onEntityLeave(EntityLeaveLevelEvent event) {

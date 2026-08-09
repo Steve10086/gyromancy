@@ -19,6 +19,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import org.checkerframework.checker.units.qual.A;
 
 import java.util.*;
 
@@ -74,13 +75,10 @@ public final class FireProjectileOp extends ProjectileEntityOp {
 
     @Override
     public FireballEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
-        FireballEntity entity = new FireballEntity(level, pos, velocity, acceleration, size);
-        entity.setPayload(defaultPayload());
-        entity.setPayload(conditionalPayload());
-        return entity;
+        return new FireballEntity(level, pos, velocity, acceleration, size);
     }
 
-    public static List<EntityPayload> defaultPayload() {
+    public List<EntityPayload> defaultPayload() {
         return List.of(
                 new ElementVolumeOp(ElementType.FIRE, STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
                         FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL, MANA_TO_VOLUME));
@@ -102,7 +100,7 @@ public final class FireProjectileOp extends ProjectileEntityOp {
         }
         if (payload.isEmpty()) {
             payload.add(new ExplosionOp());
-            payload.add(new RemoveOnHitOp());
+            //payload.add(new RemoveOnHitOp());
         }
         return payload.stream().toList();
     }
@@ -116,7 +114,9 @@ public final class FireProjectileOp extends ProjectileEntityOp {
 
     @Override
     protected List<EntityPayload> payloadFor() {
-        return payload(defaultPayload());
+        Set<EntityPayload> payload = new HashSet<>(defaultPayload());
+        payload.addAll(conditionalPayload());
+        return payload(payload.stream().toList());
     }
     @Override
     public ResourceLocation getId(){return ID;}

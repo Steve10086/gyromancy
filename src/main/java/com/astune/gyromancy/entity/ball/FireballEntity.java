@@ -11,6 +11,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class FireballEntity extends MagicBallEntity {
@@ -38,10 +39,6 @@ public class FireballEntity extends MagicBallEntity {
         runtimeData().put(FireProjectileOp.LIFETIME_KEY, lifetime);
     }
 
-    @Override
-    protected List<? extends EntityPayload> defaultPayload() {
-        return FireProjectileOp.defaultPayload();
-    }
 
     @Override
     protected boolean tickBeforePayload() {

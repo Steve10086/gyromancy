@@ -15,8 +15,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public abstract class ProjectileEntityOp  extends EntityEffectOp {
     protected ProjectileEntityOp(ResourceLocation id, ElementType element, PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
@@ -45,7 +44,15 @@ public abstract class ProjectileEntityOp  extends EntityEffectOp {
 
     public abstract MagicBallEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size);
 
-    protected abstract List<EntityPayload> payloadFor();
+    protected List<EntityPayload> payloadFor() {
+        Set<EntityPayload> payload = new HashSet<>(defaultPayload());
+        payload.addAll(conditionalPayload());
+        return payload(payload.stream().toList());
+    }
+
+    abstract Collection<? extends EntityPayload> conditionalPayload();
+
+    abstract Collection<? extends EntityPayload> defaultPayload();
 
     abstract PositionedGlyph primaryRune();
     abstract ResourceLocation getId();

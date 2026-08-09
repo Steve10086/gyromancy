@@ -14,6 +14,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.Collection;
 import java.util.List;
 
 /** Star-bound projectile that leaves temporary light blocks around its ball. */
@@ -65,6 +66,16 @@ public final class IlluminationOp extends ProjectileEntityOp {
     @Override
     protected List<EntityPayload> payloadFor() {
         return List.of(ElementVolumeOp.stability(ElementType.LIGHT));
+    }
+
+    @Override
+    Collection<? extends EntityPayload> conditionalPayload() {
+        return null;
+    }
+
+    @Override
+    Collection<? extends EntityPayload> defaultPayload() {
+        return null;
     }
 
     @Override

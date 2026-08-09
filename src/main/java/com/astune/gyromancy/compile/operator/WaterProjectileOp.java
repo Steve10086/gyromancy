@@ -78,12 +78,10 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
     @Override
     public WaterBallEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
         WaterBallEntity entity = new WaterBallEntity(level, pos, velocity, acceleration, size);
-        entity.setPayload(defaultPayload());
-        entity.setPayload(conditionalPayload());
         return entity;
     }
 
-    public static List<EntityPayload> defaultPayload() {
+    public List<EntityPayload> defaultPayload() {
         return List.of(
                 new WaterBurstOp(),
                 new RemoveOnHitOp(),
@@ -112,26 +110,9 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
 
     @Override
     protected List<EntityPayload> payloadFor() {
-        return payload(defaultPayload());
-    }
-
-    @Override
-    public RuntimeHandle activate(OpRuntimeContext ctx) {
-        ServerLevel level = ctx.level();
-        PositionedGlyph center = primaryRune();
-        if (center == null) return new RuntimeHandle(Map.of());
-        EmitResult result = new EmitResult();
-        Vec3 centerPos = ctx.origin() != null ? ctx.origin() : CenterSymbol.glyphCenter(level, center);
-        Vec3 normal = ctx.normal() != null ? ctx.normal() : CenterSymbol.faceNormal(center);
-        for (EmitOp.Emission emission : emissions()) {
-            float size = Math.max(0.1F, scale() * emission.sizeScale());
-            Vec3 pos = centerPos.add(normal.scale(size * 2.0));
-            Vec3 acceleration = emission.hasMotion() ? new Vec3(0.0, -0.04 * 0.5, 0.0) : Vec3.ZERO;
-            MagicBallEntity entity = create(level, pos, emission.velocity(), acceleration, size);
-            entity.setPayload(payloadFor());
-            EntityEmitter.INSTANCE.emit(level, ID, entity, result);
-        }
-        return result.toRuntimeHandle();
+        Set<EntityPayload> payload = new HashSet<>(defaultPayload());
+        payload.addAll(conditionalPayload());
+        return payload(payload.stream().toList());
     }
 
     @Override

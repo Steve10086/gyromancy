@@ -14,6 +14,7 @@ import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.CompiledArray;
 import com.astune.gyromancy.array.runtime.ArrayEffectLifecycle;
 import com.astune.gyromancy.compile.operator.PersistentOp;
+import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.registry.ModSymbols;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
@@ -244,7 +245,7 @@ public final class CanvasCompileService {
      */
     public static void refreshWorldGeometry(ServerLevel level, CanvasEntity canvas) {
         refreshRetainedGlyphGeometry(level, canvas);
-        if (canvas instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity) {
+        if (canvas instanceof ProjectionCanvasEntity) {
             MagicArrayDetector.syncProjectionGeometry(level, canvas);
         } else {
             MagicArrayDetector.syncWorldState(level);

@@ -1,4 +1,4 @@
-package com.astune.gyromancy.wand;
+package com.astune.gyromancy.entity.projection;
 
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import net.minecraft.util.Mth;

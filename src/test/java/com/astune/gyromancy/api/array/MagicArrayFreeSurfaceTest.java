@@ -31,6 +31,11 @@ class MagicArrayFreeSurfaceTest {
         SurfaceFrame parallelOtherPlane = new SurfaceFrame(
                 circleFrame.origin().add(0.0, 0.0, 1.0),
                 circleFrame.axisU(), circleFrame.axisV(), circleFrame.normal());
+        double angle = Math.toRadians(4.0);
+        SurfaceFrame tolerantFrame = SurfaceFrame.facing(
+                circleFrame.origin().add(0.0, 0.0, 1.0 / 32.0),
+                new Vec3(0.0, Math.sin(angle), Math.cos(angle)),
+                new Vec3(0.0, 1.0, 0.0));
 
         PositionedGlyph circle = glyph(1, SymbolRole.OUTER_CIRCLE,
                 -2.0, 2.0, -2.0, 2.0, circleFrame);
@@ -38,13 +43,17 @@ class MagicArrayFreeSurfaceTest {
                 -0.5, 0.5, -0.5, 0.5, rotatedChildFrame);
         PositionedGlyph offPlane = glyph(3, SymbolRole.PARAMETER_RUNE,
                 -0.5, 0.5, -0.5, 0.5, parallelOtherPlane);
+        PositionedGlyph tolerantChild = glyph(4, SymbolRole.PARAMETER_RUNE,
+                -0.5, 0.5, -0.5, 0.5, tolerantFrame);
 
         MagicArrayManager manager = new MagicArrayManager();
         manager.registerGlyph(child);
         manager.registerGlyph(offPlane);
+        manager.registerGlyph(tolerantChild);
         manager.registerGlyph(circle);
 
         assertEquals(circle, manager.parentCircle(child));
+        assertEquals(circle, manager.parentCircle(tolerantChild));
         assertNull(manager.parentCircle(offPlane));
     }
 

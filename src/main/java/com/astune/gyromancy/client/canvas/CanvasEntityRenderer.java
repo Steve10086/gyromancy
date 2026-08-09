@@ -2,6 +2,7 @@ package com.astune.gyromancy.client.canvas;
 
 import com.astune.gyromancy.canvas.CanvasEntity;
 import com.astune.gyromancy.canvas.CanvasDocument;
+import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
@@ -26,7 +27,7 @@ public final class CanvasEntityRenderer extends EntityRenderer<CanvasEntity> {
         if (document == null || texture == null) return;
 
         poseStack.pushPose();
-        if (entity instanceof com.astune.gyromancy.wand.WandProjectionCanvasEntity) {
+        if (entity instanceof ProjectionCanvasEntity) {
             poseStack.popPose();
             super.render(entity, yaw, partialTick, poseStack, buffers, packedLight);
             return;

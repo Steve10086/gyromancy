@@ -3,7 +3,7 @@ package com.astune.gyromancy.client.effect;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.client.canvas.CanvasClientState;
-import com.astune.gyromancy.wand.WandProjectionCanvasEntity;
+import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -25,9 +25,9 @@ import org.lwjgl.opengl.GL14;
 /** Veil-backed additive glow pass for wand projection surfaces only. */
 public final class WandProjectionGlowRenderer {
     private static final ResourceLocation RENDER_TYPE =
-            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "wand_projection_glow");
+            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "canvas_projection_glow");
     private static final ResourceLocation SHADER =
-            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "wand_projection_glow");
+            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "canvas_projection_glow");
 
     private static VertexArray vertexArray;
     private static boolean warnedMissingShader;
@@ -42,7 +42,7 @@ public final class WandProjectionGlowRenderer {
 
         float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
         for (Entity entity : minecraft.level.entitiesForRendering()) {
-            if (!(entity instanceof WandProjectionCanvasEntity projection)) continue;
+            if (!(entity instanceof ProjectionCanvasEntity projection)) continue;
 
             CanvasDocument document = CanvasClientState.document(projection.getId());
             ResourceLocation texture = CanvasClientState.textureLocation(projection);
@@ -52,7 +52,7 @@ public final class WandProjectionGlowRenderer {
         }
     }
 
-    private static void render(WandProjectionCanvasEntity projection,
+    private static void render(ProjectionCanvasEntity projection,
                                CanvasDocument document,
                                ResourceLocation texture,
                                float partialTick) {

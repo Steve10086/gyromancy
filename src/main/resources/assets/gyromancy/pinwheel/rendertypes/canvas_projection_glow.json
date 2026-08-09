@@ -8,7 +8,7 @@
   "layers": [
     {
       "type": "veil:shader",
-      "name": "gyromancy:wand_projection_glow"
+      "name": "gyromancy:canvas_projection_glow"
     },
     {
       "type": "minecraft:write_mask",

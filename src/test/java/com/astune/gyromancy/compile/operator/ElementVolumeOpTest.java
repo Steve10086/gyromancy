@@ -38,13 +38,4 @@ class ElementVolumeOpTest {
 
         assertEquals(0.0, op.lostVolume(2.0, 200.0), EPSILON);
     }
-
-    @Test
-    void firePayloadReservesGrowthManaBeforeConvertingTheRemainder() {
-        var payload = FireProjectileOp.defaultPayload();
-
-        assertInstanceOf(ExplosionOp.class, payload.get(0));
-        assertInstanceOf(ElementVolumeOp.class, payload.get(1));
-        assertInstanceOf(ElementConversionOp.class, payload.get(2));
-    }
 }

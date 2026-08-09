@@ -7,9 +7,12 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
@@ -161,5 +164,70 @@ public abstract class MagicEntity extends Entity {
             if (op.hasClientState()) states.put(Integer.toString(i), op.saveClientState());
         }
         entityData.set(DATA_PAYLOAD_STATES, states);
+    }
+
+    @Override
+    public boolean hurt(DamageSource source, float amount) {
+        return false;
+    }
+
+    @Override
+    public boolean isInvulnerableTo(DamageSource source) {
+        return true;
+    }
+
+    @Override
+    public boolean isPickable() {
+        return false;
+    }
+
+    @Override
+    public boolean canBeHitByProjectile() {
+        return false;
+    }
+
+    @Override
+    public boolean canBeCollidedWith() {
+        return false;
+    }
+
+    @Override
+    public boolean isPushable() {
+        return false;
+    }
+
+    @Override
+    public boolean isPushedByFluid() {
+        return false;
+    }
+
+    @Override
+    public PushReaction getPistonPushReaction() {
+        return PushReaction.IGNORE;
+    }
+
+    @Override
+    public boolean skipAttackInteraction(Entity entity) {
+        return true;
+    }
+
+    @Override
+    public void push(Entity entity) {
+        // Projection planes never participate in entity pushing.
+    }
+
+    @Override
+    public void push(Vec3 movement) {
+        // Projection planes never participate in entity pushing.
+    }
+
+    @Override
+    public void push(double x, double y, double z) {
+        // Projection planes never participate in entity pushing.
+    }
+
+    @Override
+    public void move(MoverType type, Vec3 movement) {
+        // Wand motion is applied explicitly by tick(); external movement is ignored.
     }
 }

@@ -28,14 +28,12 @@ import java.util.UUID;
 
 /** A spherical light source whose temporary light blocks follow its movement. */
 public final class IlluminationEntity extends MagicBallEntity {
-    private static final int DEFAULT_LIFETIME = 500;
     private static final int LIGHT_LEVEL = 15;
     private static final String LIGHTS_TAG = "PlacedLights";
     private static final Map<ServerLevel, Map<BlockPos, Set<UUID>>> LIGHT_REFERENCES =
             Collections.synchronizedMap(new IdentityHashMap<>());
 
     private final Set<BlockPos> placedLightPositions = new HashSet<>();
-    private int lifetime = DEFAULT_LIFETIME;
 
     public IlluminationEntity(EntityType<IlluminationEntity> type, Level level) {
         super(type, level, ElementType.LIGHT);
@@ -49,10 +47,6 @@ public final class IlluminationEntity extends MagicBallEntity {
         setPos(pos);
     }
 
-    public void setLifetime(int lifetime) {
-        this.lifetime = Math.max(1, lifetime);
-    }
-
     @Override
     protected List<? extends com.astune.gyromancy.compile.operator.EntityPayload> defaultPayload() {
         return List.of(ElementVolumeOp.stability(ElementType.LIGHT));
@@ -61,10 +55,6 @@ public final class IlluminationEntity extends MagicBallEntity {
     @Override
     protected boolean tickBeforePayload() {
         if (!super.tickBeforePayload()) return false;
-        if (tickCount > lifetime) {
-            discard();
-            return false;
-        }
         return true;
     }
 
@@ -138,7 +128,6 @@ public final class IlluminationEntity extends MagicBallEntity {
     @Override
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-        lifetime = Math.max(1, tag.getInt("Lifetime"));
         placedLightPositions.clear();
         if (tag.contains(LIGHTS_TAG, Tag.TAG_LIST)) {
             for (Tag value : tag.getList(LIGHTS_TAG, Tag.TAG_COMPOUND)) {
@@ -152,7 +141,6 @@ public final class IlluminationEntity extends MagicBallEntity {
     @Override
     protected void addAdditionalSaveData(@NotNull CompoundTag tag) {
         super.addAdditionalSaveData(tag);
-        tag.putInt("Lifetime", lifetime);
         ListTag lights = new ListTag();
         for (BlockPos pos : placedLightPositions) {
             CompoundTag light = new CompoundTag();

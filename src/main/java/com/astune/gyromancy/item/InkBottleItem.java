@@ -20,7 +20,7 @@ import net.minecraft.world.item.ItemStack;
 public class InkBottleItem extends Item {
 
     /** Default max ink charges for a full bottle */
-    public static final int MAX_INK = 64;
+    public static final int MAX_INK = 6400;
 
     public InkBottleItem() {
         super(new Properties()

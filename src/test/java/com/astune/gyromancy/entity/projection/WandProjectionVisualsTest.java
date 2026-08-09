@@ -1,6 +1,7 @@
-package com.astune.gyromancy.wand;
+package com.astune.gyromancy.entity.projection;
 
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
+import com.astune.gyromancy.entity.projection.WandProjectionVisuals;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 

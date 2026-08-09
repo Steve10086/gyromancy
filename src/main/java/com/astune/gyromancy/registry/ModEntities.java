@@ -9,7 +9,7 @@ import com.astune.gyromancy.entity.ball.WaterBallEntity;
 import com.astune.gyromancy.entity.ball.IceBallEntity;
 import com.astune.gyromancy.entity.ball.DryBallEntity;
 import com.astune.gyromancy.canvas.CanvasEntity;
-import com.astune.gyromancy.wand.WandProjectionCanvasEntity;
+import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -72,13 +72,13 @@ public final class ModEntities {
                     .clientTrackingRange(64)
                     .build(Gyromancy.MODID + ":canvas"));
 
-    public static final Supplier<EntityType<WandProjectionCanvasEntity>> WAND_PROJECTION =
-            ENTITIES.register("wand_projection", () -> EntityType.Builder
-                    .<WandProjectionCanvasEntity>of(WandProjectionCanvasEntity::new, MobCategory.MISC)
+    public static final Supplier<EntityType<ProjectionCanvasEntity>> CANVAS_PROJECTION =
+            ENTITIES.register("canvas_projection", () -> EntityType.Builder
+                    .<ProjectionCanvasEntity>of(ProjectionCanvasEntity::new, MobCategory.MISC)
                     .sized(1.0F, 1.0F)
                     .updateInterval(10)
                     .clientTrackingRange(64)
-                    .build(Gyromancy.MODID + ":wand_projection"));
+                    .build(Gyromancy.MODID + ":canvas_projection"));
 
     private static <T extends com.astune.gyromancy.entity.ball.MagicBallEntity> Supplier<EntityType<T>> registerBall(
             String name, EntityType.EntityFactory<T> factory) {

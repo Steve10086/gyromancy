@@ -4,7 +4,7 @@ import com.astune.gyromancy.registry.ModDataComponents;
 import com.astune.gyromancy.wand.WandContents;
 import com.astune.gyromancy.wand.WandLayout;
 import com.astune.gyromancy.wand.WandMenu;
-import com.astune.gyromancy.wand.WandProjectionService;
+import com.astune.gyromancy.entity.projection.WandProjectionService;
 import com.astune.gyromancy.wand.WandSlotSnapshots;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
