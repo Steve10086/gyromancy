@@ -2,7 +2,6 @@ package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.canvas.StampCanvasMaterial;
-import com.astune.gyromancy.api.ink.InkType;
 import com.astune.gyromancy.api.ink.PenProperties;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.item.CompassContents;
@@ -84,8 +83,8 @@ public final class ModDataComponents {
             );
 
     /** 64x64 carving canvas and recognized rune cache stored by copper rings. */
-    public static final Supplier<DataComponentType<CanvasDocument>> COPPER_RING_DOCUMENT =
-            DATA_COMPONENTS.register("copper_ring_document", () ->
+    public static final Supplier<DataComponentType<CanvasDocument>> CARVING_DOCUMENT =
+            DATA_COMPONENTS.register("carving_document", () ->
                     DataComponentType.<CanvasDocument>builder()
                             .persistent(CanvasDocument.CODEC)
                             .networkSynchronized(ByteBufCodecs.fromCodec(CanvasDocument.CODEC))

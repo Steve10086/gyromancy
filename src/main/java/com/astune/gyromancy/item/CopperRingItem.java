@@ -8,7 +8,6 @@ import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasGlyph;
 import com.astune.gyromancy.registry.ModDataComponents;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -21,16 +20,16 @@ import java.util.List;
  * raster, so the item remains self-contained when it is moved between slots or
  * saved to disk.</p>
  */
-public final class CopperRingItem extends Item implements Carvable {
+public final class CopperRingItem extends CarvingMaterials {
     public static final int CANVAS_SIZE = 64;
     public static final int CANVAS_RESOLUTION_SCALE =
             CANVAS_SIZE / CanvasDocument.PIXELS_PER_BLOCK;
-    private static final double RING_OUTER_RADIUS = 20.0;
-    private static final double RING_INNER_RADIUS = 11.0;
+    private static final double RING_OUTER_RADIUS = 31.0;
+    private static final double RING_INNER_RADIUS = 14.0;
 
     private static final StampCanvasMaterial CARVING_MATERIAL = new StampCanvasMaterial(
             ResourceLocation.fromNamespaceAndPath(
-                    "gyromancy", "textures/item/copper_ring.png"),
+                    "gyromancy", "textures/carve/copper_ring.png"),
             0xFFB873,
             1);
     private static final boolean[] RING_ALLOWED_PIXELS = createRingMask();
@@ -38,7 +37,7 @@ public final class CopperRingItem extends Item implements Carvable {
     public CopperRingItem() {
         super(new Properties()
                 .stacksTo(1)
-                .component(ModDataComponents.COPPER_RING_DOCUMENT.get(), blankCanvas()));
+                .component(ModDataComponents.CARVING_DOCUMENT.get(), blankCanvas()));
     }
 
     /** Returns a fresh blank canvas so mutable raster arrays are never shared. */
@@ -51,7 +50,7 @@ public final class CopperRingItem extends Item implements Carvable {
     @Override
     public CanvasDocument carvingCanvas(ItemStack stack) {
         return stack.getOrDefault(
-                ModDataComponents.COPPER_RING_DOCUMENT.get(), blankCanvas());
+                ModDataComponents.CARVING_DOCUMENT.get(), blankCanvas());
     }
 
     @Override
@@ -86,7 +85,7 @@ public final class CopperRingItem extends Item implements Carvable {
     @Override
     public void setCarvedRunes(ItemStack stack, List<CanvasGlyph> runes) {
         CanvasDocument current = carvingCanvas(stack);
-        stack.set(ModDataComponents.COPPER_RING_DOCUMENT.get(),
+        stack.set(ModDataComponents.CARVING_DOCUMENT.get(),
                 current.withCompileCache(runes, current.arrays()));
     }
 
@@ -94,7 +93,7 @@ public final class CopperRingItem extends Item implements Carvable {
     public void setCompiledAst(ItemStack stack, List<GroupNode> asts) {
         CanvasDocument current = carvingCanvas(stack);
         List<CanvasArrayRecord> arrays = Carvable.arrayRecordsFromAsts(asts);
-        stack.set(ModDataComponents.COPPER_RING_DOCUMENT.get(),
+        stack.set(ModDataComponents.CARVING_DOCUMENT.get(),
                 current.withCompileCache(current.glyphs(), arrays));
     }
 
@@ -106,7 +105,7 @@ public final class CopperRingItem extends Item implements Carvable {
         List<CanvasArrayRecord> arrays = compiledDocument.arrays().isEmpty()
                 ? Carvable.arrayRecordsFromAsts(asts)
                 : compiledDocument.arrays();
-        stack.set(ModDataComponents.COPPER_RING_DOCUMENT.get(),
+        stack.set(ModDataComponents.CARVING_DOCUMENT.get(),
                 carvingDocument.withCompileCache(compiledDocument.glyphs(), arrays));
     }
 }
