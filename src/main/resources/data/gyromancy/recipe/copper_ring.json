@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " C ",
+    "C C",
+    " C "
+  ],
+  "key": {
+    "C": {
+      "item": "minecraft:copper_nugget"
+    }
+  },
+  "result": {
+    "id": "gyromancy:copper_ring",
+    "count": 1
+  }
+}

@@ -83,6 +83,15 @@ public final class ModDataComponents {
                             .build()
             );
 
+    /** 64x64 carving canvas and recognized rune cache stored by copper rings. */
+    public static final Supplier<DataComponentType<CanvasDocument>> COPPER_RING_DOCUMENT =
+            DATA_COMPONENTS.register("copper_ring_document", () ->
+                    DataComponentType.<CanvasDocument>builder()
+                            .persistent(CanvasDocument.CODEC)
+                            .networkSynchronized(ByteBufCodecs.fromCodec(CanvasDocument.CODEC))
+                            .build()
+            );
+
     /** Painter canvas face captured by a stamp, including its pixel and effect data. */
     public static final Supplier<DataComponentType<CanvasFace>> STAMP_FACE =
             DATA_COMPONENTS.register("stamp_face", () ->

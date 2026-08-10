@@ -6,8 +6,10 @@ import com.astune.gyromancy.item.DebugBrushItem;
 import com.astune.gyromancy.item.InkBottleItem;
 import com.astune.gyromancy.item.PenItem;
 import com.astune.gyromancy.item.CanvasItem;
+import com.astune.gyromancy.item.CopperRingItem;
 import com.astune.gyromancy.item.StampItem;
 import com.astune.gyromancy.item.WandItem;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -40,6 +42,10 @@ public final class ModItems {
     public static final DeferredItem<CanvasItem> CANVAS = ITEMS.register("canvas",
             CanvasItem::new);
 
+    /** Carvable 64x64 copper ring used as an intermediate crafting material. */
+    public static final DeferredItem<CopperRingItem> COPPER_RING = ITEMS.register("copper_ring",
+            CopperRingItem::new);
+
     /** Reusable painting pattern captured from a Painter canvas face. */
     public static final DeferredItem<StampItem> STAMP = ITEMS.register("stamp",
             StampItem::new);
@@ -47,4 +53,9 @@ public final class ModItems {
     /** Default two-plane wand: two canvas slots at one and one-and-a-half blocks. */
     public static final DeferredItem<WandItem> WAND = ITEMS.register("wand",
             WandItem::new);
+
+    /** Block item for the non-persistent rune carving table. */
+    public static final DeferredItem<BlockItem> RUNE_CARVING_TABLE = ITEMS.register(
+            "rune_carving_table",
+            () -> new BlockItem(ModBlocks.RUNE_CARVING_TABLE.get(), new Item.Properties()));
 }

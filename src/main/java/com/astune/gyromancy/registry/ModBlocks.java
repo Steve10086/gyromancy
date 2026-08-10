@@ -1,10 +1,7 @@
 package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.level.material.MapColor;
+import com.astune.gyromancy.block.RuneCarvingTableBlock;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -18,8 +15,7 @@ public final class ModBlocks {
 
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(Gyromancy.MODID);
 
-    // Blocks will be registered here in Phase 4-5:
-    //
-    // public static final DeferredBlock<Block> INK_CAULDRON = BLOCKS.registerSimpleBlock(
-    //     "ink_cauldron", BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK));
+    /** Workbench-like table which owns no persistent inventory. */
+    public static final DeferredBlock<RuneCarvingTableBlock> RUNE_CARVING_TABLE =
+            BLOCKS.register("rune_carving_table", RuneCarvingTableBlock::new);
 }

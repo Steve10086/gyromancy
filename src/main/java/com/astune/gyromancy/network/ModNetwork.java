@@ -64,6 +64,12 @@ public final class ModNetwork {
         );
 
         registrar.playToServer(
+                SubmitRuneCarvingPacket.TYPE,
+                SubmitRuneCarvingPacket.STREAM_CODEC,
+                SubmitRuneCarvingPacket::handleServer
+        );
+
+        registrar.playToServer(
                 CompassRadiusPacket.TYPE,
                 CompassRadiusPacket.STREAM_CODEC,
                 CompassRadiusPacket::handleServer

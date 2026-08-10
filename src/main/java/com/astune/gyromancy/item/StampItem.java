@@ -2,8 +2,11 @@ package com.astune.gyromancy.item;
 
 import com.astune.gyromancy.api.canvas.CanvasStampTool;
 import com.astune.gyromancy.api.canvas.CanvasEditorTool.EditorContext;
+import com.astune.gyromancy.api.canvas.Carvable;
 import com.astune.gyromancy.api.canvas.StampCanvasMaterial;
+import com.astune.gyromancy.array.compile.GroupNode;
 import com.astune.gyromancy.canvas.CanvasDocument;
+import com.astune.gyromancy.canvas.CanvasGlyph;
 import com.astune.gyromancy.client.canvas.CanvasStampRaster;
 import com.astune.gyromancy.network.StampEditorSnapshotPacket;
 import com.astune.gyromancy.registry.ModDataComponents;
@@ -30,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-public class StampItem extends Item implements IPaintProvider, CanvasStampTool {
+public class StampItem extends Item implements IPaintProvider, CanvasStampTool, Carvable {
     private static final String MANA_KEY = "gyromancy:mana";
     private static final int MANA_VALUE = 10;
     private static final double MIN_EDITOR_SIZE = 0.125;
@@ -53,6 +56,48 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool {
                 .component(ModDataComponents.STAMP_MATERIAL.get(), StampCanvasMaterial.DEFAULT)
                 .component(ModDataComponents.STAMP_REVISION.get(), 0));
         PaintProviders.register(this, this);
+    }
+
+    @Override
+    public CanvasDocument carvingCanvas(ItemStack stack) {
+        return stack.getOrDefault(
+                ModDataComponents.STAMP_CANVAS.get(), CanvasDocument.blank(1, 1));
+    }
+
+    @Override
+    public CarvingProperties carvingProperties(ItemStack stack) {
+        CanvasDocument document = carvingCanvas(stack);
+        return new CarvingProperties(
+                stack.getOrDefault(ModDataComponents.STAMP_MATERIAL.get(),
+                        StampCanvasMaterial.DEFAULT),
+                document.resolutionScale(),
+                new boolean[0]);
+    }
+
+    @Override
+    public void setCarvedRunes(ItemStack stack, List<CanvasGlyph> runes) {
+        // Stamps persist the raster in applyCarving, not recognized runes.
+    }
+
+    @Override
+    public void setCompiledAst(ItemStack stack, List<GroupNode> asts) {
+        // Stamps persist the raster they were carved from, rather than the
+        // intermediate rune and AST structures used by the generic path.
+    }
+
+    @Override
+    public void applyCarving(ItemStack stack,
+                             CanvasDocument carvingDocument,
+                             CanvasDocument compiledDocument,
+                             List<GroupNode> asts) {
+        // Keep the original stamp behavior: the item stores the actual
+        // carving canvas and never serializes recognized runes or compiled
+        // ASTs into STAMP_CANVAS.
+        stack.set(ModDataComponents.STAMP_CANVAS.get(),
+                carvingDocument.withCompileCache(List.of(), List.of()));
+        int revision = stack.getOrDefault(ModDataComponents.STAMP_REVISION.get(), 0);
+        stack.set(ModDataComponents.STAMP_REVISION.get(), revision + 1);
+        stack.remove(ModDataComponents.STAMP_FACE.get());
     }
 
     @Override

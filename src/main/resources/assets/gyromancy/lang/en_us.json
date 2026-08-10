@@ -25,6 +25,7 @@
   "gyromancy.configuration.paintCameraPanRange": "Paint Camera Pan Range",
   "gyromancy.configuration.paintCameraZoomRange": "Paint Camera Zoom Range",
   "item.gyromancy.canvas": "Canvas",
+  "item.gyromancy.copper_ring": "Copper Ring",
   "item.gyromancy.canvas.dimensions": "Size: %s x %s blocks",
   "item.gyromancy.canvas.resolution": "Resolution: %s x %s",
   "screen.gyromancy.canvas": "Canvas",
@@ -68,5 +69,9 @@
   "screen.gyromancy.wand.slot_near": "1 block",
   "screen.gyromancy.wand.slot_far": "1.5 blocks",
   "screen.gyromancy.stamp_carving": "Stamp Carving",
-  "screen.gyromancy.stamp_carving.controls": "Left: carve / Right: erase / Shift: pan and zoom"
+  "screen.gyromancy.stamp_carving.controls": "Left: carve / Right: erase / Shift: pan and zoom",
+  "block.gyromancy.rune_carving_table": "Rune Carving Table",
+  "container.gyromancy.rune_carving_table": "Rune Carving Table",
+  "screen.gyromancy.rune_carving.empty": "Place a carvable item in the slot",
+  "screen.gyromancy.rune_carving.input": "Carvable item"
 }

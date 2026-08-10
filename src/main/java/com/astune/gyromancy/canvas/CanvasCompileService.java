@@ -10,6 +10,7 @@ import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.MagicArrayDetector;
 import com.astune.gyromancy.array.compile.ArrayAstBuilder;
 import com.astune.gyromancy.array.compile.ArrayNodeCompiler;
+import com.astune.gyromancy.array.compile.GroupNode;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.CompiledArray;
 import com.astune.gyromancy.array.runtime.ArrayEffectLifecycle;
@@ -55,6 +56,38 @@ public final class CanvasCompileService {
         return compiled.withRaster(
                 compiledStrokeMaterial(raster, glyphs, arrays),
                 raster.strokeEffects());
+    }
+
+    /**
+     * Builds the successfully compiling portable AST roots for a document.
+     * The returned nodes have a synthetic surface and are intended for an
+     * item to serialize in whatever form suits that item.
+     */
+    public static List<GroupNode> compilePortableAsts(CanvasDocument document) {
+        MagicArrayManager manager = new MagicArrayManager();
+        java.util.LinkedHashMap<UUID, PositionedGlyph> positioned = new java.util.LinkedHashMap<>();
+        int glyphId = 1;
+        for (CanvasGlyph glyph : document.glyphs()) {
+            PositionedGlyph world = portableGlyph(document, glyph, glyphId++);
+            positioned.put(glyph.glyphUuid(), world);
+            manager.registerGlyph(world);
+        }
+
+        List<GroupNode> asts = new ArrayList<>();
+        positioned.values().stream()
+                .filter(glyph -> glyph.role() == SymbolRole.OUTER_CIRCLE)
+                .sorted(Comparator.comparingDouble((PositionedGlyph glyph) -> glyph.bounds().area())
+                        .thenComparingInt(PositionedGlyph::glyphId))
+                .forEach(circle -> {
+                    GroupNode ast = ArrayAstBuilder.build(circle, manager, ignored -> true);
+                    CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(
+                            ast, manager.opDefinitions());
+                    if (result instanceof CompileResult.Success<CompiledArray> success
+                            && success.value().root() instanceof PersistentOp) {
+                        asts.add(ast);
+                    }
+                });
+        return List.copyOf(asts);
     }
 
     static int[] compiledStrokeMaterial(

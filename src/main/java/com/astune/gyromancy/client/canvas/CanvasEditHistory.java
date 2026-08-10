@@ -109,6 +109,12 @@ final class CanvasEditHistory {
         return !redo.isEmpty();
     }
 
+    void clear() {
+        undo.clear();
+        redo.clear();
+        activeChanges = null;
+    }
+
     private record PixelChange(
             int index,
             int beforeColor,

@@ -14,6 +14,7 @@ import com.astune.gyromancy.registry.ModEntities;
 import com.astune.gyromancy.registry.ModItems;
 import com.astune.gyromancy.registry.ModMenus;
 import com.astune.gyromancy.client.wand.WandScreen;
+import com.astune.gyromancy.client.canvas.RuneCarvingScreen;
 import com.astune.painter.api.imageProvider.CanvasImageProviderRegistry;
 import com.astune.painter.api.render.CanvasRendererRegistry;
 import net.neoforged.api.distmarker.Dist;
@@ -60,5 +61,6 @@ public final class ClientSetup {
     @SubscribeEvent
     static void registerMenuScreens(RegisterMenuScreensEvent event) {
         event.register(ModMenus.WAND.get(), WandScreen::new);
+        event.register(ModMenus.RUNE_CARVING.get(), RuneCarvingScreen::new);
     }
 }
