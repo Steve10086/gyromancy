@@ -26,6 +26,7 @@
   "gyromancy.configuration.paintCameraZoomRange": "Paint Camera Zoom Range",
   "item.gyromancy.canvas": "Canvas",
   "item.gyromancy.copper_ring": "Copper Ring",
+  "item.gyromancy.copper_nugget": "Copper Nugget",
   "item.gyromancy.canvas.dimensions": "Size: %s x %s blocks",
   "item.gyromancy.canvas.resolution": "Resolution: %s x %s",
   "screen.gyromancy.canvas": "Canvas",

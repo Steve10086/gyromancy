@@ -1,9 +1,7 @@
 package com.astune.gyromancy.api.canvas;
 
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
-import com.astune.gyromancy.array.compile.ArrayNodeCompiler;
-import com.astune.gyromancy.array.compile.CompileResult;
-import com.astune.gyromancy.array.compile.CompiledArray;
+import com.astune.gyromancy.array.compile.ArrayAstBuilder;
 import com.astune.gyromancy.array.compile.GroupNode;
 import com.astune.gyromancy.canvas.CanvasArrayRecord;
 import com.astune.gyromancy.canvas.CanvasDocument;
@@ -19,10 +17,10 @@ import java.util.List;
  *
  * <p>The carving table deliberately does not know how an item stores its
  * result. Implementations provide the surface description and receive the
- * recognized runes and successfully compiled ASTs through the two setter
- * methods below. This keeps item persistence in the item implementation,
- * rather than adding a universal data component with assumptions about every
- * carvable item.
+ * recognized runes and syntax trees through the two setter methods below.
+ * Runtime operator eligibility is separate from this structural carving data.
+ * This keeps item persistence in the item implementation, rather than adding
+ * a universal data component with assumptions about every carvable item.
  */
 public interface Carvable {
 
@@ -41,7 +39,7 @@ public interface Carvable {
     /** Stores every recognized rune, including runes outside compiled circles. */
     void setCarvedRunes(ItemStack stack, List<CanvasGlyph> runes);
 
-    /** Stores the ASTs of the circles which compiled successfully. */
+    /** Stores the ASTs of all recognized outer circles, regardless of runtime validity. */
     void setCompiledAst(ItemStack stack, List<GroupNode> asts);
 
     /**
@@ -69,25 +67,21 @@ public interface Carvable {
     }
 
     /**
-     * Converts compiled AST roots into the compact, codec-friendly cache used
-     * by the built-in canvas-like items. Custom items may persist the AST
-     * directly instead.
+     * Converts AST roots into a compact structural cache used by the built-in
+     * canvas-like items. This intentionally does not invoke the operator
+     * compiler: failed or non-runtime roots still need to retain their tree.
      */
     static List<CanvasArrayRecord> arrayRecordsFromAsts(List<GroupNode> asts) {
         List<CanvasArrayRecord> records = new ArrayList<>();
         for (GroupNode ast : asts) {
-            CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(ast);
-            if (!(result instanceof CompileResult.Success<CompiledArray> success)) continue;
-            CompiledArray compiled = success.value();
-            List<java.util.UUID> bound = compiled.boundGlyphs().stream()
+            List<java.util.UUID> bound = ArrayAstBuilder.boundGlyphs(ast).stream()
                     .map(PositionedGlyph::glyphUuid)
                     .toList();
             java.util.UUID root = ast.boundary().glyphUuid();
             records.add(new CanvasArrayRecord(
                     root,
                     bound,
-                    CanvasArrayRecord.fingerprint(root, bound),
-                    compiled.color()));
+                    CanvasArrayRecord.fingerprint(root, bound)));
         }
         return List.copyOf(records);
     }

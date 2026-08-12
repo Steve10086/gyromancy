@@ -86,6 +86,36 @@ public final class CanvasScanUtils {
     }
 
     /**
+     * Extracts only the foreground components which intersect the supplied
+     * seed region. The flood fill is still allowed to leave the region so a
+     * component is returned in its complete form, but pixels belonging to
+     * unrelated components are never scanned.
+     */
+    public static List<ConnectedComponent> extractComponents(
+            int[] pixels, int width, int height, BitSet seedRegion, int minArea) {
+        if (width < 0 || height < 0 || pixels.length != width * height) {
+            throw new IllegalArgumentException("Canvas matrix dimensions do not match");
+        }
+        boolean[][] visited = new boolean[height][width];
+        List<ConnectedComponent> components = new ArrayList<>();
+        for (int seed = seedRegion.nextSetBit(0);
+             seed >= 0 && seed < pixels.length;
+             seed = seedRegion.nextSetBit(seed + 1)) {
+            int x = seed % width;
+            int y = seed / width;
+            if (visited[y][x] || pixels[seed] == 0) continue;
+
+            ConnectedComponent component = floodFillRaw(
+                    pixels, visited, x, y, width, height);
+            if (component != null && component.area >= minArea) {
+                components.add(component);
+            }
+        }
+        components.sort((a, b) -> Integer.compare(b.area, a.area));
+        return components;
+    }
+
+    /**
      * 8-connected BFS flood fill using IPixelMatrix.
      */
     private static ConnectedComponent floodFill(IPixelMatrix matrix, boolean[][] visited,
@@ -200,6 +230,58 @@ public final class CanvasScanUtils {
         }
 
         return new ConnectedComponent(subPixels, minX, minY, maxX, maxY, sumX / area, sumY / area, area);
+    }
+
+    private static ConnectedComponent floodFillRaw(int[] pixels, boolean[][] visited,
+                                                    int startX, int startY, int w, int h) {
+        Deque<int[]> queue = new ArrayDeque<>();
+        queue.add(new int[]{startX, startY});
+        visited[startY][startX] = true;
+
+        int minX = startX, minY = startY, maxX = startX, maxY = startY;
+        double sumX = 0, sumY = 0;
+        int area = 0;
+        List<int[]> pixelPositions = new ArrayList<>();
+
+        while (!queue.isEmpty()) {
+            int[] point = queue.poll();
+            int x = point[0];
+            int y = point[1];
+            if (pixels[y * w + x] == 0) continue;
+
+            area++;
+            sumX += x;
+            sumY += y;
+            pixelPositions.add(new int[]{x, y});
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    if (dx == 0 && dy == 0) continue;
+                    int nx = x + dx;
+                    int ny = y + dy;
+                    if (nx >= 0 && nx < w && ny >= 0 && ny < h
+                            && !visited[ny][nx]) {
+                        visited[ny][nx] = true;
+                        queue.add(new int[]{nx, ny});
+                    }
+                }
+            }
+        }
+
+        if (area == 0) return null;
+        int componentWidth = maxX - minX + 1;
+        int componentHeight = maxY - minY + 1;
+        int[][] subPixels = new int[componentHeight][componentWidth];
+        for (int[] point : pixelPositions) {
+            subPixels[point[1] - minY][point[0] - minX] = 1;
+        }
+        return new ConnectedComponent(
+                subPixels, minX, minY, maxX, maxY,
+                sumX / area, sumY / area, area);
     }
 
     /**

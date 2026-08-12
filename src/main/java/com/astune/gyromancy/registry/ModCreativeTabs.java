@@ -31,6 +31,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.INK_BOTTLE.get());
                         output.accept(ModItems.CANVAS.get());
                         output.accept(ModItems.COPPER_RING.get());
+                        output.accept(ModItems.COPPER_NUGGET.get());
                         output.accept(ModItems.STAMP.get());
                         output.accept(ModItems.WAND.get());
                         output.accept(ModItems.RUNE_CARVING_TABLE.get());

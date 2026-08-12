@@ -1,5 +1,6 @@
 package com.astune.gyromancy.canvas;
 
+import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.array.MagicArrayManager;
@@ -59,18 +60,76 @@ public final class CanvasCompileService {
     }
 
     /**
-     * Builds the successfully compiling portable AST roots for a document.
-     * The returned nodes have a synthetic surface and are intended for an
-     * item to serialize in whatever form suits that item.
+     * Applies a portable carving edit without compiling any AST. Existing
+     * glyph identities are retained unless their pixels intersect the edit
+     * region. Array records which depend on an invalidated glyph are dropped;
+     * final array/AST compilation is performed when the carving menu closes.
+     */
+    public static CanvasDocument updatePortableIncremental(
+            CanvasDocument before, CanvasDocument submitted) {
+        CanvasDocument baseline;
+        try {
+            baseline = before.resolutionScale() == submitted.resolutionScale()
+                    ? before : before.resample(submitted.resolutionScale());
+        } catch (IllegalArgumentException exception) {
+            return submitted.withCompileCache(List.of(), List.of());
+        }
+
+        CanvasEditDiff diff = CanvasEditDiff.between(baseline, submitted);
+        if (diff.isEmpty()) {
+            return submitted.withCompileCache(baseline.glyphs(), baseline.arrays());
+        }
+
+        List<CanvasGlyph> invalidated = baseline.glyphs().stream()
+                .filter(diff::touches)
+                .toList();
+        Set<UUID> invalidatedIds = invalidated.stream()
+                .map(CanvasGlyph::glyphUuid).collect(java.util.stream.Collectors.toSet());
+        List<CanvasGlyph> retained = baseline.glyphs().stream()
+                .filter(glyph -> !invalidatedIds.contains(glyph.glyphUuid()))
+                .toList();
+        List<CanvasGlyph> recognized = MagicArrayDetector.circlesLast(
+                recognizeChangedComponents(submitted, diff.compileRegion()),
+                glyph -> glyph.role() == SymbolRole.OUTER_CIRCLE);
+
+        List<CanvasGlyph> nextGlyphs = new ArrayList<>(retained);
+        nextGlyphs.addAll(recognized);
+        return submitted.withCompileCache(nextGlyphs, List.of());
+    }
+
+    /**
+     * Builds one portable AST root for every outer circle in a document.
+     * Operator compilation is diagnostic only here: a carvable item stores
+     * the syntax tree even when its current inputs do not form a runnable op.
      */
     public static List<GroupNode> compilePortableAsts(CanvasDocument document) {
+        Gyromancy.LOGGER.info(
+                "[PortableCompiler] input raster={}x{} physical={}x{} glyphs={} cachedArrays={}",
+                document.resolutionWidth(), document.resolutionHeight(),
+                document.physicalWidth(), document.physicalHeight(),
+                document.glyphs().size(), document.arrays().size());
+
         MagicArrayManager manager = new MagicArrayManager();
         java.util.LinkedHashMap<UUID, PositionedGlyph> positioned = new java.util.LinkedHashMap<>();
         int glyphId = 1;
         for (CanvasGlyph glyph : document.glyphs()) {
+            Gyromancy.LOGGER.info(
+                    "[PortableCompiler] glyph uuid={} symbol={} role={} bounds=({},{})->({},{}) cells={}",
+                    glyph.glyphUuid(), glyph.symbolId(), glyph.role(),
+                    glyph.minX(), glyph.minY(), glyph.maxX(), glyph.maxY(),
+                    glyph.rawCells().length);
             PositionedGlyph world = portableGlyph(document, glyph, glyphId++);
             positioned.put(glyph.glyphUuid(), world);
             manager.registerGlyph(world);
+        }
+
+        long outerCircleCount = positioned.values().stream()
+                .filter(glyph -> glyph.role() == SymbolRole.OUTER_CIRCLE)
+                .count();
+        if (outerCircleCount == 0) {
+            Gyromancy.LOGGER.warn(
+                    "[PortableCompiler] no outer circle in {} cached glyph(s); AST result is empty",
+                    positioned.size());
         }
 
         List<GroupNode> asts = new ArrayList<>();
@@ -79,15 +138,67 @@ public final class CanvasCompileService {
                 .sorted(Comparator.comparingDouble((PositionedGlyph glyph) -> glyph.bounds().area())
                         .thenComparingInt(PositionedGlyph::glyphId))
                 .forEach(circle -> {
+                    List<PositionedGlyph> directChildren = manager.directChildren(circle);
                     GroupNode ast = ArrayAstBuilder.build(circle, manager, ignored -> true);
+                    Gyromancy.LOGGER.info(
+                            "[PortableCompiler] circle uuid={} glyphId={} directChildren={} ast={}",
+                            circle.glyphUuid(), circle.glyphId(), directChildren.size(),
+                            describeAst(ast));
                     CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(
                             ast, manager.opDefinitions());
-                    if (result instanceof CompileResult.Success<CompiledArray> success
-                            && success.value().root() instanceof PersistentOp) {
-                        asts.add(ast);
+                    if (!(result instanceof CompileResult.Success<CompiledArray> success)) {
+                        if (result instanceof CompileResult.Failure<CompiledArray> failure) {
+                            Gyromancy.LOGGER.warn(
+                                    "[PortableCompiler] circle uuid={} compile failed: {}",
+                                    circle.glyphUuid(), failure.diagnostics());
+                        }
+                    } else if (!(success.value().root() instanceof PersistentOp)) {
+                        Gyromancy.LOGGER.info(
+                                "[PortableCompiler] circle uuid={} compiled root {} is a non-runtime AST; retaining it",
+                                circle.glyphUuid(), success.value().root().getClass().getName());
                     }
+                    // The tree is the carving result. Runtime eligibility is
+                    // deliberately not allowed to delete it.
+                    asts.add(ast);
                 });
+
+        Gyromancy.LOGGER.info("[PortableCompiler] accepted AST roots={}", asts.size());
+
         return List.copyOf(asts);
+    }
+
+    private static String describeAst(GroupNode ast) {
+        StringBuilder result = new StringBuilder();
+        describeAstNode(ast, result, 0);
+        return result.toString();
+    }
+
+    private static void describeAstNode(
+            com.astune.gyromancy.array.compile.ArrayNode node,
+            StringBuilder result,
+            int depth) {
+        if (depth > 16) {
+            result.append("...");
+            return;
+        }
+        if (depth > 0) result.append("/");
+        switch (node) {
+            case GroupNode group -> {
+                result.append("Group(").append(group.boundary().symbolId().getPath()).append(")");
+                describeAstNode(group.body(), result, depth + 1);
+            }
+            case com.astune.gyromancy.array.compile.SequenceNode sequence -> {
+                result.append("Sequence[");
+                for (com.astune.gyromancy.array.compile.ArrayNode child : sequence.children()) {
+                    describeAstNode(child, result, depth + 1);
+                    result.append(",");
+                }
+                result.append("]");
+            }
+            case com.astune.gyromancy.array.compile.SymbolNode symbol ->
+                    result.append("Rune(").append(symbol.glyph().symbolId().getPath()).append(")");
+            case com.astune.gyromancy.array.compile.ApplyNode apply -> result.append("Apply");
+        }
     }
 
     static int[] compiledStrokeMaterial(
@@ -300,19 +411,13 @@ public final class CanvasCompileService {
             CanvasDocument document, BitSet compileRegion) {
         int width = document.resolutionWidth();
         int height = document.resolutionHeight();
-        int[][] matrix = new int[height][width];
         int[] effects = document.rawStrokeEffects();
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                matrix[y][x] = effects[y * width + x] > 0 ? 1 : 0;
-            }
-        }
 
         List<CanvasGlyph> recognized = new ArrayList<>();
         for (CanvasScanUtils.ConnectedComponent component
-                : CanvasScanUtils.extractComponents(matrix, 1)) {
+                : CanvasScanUtils.extractComponents(
+                        effects, width, height, compileRegion, 1)) {
             int[] cells = componentCells(component, width);
-            if (Arrays.stream(cells).noneMatch(compileRegion::get)) continue;
 
             ExtractedGlyph extracted = extractedGlyph(document, component, cells);
             List<SymbolMatch> matches = SymbolRecognizer.recognize(extracted);

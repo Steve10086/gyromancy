@@ -39,8 +39,16 @@ public record CanvasEditDiff(int width, int height, BitSet changed, BitSet compi
             }
         }
 
+        return new CanvasEditDiff(width, height, changed,
+                expandRegion(width, height, changed));
+    }
+
+    /** Expands changed pixels by one cell using the recognizer's 8-connectivity. */
+    public static BitSet expandRegion(int width, int height, BitSet changed) {
         BitSet compileRegion = new BitSet(width * height);
-        for (int index = changed.nextSetBit(0); index >= 0; index = changed.nextSetBit(index + 1)) {
+        for (int index = changed.nextSetBit(0);
+             index >= 0;
+             index = changed.nextSetBit(index + 1)) {
             int x = index % width;
             int y = index / width;
             for (int dy = -1; dy <= 1; dy++) {
@@ -53,7 +61,7 @@ public record CanvasEditDiff(int width, int height, BitSet changed, BitSet compi
                 }
             }
         }
-        return new CanvasEditDiff(width, height, changed, compileRegion);
+        return compileRegion;
     }
 
     public boolean isEmpty() {

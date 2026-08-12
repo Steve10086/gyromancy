@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "type": "gyromancy:carving",
+      "item": {
+        "item": "gyromancy:copper_ring"
+      },
+      "runes": [
+        "gyromancy:arrow",
+        "gyromancy:arrow"
+      ],
+      "outer_circle": [
+        {
+          "runes": [
+            "gyromancy:curl"
+          ]
+        }
+      ]
+    },
+    {
+      "item": "minecraft:paper"
+    }
+  ],
+  "result": {
+    "id": "minecraft:oak_planks",
+    "count": 1
+  }
+}

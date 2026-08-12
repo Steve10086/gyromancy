@@ -1,0 +1,54 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "GD ",
+    "CSC",
+    " DS"
+  ],
+  "key": {
+    "G": {
+      "item": "minecraft:glass_pane"
+    },
+    "S": {
+      "item": "minecraft:stick"
+    },
+    "C": {
+      "type": "gyromancy:carving",
+      "item": {
+        "item": "gyromancy:copper_ring"
+      },
+      "outer_circle": [
+        {
+          "runes": [
+            "gyromancy:split",
+            "gyromancy:star",
+            "gyromancy:arrow",
+            "gyromancy:arrow",
+            "gyromancy:cross"
+          ]
+        }
+      ]
+    },
+    "D": {
+      "type": "gyromancy:carving",
+      "item": {
+        "item": "gyromancy:copper_ring"
+      },
+      "outer_circle": [
+        {
+          "runes": [
+            "gyromancy:drain",
+            "gyromancy:mana",
+            "gyromancy:arrow_up",
+            "gyromancy:cross"
+          ]
+        }
+      ]
+    }
+  },
+  "result": {
+    "id": "gyromancy:wand",
+    "count": 1
+  }
+}

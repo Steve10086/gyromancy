@@ -21,6 +21,7 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.concurrent.CompletableFuture;
 
 /** Canvas-like rune engraving editor backed by the table's temporary slot. */
@@ -54,6 +55,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
     private long runePreviewGeneration;
     private long nextRunePreviewNanos;
     private boolean runePreviewDirty = true;
+    private final BitSet runePreviewDirtyRegion = new BitSet();
     private boolean inventoryExpanded;
     private boolean viewModifierHeld;
     private boolean panning;
@@ -128,7 +130,10 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
 
     private void refreshInput(boolean force) {
         ItemStack current = carvingMenu.carvingStack();
-        boolean itemChanged = force || !ItemStack.matches(current, observedInput);
+        boolean stackChanged = force || !ItemStack.matches(current, observedInput);
+        boolean itemIdentityChanged = force
+                || current.getItem() != observedInput.getItem()
+                || current.getCount() != observedInput.getCount();
         Carvable.CarvingProperties next = null;
         CanvasDocument storedCanvas = null;
         int nextPhysicalWidth = 1;
@@ -149,7 +154,17 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
         boolean surfaceChanged = !sameProperties(properties, next);
         boolean aspectChanged = physicalWidth != nextPhysicalWidth
                 || physicalHeight != nextPhysicalHeight;
-        if (!itemChanged && !surfaceChanged && !aspectChanged) return;
+        if (!stackChanged && !surfaceChanged && !aspectChanged) return;
+
+        // The server broadcasts the item after every accepted carving action.
+        // Its raster is unchanged, while the rune/array cache and therefore
+        // ItemStack.matches() are different. Do not reset the local editor or
+        // throw away its incremental preview for a cache-only update.
+        if (!itemIdentityChanged && !surfaceChanged && !aspectChanged
+                && sameLocalRaster(storedCanvas)) {
+            observedInput = current.copy();
+            return;
+        }
 
         finishStrokeWithoutSubmit();
         properties = next;
@@ -184,6 +199,12 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
             layoutPanel();
         }
         updateActionButtons();
+    }
+
+    private boolean sameLocalRaster(CanvasDocument storedCanvas) {
+        if (storedCanvas == null || storedCanvas.resolutionScale() != scale) return false;
+        return Arrays.equals(storedCanvas.colors(), colors)
+                && Arrays.equals(storedCanvas.strokeEffects(), effects);
     }
 
     private static boolean sameProperties(Carvable.CarvingProperties first,
@@ -644,11 +665,33 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
     public void invalidateRunePreview() {
         runePreviewGeneration++;
         runePreviewDirty = true;
+        markRunePreviewDirtyFully();
     }
 
     private void clearRunePreview() {
         runePreview = CanvasRunePreview.empty();
         invalidateRunePreview();
+    }
+
+    private void invalidateRunePreviewAt(int x, int y) {
+        int width = rasterWidth();
+        int height = rasterHeight();
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int nx = x + dx;
+                int ny = y + dy;
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                    runePreviewDirtyRegion.set(ny * width + nx);
+                }
+            }
+        }
+        runePreviewGeneration++;
+        runePreviewDirty = true;
+    }
+
+    private void markRunePreviewDirtyFully() {
+        int size = rasterWidth() * rasterHeight();
+        if (size > 0) runePreviewDirtyRegion.set(0, size);
     }
 
     private void updateRunePreview() {
@@ -658,10 +701,14 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
                 if (result.generation() == runePreviewGeneration) {
                     runePreview = result.preview();
                     refreshTexture();
+                } else {
+                    runePreviewDirty = true;
+                    markRunePreviewDirtyFully();
                 }
             } catch (RuntimeException exception) {
                 Gyromancy.LOGGER.warn("Rune carving preview failed", exception);
                 runePreviewDirty = true;
+                markRunePreviewDirtyFully();
             } finally {
                 runePreviewTask = null;
             }
@@ -671,11 +718,16 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
         int width = rasterWidth();
         int height = rasterHeight();
         int[] effectSnapshot = effects.clone();
+        BitSet dirtyRegion = (BitSet) runePreviewDirtyRegion.clone();
+        runePreviewDirtyRegion.clear();
+        CanvasRunePreview previousPreview = runePreview;
         long generation = runePreviewGeneration;
         runePreviewDirty = false;
         nextRunePreviewNanos = now + RUNE_PREVIEW_INTERVAL_NANOS;
         runePreviewTask = CompletableFuture.supplyAsync(() -> new RunePreviewTaskResult(
-                generation, CanvasRunePreview.compile(width, height, effectSnapshot)));
+                generation, CanvasRunePreview.compileIncremental(
+                        width, height, effectSnapshot,
+                        previousPreview, dirtyRegion)));
     }
 
     private void toggleInventory() {
@@ -872,7 +924,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
         colors[index] = normalizedColor;
         effects[index] = normalizedEffect;
         pendingSubmission = true;
-        invalidateRunePreview();
+        invalidateRunePreviewAt(x, y);
         if (canvasTexture != null) canvasTexture.setCanvasPixel(x, y, normalizedColor);
     }
 

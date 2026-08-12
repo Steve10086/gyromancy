@@ -13,6 +13,7 @@ import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -52,16 +53,57 @@ final class CanvasRunePreview {
             return EMPTY;
         }
 
-        int[][] matrix = new int[height][width];
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                matrix[y][x] = effects[y * width + x] > 0 ? 1 : 0;
-            }
+        BitSet seeds = new BitSet(effects.length);
+        for (int index = 0; index < effects.length; index++) {
+            if (effects[index] > 0) seeds.set(index);
         }
+        return compileComponents(width, height, effects,
+                CanvasScanUtils.extractComponents(effects, width, height, seeds, 1));
+    }
 
+    /** Updates only components intersecting the supplied dirty region. */
+    static CanvasRunePreview compileIncremental(
+            int width, int height, int[] effects,
+            CanvasRunePreview previous, BitSet dirtyRegion) {
+        if (width <= 0 || height <= 0 || effects.length != width * height) {
+            return EMPTY;
+        }
+        if (previous == null
+                || previous.width != width
+                || previous.height != height) {
+            return compile(width, height, effects);
+        }
+        if (dirtyRegion.isEmpty()) return previous;
+
+        List<RuneMatch> next = new ArrayList<>();
+        for (RuneMatch rune : previous.runes) {
+            boolean affected = false;
+            for (int cell : rune.cells()) {
+                if (dirtyRegion.get(cell)) {
+                    affected = true;
+                    break;
+                }
+            }
+            if (!affected) next.add(rune);
+        }
+        next.addAll(recognizeComponents(width, height, effects,
+                CanvasScanUtils.extractComponents(
+                        effects, width, height, dirtyRegion, 1)));
+        return new CanvasRunePreview(width, height, next);
+    }
+
+    private static CanvasRunePreview compileComponents(
+            int width, int height, int[] effects,
+            List<CanvasScanUtils.ConnectedComponent> components) {
+        return new CanvasRunePreview(
+                width, height, recognizeComponents(width, height, effects, components));
+    }
+
+    private static List<RuneMatch> recognizeComponents(
+            int width, int height, int[] effects,
+            List<CanvasScanUtils.ConnectedComponent> components) {
         List<RuneMatch> runes = new ArrayList<>();
-        for (CanvasScanUtils.ConnectedComponent component
-                : CanvasScanUtils.extractComponents(matrix, 1)) {
+        for (CanvasScanUtils.ConnectedComponent component : components) {
             int[] cells = componentCells(component, width);
             ExtractedGlyph glyph = extractedGlyph(component, cells, width);
             List<SymbolMatch> matches = SymbolRecognizer.recognize(
@@ -78,7 +120,7 @@ final class CanvasRunePreview {
                     template == null ? 0xFFFFFFFF : template.glyphColor(),
                     cells));
         }
-        return runes.isEmpty() ? EMPTY : new CanvasRunePreview(width, height, runes);
+        return runes;
     }
 
     static CanvasRunePreview of(int width, int height, List<RuneMatch> runes) {

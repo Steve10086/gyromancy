@@ -21,6 +21,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -63,6 +64,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private long runePreviewGeneration;
     private long nextRunePreviewNanos;
     private boolean runePreviewDirty = true;
+    private final BitSet runePreviewDirtyRegion = new BitSet();
     private int scale;
     private int[] colors;
     private int[] effects;
@@ -721,11 +723,33 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     public void invalidateRunePreview() {
         runePreviewGeneration++;
         runePreviewDirty = true;
+        markRunePreviewDirtyFully();
     }
 
     private void clearRunePreview() {
         runePreview = CanvasRunePreview.empty();
         invalidateRunePreview();
+    }
+
+    private void invalidateRunePreviewAt(int x, int y) {
+        int width = rasterWidth();
+        int height = rasterHeight();
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int nx = x + dx;
+                int ny = y + dy;
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                    runePreviewDirtyRegion.set(ny * width + nx);
+                }
+            }
+        }
+        runePreviewGeneration++;
+        runePreviewDirty = true;
+    }
+
+    private void markRunePreviewDirtyFully() {
+        int size = rasterWidth() * rasterHeight();
+        if (size > 0) runePreviewDirtyRegion.set(0, size);
     }
 
     private void updateRunePreview() {
@@ -735,10 +759,14 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 if (result.generation() == runePreviewGeneration) {
                     runePreview = result.preview();
                     refreshCanvasTexture();
+                } else {
+                    runePreviewDirty = true;
+                    markRunePreviewDirtyFully();
                 }
             } catch (RuntimeException exception) {
                 Gyromancy.LOGGER.warn("Client canvas rune preview failed", exception);
                 runePreviewDirty = true;
+                markRunePreviewDirtyFully();
             } finally {
                 runePreviewTask = null;
             }
@@ -753,14 +781,18 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         int rasterWidth = CanvasDocument.PIXELS_PER_BLOCK * scale;
         int rasterHeight = CanvasDocument.PIXELS_PER_BLOCK * scale;
         int[] effectSnapshot = effects.clone();
+        BitSet dirtyRegion = (BitSet) runePreviewDirtyRegion.clone();
+        runePreviewDirtyRegion.clear();
+        CanvasRunePreview previousPreview = runePreview;
         long generation = runePreviewGeneration;
         runePreviewDirty = false;
         nextRunePreviewNanos = now + RUNE_PREVIEW_INTERVAL_NANOS;
         runePreviewTask = CompletableFuture.supplyAsync(() ->
                 new RunePreviewTaskResult(
                         generation,
-                        CanvasRunePreview.compile(
-                                rasterWidth, rasterHeight, effectSnapshot)));
+                        CanvasRunePreview.compileIncremental(
+                                rasterWidth, rasterHeight, effectSnapshot,
+                                previousPreview, dirtyRegion)));
     }
 
     private CanvasRunePreview.RuneMatch hoveredRune(
@@ -884,7 +916,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         history.recordChange(index, colors[index], effects[index], color, effect);
         colors[index] = color;
         effects[index] = effect;
-        invalidateRunePreview();
+        invalidateRunePreviewAt(x, y);
         if (canvasTexture != null) canvasTexture.setCanvasPixel(x, y, color);
     }
 

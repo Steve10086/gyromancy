@@ -46,6 +46,10 @@ public final class ModItems {
     public static final DeferredItem<CopperRingItem> COPPER_RING = ITEMS.register("copper_ring",
             CopperRingItem::new);
 
+    /** Copper nugget used to craft copper rings. */
+    public static final DeferredItem<Item> COPPER_NUGGET = ITEMS.register("copper_nugget",
+            () -> new Item(new Item.Properties()));
+
     /** Reusable painting pattern captured from a Painter canvas face. */
     public static final DeferredItem<StampItem> STAMP = ITEMS.register("stamp",
             StampItem::new);

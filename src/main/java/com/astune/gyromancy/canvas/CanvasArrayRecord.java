@@ -6,7 +6,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.List;
 import java.util.UUID;
 
-/** Persisted proof that a canvas-local circle compiled successfully. */
+/** Persisted structural record for a canvas-local outer-circle AST. */
 public record CanvasArrayRecord(
         UUID rootGlyph,
         List<UUID> boundGlyphs,

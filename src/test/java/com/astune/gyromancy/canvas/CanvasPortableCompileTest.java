@@ -1,6 +1,8 @@
 package com.astune.gyromancy.canvas;
 
+import com.astune.gyromancy.api.canvas.Carvable;
 import com.astune.gyromancy.api.symbol.SymbolRole;
+import com.astune.gyromancy.array.compile.GroupNode;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +28,56 @@ class CanvasPortableCompileTest {
         assertEquals(circle.glyphUuid(), arrays.getFirst().rootGlyph());
         assertEquals(List.of(circle.glyphUuid(), fire.glyphUuid()),
                 arrays.getFirst().boundGlyphs());
+    }
+
+    @Test
+    void portableAstCompilationAcceptsTheSameCanvasGlyphInput() {
+        CanvasGlyph circle = glyph(
+                "circle_outer", SymbolRole.OUTER_CIRCLE,
+                0.0, 1.0, 0.0, 1.0);
+        CanvasGlyph fire = glyph(
+                "fire", SymbolRole.CENTER_SYMBOL,
+                0.4, 0.6, 0.4, 0.6);
+        CanvasDocument document = CanvasDocument.blank(1, 1)
+                .withCompileCache(List.of(circle, fire), List.of());
+
+        List<GroupNode> asts = CanvasCompileService.compilePortableAsts(document);
+
+        assertEquals(1, asts.size());
+        assertEquals(circle.glyphUuid(), asts.getFirst().boundary().glyphUuid());
+    }
+
+    @Test
+    void portableAstKeepsACompiledNonRuntimeRootForCarvingData() {
+        CanvasGlyph circle = glyph(
+                "circle_outer", SymbolRole.OUTER_CIRCLE,
+                0.0, 1.0, 0.0, 1.0);
+        CanvasGlyph arrow = glyph(
+                "arrow", SymbolRole.PARAMETER_RUNE,
+                0.4, 0.6, 0.4, 0.6);
+        CanvasDocument document = CanvasDocument.blank(1, 1)
+                .withCompileCache(List.of(circle, arrow), List.of());
+
+        List<GroupNode> asts = CanvasCompileService.compilePortableAsts(document);
+
+        assertEquals(1, asts.size());
+        assertEquals(circle.glyphUuid(), asts.getFirst().boundary().glyphUuid());
+    }
+
+    @Test
+    void portableAstKeepsAnUncompilableCircleTreeForCarvingData() {
+        CanvasGlyph circle = glyph(
+                "circle_outer", SymbolRole.OUTER_CIRCLE,
+                0.0, 1.0, 0.0, 1.0);
+        CanvasDocument document = CanvasDocument.blank(1, 1)
+                .withCompileCache(List.of(circle), List.of());
+
+        List<GroupNode> asts = CanvasCompileService.compilePortableAsts(document);
+        List<CanvasArrayRecord> records = Carvable.arrayRecordsFromAsts(asts);
+
+        assertEquals(1, asts.size());
+        assertEquals(1, records.size());
+        assertEquals(List.of(circle.glyphUuid()), records.getFirst().boundGlyphs());
     }
 
     @Test

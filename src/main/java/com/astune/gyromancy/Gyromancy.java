@@ -21,6 +21,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.minecraft.resources.ResourceLocation;
 
 @Mod(Gyromancy.MODID)
 public class Gyromancy {
@@ -40,6 +41,7 @@ public class Gyromancy {
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
         ModAttachments.ATTACHMENTS.register(modEventBus);
         ModDataComponents.DATA_COMPONENTS.register(modEventBus);
+        ModIngredients.INGREDIENT_TYPES.register(modEventBus);
         ModRecipes.RECIPE_SERIALIZERS.register(modEventBus);
         ModMenus.MENUS.register(modEventBus);
         ModSymbols.register(modEventBus);
@@ -80,6 +82,12 @@ public class Gyromancy {
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         LOGGER.info("[Gyromancy] Server starting");
+        ResourceLocation testRecipe = ResourceLocation.fromNamespaceAndPath(
+                MODID, "carving_test");
+        event.getServer().getRecipeManager().byKey(testRecipe).ifPresentOrElse(
+                holder -> LOGGER.info("[RecipeDiagnostic] loaded {} type={}",
+                        testRecipe, holder.value().getType()),
+                () -> LOGGER.error("[RecipeDiagnostic] missing recipe {}", testRecipe));
     }
 
     @SubscribeEvent

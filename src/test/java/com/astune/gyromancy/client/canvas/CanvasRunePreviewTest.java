@@ -3,6 +3,7 @@ package com.astune.gyromancy.client.canvas;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
+import java.util.BitSet;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -45,5 +46,24 @@ class CanvasRunePreviewTest {
 
         assertTrue(preview.runeAt(0, 0).isEmpty());
         assertEquals(fire, preview.runeAt(0, 1).orElseThrow().symbolId());
+    }
+
+    @Test
+    void incrementalPreviewKeepsMatchesOutsideTheDirtyRegion() {
+        ResourceLocation fire = ResourceLocation.fromNamespaceAndPath(
+                "gyromancy", "fire");
+        CanvasRunePreview previous = CanvasRunePreview.of(
+                16, 16,
+                List.of(new CanvasRunePreview.RuneMatch(
+                        fire, 0.9F, 0xFFFF8888, new int[]{0})));
+        int[] effects = new int[16 * 16];
+        effects[15 * 16 + 15] = 1;
+        BitSet dirtyRegion = new BitSet(effects.length);
+        dirtyRegion.set(15 * 16 + 15);
+
+        CanvasRunePreview updated = CanvasRunePreview.compileIncremental(
+                16, 16, effects, previous, dirtyRegion);
+
+        assertEquals(fire, updated.runeAt(0, 0).orElseThrow().symbolId());
     }
 }

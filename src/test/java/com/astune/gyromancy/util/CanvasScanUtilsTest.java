@@ -4,6 +4,7 @@ import com.astune.gyromancy.util.CanvasScanUtils.ConnectedComponent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 
+import java.util.BitSet;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -33,6 +34,30 @@ class CanvasScanUtilsTest {
 
         List<ConnectedComponent> comps = CanvasScanUtils.extractComponents(pixels, 5);
         assertEquals(2, comps.size());
+    }
+
+    @Test
+    @DisplayName("Should extract only the component seeded by the dirty region")
+    void testExtractSeededComponents() {
+        int width = 16;
+        int height = 16;
+        int[] pixels = new int[width * height];
+        for (int y = 2; y <= 4; y++) {
+            for (int x = 2; x <= 4; x++) pixels[y * width + x] = 1;
+        }
+        for (int y = 11; y <= 13; y++) {
+            for (int x = 11; x <= 13; x++) pixels[y * width + x] = 1;
+        }
+
+        BitSet seeds = new BitSet(width * height);
+        seeds.set(3 * width + 3);
+
+        List<ConnectedComponent> comps = CanvasScanUtils.extractComponents(
+                pixels, width, height, seeds, 1);
+        assertEquals(1, comps.size());
+        assertEquals(2, comps.getFirst().minX());
+        assertEquals(2, comps.getFirst().minY());
+        assertEquals(9, comps.getFirst().area());
     }
 
     @Test

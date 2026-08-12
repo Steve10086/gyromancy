@@ -1,6 +1,8 @@
 package com.astune.gyromancy.rune;
 
 import com.astune.gyromancy.api.canvas.Carvable;
+import com.astune.gyromancy.canvas.CanvasCompileService;
+import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.registry.ModBlocks;
 import com.astune.gyromancy.registry.ModMenus;
 import net.minecraft.core.BlockPos;
@@ -43,6 +45,7 @@ public final class RuneCarvingMenu extends ItemCombinerMenu {
         super(ModMenus.RUNE_CARVING.get(), containerId, inventory, access);
         this.tablePos = tablePos;
         replaceInventorySlots(inventory);
+        replaceInputSlot();
     }
 
     public static RuneCarvingMenu fromNetwork(int containerId,
@@ -111,6 +114,37 @@ public final class RuneCarvingMenu extends ItemCombinerMenu {
     }
 
     @Override
+    public void removed(Player player) {
+        if (!player.level().isClientSide) compileCarvingAst(carvingStack());
+        super.removed(player);
+    }
+
+    private static void compileCarvingAst(ItemStack stack) {
+        if (stack.isEmpty() || !(stack.getItem() instanceof Carvable carvable)) return;
+        try {
+            CanvasDocument document = carvable.carvingCanvas(stack);
+            if (document == null) return;
+            // AST compilation is deferred to the table boundary, but it must
+            // consume the glyph cache produced by the live incremental path.
+            carvable.setCompiledAst(stack,
+                    CanvasCompileService.compilePortableAsts(document));
+        } catch (RuntimeException exception) {
+            // A malformed drawing must not prevent the table from returning
+            // the input item to its owner.
+            com.astune.gyromancy.Gyromancy.LOGGER.warn(
+                    "Rune carving AST compilation failed for {}", stack.getItem(), exception);
+        }
+    }
+
+    private void replaceInputSlot() {
+        Slot original = slots.get(INPUT_SLOT);
+        CarvingInputSlot replacement = new CarvingInputSlot(
+                inputSlots, INPUT_SLOT, original.x, original.y);
+        replacement.index = INPUT_SLOT;
+        slots.set(INPUT_SLOT, replacement);
+    }
+
+    @Override
     protected boolean canMoveIntoInputSlots(ItemStack stack) {
         // ItemCombinerMenu uses this hook before attempting a shift-click from
         // either player-inventory section. Returning false lets ordinary
@@ -161,6 +195,24 @@ public final class RuneCarvingMenu extends ItemCombinerMenu {
         @Override
         public boolean isActive() {
             return active;
+        }
+    }
+
+    private final class CarvingInputSlot extends Slot {
+        private CarvingInputSlot(net.minecraft.world.Container container,
+                                 int slot, int x, int y) {
+            super(container, slot, x, y);
+        }
+
+        @Override
+        public boolean mayPlace(ItemStack stack) {
+            return stack.getItem() instanceof Carvable;
+        }
+
+        @Override
+        public void onTake(Player player, ItemStack stack) {
+            if (!player.level().isClientSide) compileCarvingAst(stack);
+            super.onTake(player, stack);
         }
     }
 }

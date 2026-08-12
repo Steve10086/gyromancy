@@ -13,7 +13,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
-/** Applies one live carving snapshot to the item in the table slot. */
+/** Applies one incremental carving snapshot to the item in the table slot. */
 public record SubmitRuneCarvingPacket(
         int containerId,
         int sequence,
@@ -96,10 +96,14 @@ public record SubmitRuneCarvingPacket(
             int physicalHeight = currentCanvas == null ? 1 : currentCanvas.physicalHeight();
             CanvasDocument submitted = new CanvasDocument(
                     physicalWidth, physicalHeight, packet.scale, colors, effects,
-                    java.util.List.of(), java.util.List.of());
-            CanvasDocument compiled = CanvasCompileService.compilePortable(submitted);
-            carvable.applyCarving(stack, submitted, compiled,
-                    CanvasCompileService.compilePortableAsts(compiled));
+                    currentCanvas == null ? java.util.List.of() : currentCanvas.glyphs(),
+                    currentCanvas == null ? java.util.List.of() : currentCanvas.arrays());
+            CanvasDocument updated = CanvasCompileService.updatePortableIncremental(
+                    currentCanvas == null ? submitted : currentCanvas, submitted);
+            // Live carving stores the raster and the incremental rune cache.
+            // AST compilation is intentionally deferred until the menu closes
+            // or the item is removed from the input slot.
+            carvable.applyCarving(stack, submitted, updated, java.util.List.of());
             menu.broadcastChanges();
         } catch (RuntimeException exception) {
             Gyromancy.LOGGER.warn("Rune carving compilation failed for {}",
