@@ -48,7 +48,7 @@ public final class ClientSetup {
     static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.FIREBALL.get(), FireballRenderer::new);
         event.registerEntityRenderer(ModEntities.ILLUMINATION.get(),
-                context -> new ElementBallRenderer<>(context, "fire_ball", 0xFFFFFF88));
+                context -> new ElementBallRenderer<>(context, "illuminate_ball", 0xFFFFFFFF));
         event.registerEntityRenderer(ModEntities.OLD_FIREBALL.get(), OldFireballRenderer::new);
         event.registerEntityRenderer(ModEntities.MANABALL.get(), ManaballRenderer::new);
         event.registerEntityRenderer(ModEntities.WATER_BALL.get(), WaterBallRenderer::new);
