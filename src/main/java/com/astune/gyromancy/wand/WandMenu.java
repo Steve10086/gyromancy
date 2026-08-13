@@ -13,8 +13,16 @@ import net.minecraft.world.item.ItemStack;
 
 /** Server-synchronised screen container for a wand's canvas slots. */
 public final class WandMenu extends AbstractContainerMenu {
+    public static final int SLOT_SIZE = 18;
+    public static final int SLOT_PITCH = 22;
+    public static final int CENTER_RAIL_WIDTH = 38;
+    public static final int SIDE_GAP = 10;
+    public static final int UPPER_MIN_HEIGHT = 132;
+    public static final int SLOT_START_Y = 52;
+
     private final Inventory playerInventory;
     private final InteractionHand hand;
+    private final ItemStack wandStack;
     private final WandContainer wandContainer;
     private final WandLayout layout;
 
@@ -22,27 +30,29 @@ public final class WandMenu extends AbstractContainerMenu {
         super(ModMenus.WAND.get(), containerId);
         this.playerInventory = inventory;
         this.hand = hand;
-        ItemStack wand = inventory.player.getItemInHand(hand);
-        this.layout = wand.getItem() instanceof WandItem item
+        this.wandStack = inventory.player.getItemInHand(hand);
+        this.layout = wandStack.getItem() instanceof WandItem item
                 ? item.layout() : WandLayout.DEFAULT;
-        this.wandContainer = new WandContainer(wand, layout);
+        this.wandContainer = new WandContainer(wandStack, layout);
 
         int slotIndex = 0;
         for (int slot = 0; slot < layout.slotCount(); slot++) {
             for (int entry = 0; entry < layout.slotCapacity(slot); entry++) {
-                addSlot(new CanvasSlot(wandContainer, slotIndex++, 44 + slot * 72,
-                        24 + entry * 22));
+                addSlot(new CanvasSlot(wandContainer, slotIndex++, canvasSlotX(layout, slot),
+                        canvasSlotY(layout, slot, entry)));
             }
         }
 
+        int inventoryX = inventoryLeft(layout);
+        int inventoryY = inventoryTop(layout);
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 9; column++) {
                 addSlot(new Slot(inventory, 9 + row * 9 + column,
-                        8 + column * 18, 84 + row * 18));
+                        inventoryX + column * 18, inventoryY + row * 18));
             }
         }
         for (int column = 0; column < 9; column++) {
-            addSlot(new Slot(inventory, column, 8 + column * 18, 142));
+            addSlot(new Slot(inventory, column, inventoryX + column * 18, inventoryY + 58));
         }
     }
 
@@ -59,8 +69,54 @@ public final class WandMenu extends AbstractContainerMenu {
         return layout;
     }
 
+    public ItemStack wandStack() {
+        return wandStack;
+    }
+
     public InteractionHand hand() {
         return hand;
+    }
+
+    public static int screenWidth(WandLayout layout) {
+        return Math.max(236, 132 + layout.slotCount() * 48);
+    }
+
+    public static int upperHeight(WandLayout layout) {
+        int bottom = 0;
+        for (int slot = 0; slot < layout.slotCount(); slot++) {
+            int slotBottom = canvasSlotY(layout, slot, layout.slotCapacity(slot) - 1) + SLOT_SIZE;
+            bottom = Math.max(bottom, slotBottom);
+        }
+        return Math.max(UPPER_MIN_HEIGHT, bottom + 20);
+    }
+
+    public static int inventoryTop(WandLayout layout) {
+        return upperHeight(layout) + 16;
+    }
+
+    public static int screenHeight(WandLayout layout) {
+        return inventoryTop(layout) + 84;
+    }
+
+    public static int inventoryLeft(WandLayout layout) {
+        return (screenWidth(layout) - 162) / 2;
+    }
+
+    public static int canvasSlotX(WandLayout layout, int slot) {
+        int center = screenWidth(layout) / 2;
+        int railLeft = center - CENTER_RAIL_WIDTH / 2;
+        return (slot & 1) == 0
+                ? railLeft - SIDE_GAP - SLOT_SIZE
+                : railLeft + CENTER_RAIL_WIDTH + SIDE_GAP;
+    }
+
+    public static int canvasSlotY(WandLayout layout, int slot, int entry) {
+        int side = slot & 1;
+        int top = SLOT_START_Y;
+        for (int previous = side; previous < slot; previous += 2) {
+            top += layout.slotCapacity(previous) * SLOT_PITCH + 10;
+        }
+        return top + entry * SLOT_PITCH;
     }
 
     @Override
