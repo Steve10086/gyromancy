@@ -4,28 +4,44 @@
             "type": "veil:blit",
             "shader": "gyromancy:glyph_bloom_threshold",
             "in": "veil:post",
-            "out": "gyromancy:glyph_bloom_half"
+            "out": "glyph_bloom_half"
         },
         {
             "type": "veil:blit",
             "shader": "gyromancy:glyph_bloom_blur_h",
-            "in": "gyromancy:glyph_bloom_half",
-            "out": "gyromancy:glyph_bloom_half2"
+            "in": "glyph_bloom_half",
+            "out": "glyph_bloom_half2"
         },
         {
             "type": "veil:blit",
             "shader": "gyromancy:glyph_bloom_blur_v",
-            "in": "gyromancy:glyph_bloom_half2",
-            "out": "gyromancy:glyph_bloom_half"
+            "in": "glyph_bloom_half2",
+            "out": "glyph_bloom_half"
         },
         {
             "type": "veil:blit",
             "shader": "gyromancy:glyph_bloom_composite",
-            "in": "gyromancy:glyph_bloom_half",
+            "in": "glyph_bloom_half",
             "out": "veil:post"
         }
     ],
-    "renderStage": "AFTER_PARTICLES",
+    "framebuffers": {
+        "glyph_bloom_half": {
+            "width": "q.screen_width / 2.0",
+            "height": "q.screen_height / 2.0",
+            "depth": false,
+            "autoClear": false,
+            "format": "RGBA16F"
+        },
+        "glyph_bloom_half2": {
+            "width": "q.screen_width / 2.0",
+            "height": "q.screen_height / 2.0",
+            "depth": false,
+            "autoClear": false,
+            "format": "RGBA16F"
+        }
+    },
+    "renderStage": "after_particles",
     "priority": 500,
     "replace": false
 }
