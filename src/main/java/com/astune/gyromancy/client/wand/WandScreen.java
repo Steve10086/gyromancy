@@ -1,13 +1,17 @@
 package com.astune.gyromancy.client.wand;
 
 import com.astune.gyromancy.wand.WandMenu;
+import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
 /** Wood-and-bronze wand configuration screen with a vertical center rail. */
@@ -16,15 +20,25 @@ public final class WandScreen extends AbstractContainerScreen<WandMenu> {
             "gyromancy", "textures/gui/sprites/wand_config_container.png");
     private static final int BACKGROUND_SOURCE_WIDTH = 256;
     private static final int BACKGROUND_SOURCE_HEIGHT = 256;
-    private static final int WAND_CENTER_X = 88;
+    private static final float WAND_CENTER_X = 81.5f;
     private static final int WAND_CENTER_Y = 72;
+    private static final float WAND_STATIC_ROTATION = 90.0f;
+    private static final float WAND_MODEL_SCALE = 70.0f;
+    private static final float WAND_MODEL_SCALE_Y = -70.0f;
+
+    // The Blockbench model's geometry is centered at approximately
+    // (-0.575..16, 8.25..11.975, 6.5..10) model pixels. These are the
+    // corresponding offsets from the item's built-in 8,8,8 render origin.
+    private static final float WAND_MODEL_PIVOT_X = -0.01796875f;
+    private static final float WAND_MODEL_PIVOT_Y = 0.13203125f;
+    private static final float WAND_MODEL_PIVOT_Z = 0.015625f;
     private static final int TEXT = 0xFFF4D7A2;
     private static final int MUTED_TEXT = 0xFFB88762;
     private static final int LINE = 0xFF9A654A;
     private static final int LINE_HIGHLIGHT = 0xFFC28A5C;
     private static final int MAGICAL = 0xFF6CC5B3;
 
-    private float wandZ = 30f;
+    private float wandRotation = 0.0f;
 
     public WandScreen(WandMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
@@ -39,22 +53,41 @@ public final class WandScreen extends AbstractContainerScreen<WandMenu> {
         drawWandModel(graphics, leftPos + WAND_CENTER_X, topPos + WAND_CENTER_Y);
     }
 
-    private void drawWandModel(GuiGraphics graphics, int centerX, int centerY) {
+    private void drawWandModel(GuiGraphics graphics, float centerX, int centerY) {
         ItemStack wand = menu.wandStack();
         if (wand.isEmpty()) return;
 
         PoseStack pose = graphics.pose();
         pose.pushPose();
-        pose.translate(centerX, centerY, 30f);
-        wandZ = (wandZ + 1f) % 360;
+        pose.translate(centerX, centerY, -20);
+        wandRotation = (wandRotation + 1f) % 360;
 
-        pose.mulPose(Axis.ZP.rotationDegrees(45.0f));
-
-        pose.translate(-centerX, -centerY, -30f);
-        pose.mulPose(Axis.YP.rotationDegrees(wandZ));
-        pose.translate(centerX, centerY, 30f);
-        pose.scale(5f, 5f, 2f);
-        graphics.renderItem(wand, -10, -9);
+        // Use a context without the model's display.gui transform. The wand
+        // screen supplies its own orientation and pivot below.
+        BakedModel model = minecraft.getItemRenderer().getModel(
+                wand, minecraft.level, minecraft.player, 0);
+        pose.translate(5.5f, 0f, 150.0f);
+        pose.mulPose(Axis.YP.rotationDegrees(wandRotation));
+        pose.mulPose(Axis.ZP.rotationDegrees(WAND_STATIC_ROTATION));
+        pose.scale(WAND_MODEL_SCALE, WAND_MODEL_SCALE_Y, WAND_MODEL_SCALE);
+        pose.translate(-WAND_MODEL_PIVOT_X, -WAND_MODEL_PIVOT_Y, -WAND_MODEL_PIVOT_Z);
+        boolean flatItem = !model.usesBlockLight();
+        if (flatItem) {
+            Lighting.setupForFlatItems();
+        }
+        minecraft.getItemRenderer().render(
+                wand,
+                ItemDisplayContext.NONE,
+                false,
+                pose,
+                graphics.bufferSource(),
+                15728880,
+                OverlayTexture.NO_OVERLAY,
+                model);
+        graphics.flush();
+        if (flatItem) {
+            Lighting.setupFor3DItems();
+        }
         pose.popPose();
     }
 
