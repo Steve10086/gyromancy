@@ -58,7 +58,7 @@ public class WandItem extends Item {
         }
         player.startUsingItem(hand);
         if (!level.isClientSide) {
-            WandProjectionService.project(level, player, stack, layout);
+            WandProjectionService.project(level, player, stack, layout, hand);
         }
         return InteractionResultHolder.consume(stack);
     }

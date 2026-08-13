@@ -2,6 +2,7 @@ package com.astune.gyromancy.client.canvas;
 
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
+import com.astune.gyromancy.entity.projection.WandProjectionPose;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
@@ -19,8 +20,10 @@ public final class ProjectionCanvasRenderPose {
         }
 
         Vec3 view = player.getViewVector(partialTick).normalize();
-        Vec3 center = player.getEyePosition(partialTick)
-                .add(view.scale(projection.projectionOffset()));
+        Vec3 center = WandProjectionPose.targetCenter(
+                player.getEyePosition(partialTick), view,
+                projection.projectionOffset(), player.getViewYRot(partialTick),
+                projection.mirrorsWandOffset());
         return projection.renderSurfaceFrameAt(partialTick, center, view);
     }
 }

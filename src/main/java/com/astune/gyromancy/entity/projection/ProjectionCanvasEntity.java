@@ -48,6 +48,8 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
             SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.LONG);
     private static final EntityDataAccessor<java.util.Optional<UUID>> DATA_OWNER =
             SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.OPTIONAL_UUID);
+    private static final EntityDataAccessor<Boolean> DATA_MIRROR_OFFSET =
+            SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.BOOLEAN);
     private UUID owner;
     private int clientLerpSteps;
     private double clientLerpX;
@@ -74,7 +76,8 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
                                                 Vec3 viewDirection,
                                                 float viewYaw,
                                                 float viewPitch,
-                                                float projectionOffset) {
+                                                float projectionOffset,
+                                                boolean mirrorOffset) {
         ProjectionCanvasEntity canvas = new ProjectionCanvasEntity(
                 ModEntities.CANVAS_PROJECTION.get(), level);
         canvas.owner = owner;
@@ -86,6 +89,7 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         canvas.setRollTarget(0.0F);
         canvas.setProjectionView(viewYaw, viewPitch);
         canvas.entityData.set(DATA_PROJECTION_OFFSET, projectionOffset);
+        canvas.entityData.set(DATA_MIRROR_OFFSET, mirrorOffset);
         canvas.entityData.set(DATA_SPAWN_GAME_TICK, level.getGameTime());
         canvas.setPos(center);
         canvas.recalculateBoundingBox();
@@ -105,6 +109,7 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         canvas.setProjectionView(0.0F, 0.0F);
         canvas.entityData.set(DATA_PROJECTION_OFFSET, 0.0F);
         canvas.entityData.set(DATA_OWNER, java.util.Optional.empty());
+        canvas.entityData.set(DATA_MIRROR_OFFSET, false);
         canvas.entityData.set(DATA_SPAWN_GAME_TICK, level.getGameTime());
         canvas.setPos(frame.origin());
         canvas.recalculateBoundingBox();
@@ -117,6 +122,10 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
 
     public float projectionOffset() {
         return entityData.get(DATA_PROJECTION_OFFSET);
+    }
+
+    public boolean mirrorsWandOffset() {
+        return entityData.get(DATA_MIRROR_OFFSET);
     }
 
     /** BlockAttachedEntity only updates its integer anchor; projections need exact coordinates. */
@@ -234,6 +243,7 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         compound.putDouble("surface_normal_y", surfaceNormal().y);
         compound.putDouble("surface_normal_z", surfaceNormal().z);
         compound.putFloat("projection_offset", entityData.get(DATA_PROJECTION_OFFSET));
+        compound.putBoolean("mirror_offset", entityData.get(DATA_MIRROR_OFFSET));
         compound.putFloat("surface_roll", projectionRoll());
         compound.putLong("spawn_game_tick", entityData.get(DATA_SPAWN_GAME_TICK));
     }
@@ -255,6 +265,9 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         }
         if (compound.contains("projection_offset")) {
             entityData.set(DATA_PROJECTION_OFFSET, compound.getFloat("projection_offset"));
+        }
+        if (compound.contains("mirror_offset")) {
+            entityData.set(DATA_MIRROR_OFFSET, compound.getBoolean("mirror_offset"));
         }
         if (compound.contains("spawn_game_tick")) {
             entityData.set(DATA_SPAWN_GAME_TICK, compound.getLong("spawn_game_tick"));
@@ -286,6 +299,7 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         builder.define(DATA_ROLL_DEGREES, 0.0F);
         builder.define(DATA_SPAWN_GAME_TICK, Long.MIN_VALUE);
         builder.define(DATA_OWNER, java.util.Optional.empty());
+        builder.define(DATA_MIRROR_OFFSET, false);
     }
 
     public void setProjectedNormal(Vec3 normal) {
@@ -424,8 +438,10 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         }
 
         Vec3 view = player.getViewVector(1.0F).normalize();
-        Vec3 targetCenter = player.getEyePosition().add(
-                view.scale(entityData.get(DATA_PROJECTION_OFFSET)));
+        Vec3 targetCenter = WandProjectionPose.targetCenter(
+                player.getEyePosition(), view,
+                entityData.get(DATA_PROJECTION_OFFSET), player.getYRot(),
+                entityData.get(DATA_MIRROR_OFFSET));
         // The client predicts the pose every render frame. Keep the server
         // state authoritative and current as well, instead of introducing a
         // second multi-tick smoothing delay here.

@@ -10,6 +10,7 @@ import com.astune.gyromancy.registry.ModDataComponents;
 import com.astune.gyromancy.wand.WandLayout;
 import com.astune.gyromancy.wand.WandSlotSnapshots;
 import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -29,7 +30,8 @@ import java.util.UUID;
 public final class WandProjectionService {
     private WandProjectionService() {}
 
-    public static void project(Level level, Player player, ItemStack wand, WandLayout layout) {
+    public static void project(Level level, Player player, ItemStack wand,
+                               WandLayout layout, InteractionHand hand) {
         if (!(level instanceof ServerLevel serverLevel)) return;
         discardOwned(serverLevel, player.getUUID());
 
@@ -47,14 +49,17 @@ public final class WandProjectionService {
             java.util.Optional<CanvasDocument> cachedDocument = snapshots.get(slot).document();
             if (cachedDocument.isEmpty()) continue;
             populatedSlots++;
-            Vec3 center = player.getEyePosition().add(view.scale(layout.slotOffset(slot)));
+            Vec3 center = WandProjectionPose.targetCenter(
+                    player.getEyePosition(), view, layout.slotOffset(slot), player.getYRot(),
+                    WandProjectionPose.mirrorForHand(player.getMainArm(), hand));
             CanvasDocument document = cachedDocument.get();
             projectedGlyphs += document.glyphs().size();
             ProjectionCanvasEntity projection = ProjectionCanvasEntity.create(
                     serverLevel, center, facing, copyForProjection(document), player.getUUID(),
                     view,
                     player.getYRot() + 180.0F, player.getXRot(),
-                    (float) layout.slotOffset(slot));
+                    (float) layout.slotOffset(slot),
+                    WandProjectionPose.mirrorForHand(player.getMainArm(), hand));
             if (!serverLevel.addFreshEntity(projection)) {
                 Gyromancy.LOGGER.warn("[Wand] Failed to add projection entity for player {}",
                         player.getScoreboardName());
