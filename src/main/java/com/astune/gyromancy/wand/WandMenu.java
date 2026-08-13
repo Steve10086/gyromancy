@@ -14,11 +14,16 @@ import net.minecraft.world.item.ItemStack;
 /** Server-synchronised screen container for a wand's canvas slots. */
 public final class WandMenu extends AbstractContainerMenu {
     public static final int SLOT_SIZE = 18;
-    public static final int SLOT_PITCH = 22;
-    public static final int CENTER_RAIL_WIDTH = 38;
-    public static final int SIDE_GAP = 10;
-    public static final int UPPER_MIN_HEIGHT = 132;
-    public static final int SLOT_START_Y = 52;
+    public static final int SCREEN_WIDTH = 176;
+    public static final int SCREEN_HEIGHT = 227;
+    public static final int INVENTORY_LEFT = 8;
+    public static final int INVENTORY_TOP = 140;
+
+    // The first four positions are painted into wand_config_container.png.
+    // They form two inward-facing pairs around the central wand display.
+    private static final int[][] CONFIG_SLOT_POSITIONS = {
+            {32, 32}, {48, 52}, {128, 68}, {112, 88}
+    };
 
     private final Inventory playerInventory;
     private final InteractionHand hand;
@@ -78,45 +83,47 @@ public final class WandMenu extends AbstractContainerMenu {
     }
 
     public static int screenWidth(WandLayout layout) {
-        return Math.max(236, 132 + layout.slotCount() * 48);
+        return SCREEN_WIDTH;
     }
 
     public static int upperHeight(WandLayout layout) {
-        int bottom = 0;
-        for (int slot = 0; slot < layout.slotCount(); slot++) {
-            int slotBottom = canvasSlotY(layout, slot, layout.slotCapacity(slot) - 1) + SLOT_SIZE;
-            bottom = Math.max(bottom, slotBottom);
-        }
-        return Math.max(UPPER_MIN_HEIGHT, bottom + 20);
+        return INVENTORY_TOP;
     }
 
     public static int inventoryTop(WandLayout layout) {
-        return upperHeight(layout) + 16;
+        return INVENTORY_TOP;
     }
 
     public static int screenHeight(WandLayout layout) {
-        return inventoryTop(layout) + 84;
+        return SCREEN_HEIGHT;
     }
 
     public static int inventoryLeft(WandLayout layout) {
-        return (screenWidth(layout) - 162) / 2;
+        return INVENTORY_LEFT;
     }
 
     public static int canvasSlotX(WandLayout layout, int slot) {
-        int center = screenWidth(layout) / 2;
-        int railLeft = center - CENTER_RAIL_WIDTH / 2;
-        return (slot & 1) == 0
-                ? railLeft - SIDE_GAP - SLOT_SIZE
-                : railLeft + CENTER_RAIL_WIDTH + SIDE_GAP;
+        int position = positionIndex(layout, slot, 0);
+        return position < CONFIG_SLOT_POSITIONS.length
+                ? CONFIG_SLOT_POSITIONS[position][0] : fallbackSlotX(slot);
     }
 
     public static int canvasSlotY(WandLayout layout, int slot, int entry) {
-        int side = slot & 1;
-        int top = SLOT_START_Y;
-        for (int previous = side; previous < slot; previous += 2) {
-            top += layout.slotCapacity(previous) * SLOT_PITCH + 10;
+        int position = positionIndex(layout, slot, entry);
+        return position < CONFIG_SLOT_POSITIONS.length
+                ? CONFIG_SLOT_POSITIONS[position][1] : 32 + entry * 22;
+    }
+
+    private static int positionIndex(WandLayout layout, int slot, int entry) {
+        int index = entry;
+        for (int previous = 0; previous < slot; previous++) {
+            index += layout.slotCapacity(previous);
         }
-        return top + entry * SLOT_PITCH;
+        return index;
+    }
+
+    private static int fallbackSlotX(int slot) {
+        return (slot & 1) == 0 ? 32 : 128;
     }
 
     @Override
