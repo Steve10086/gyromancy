@@ -3,6 +3,7 @@ package com.astune.gyromancy.client.effect;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.client.canvas.CanvasClientState;
+import com.astune.gyromancy.client.canvas.ProjectionCanvasRenderPose;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -66,7 +67,7 @@ public final class WandProjectionGlowRenderer {
             return;
         }
 
-        var frame = projection.renderSurfaceFrame(partialTick);
+        var frame = ProjectionCanvasRenderPose.frame(projection, partialTick);
         float entranceScale = projection.renderEntranceScale(partialTick);
         Vec3 offset = frame.normal().scale(com.astune.gyromancy.canvas.CanvasEntity.DEPTH * 0.501F);
         Vec3 center = frame.origin().add(offset);

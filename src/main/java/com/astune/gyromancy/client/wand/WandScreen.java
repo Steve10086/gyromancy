@@ -45,10 +45,14 @@ public final class WandScreen extends AbstractContainerScreen<WandMenu> {
 
         PoseStack pose = graphics.pose();
         pose.pushPose();
-        pose.translate(centerX, centerY, wandZ);
-        wandZ += 0.5f;
+        pose.translate(centerX, centerY, 30f);
+        wandZ = (wandZ + 1f) % 360;
 
         pose.mulPose(Axis.ZP.rotationDegrees(45.0f));
+
+        pose.translate(-centerX, -centerY, -30f);
+        pose.mulPose(Axis.YP.rotationDegrees(wandZ));
+        pose.translate(centerX, centerY, 30f);
         pose.scale(5f, 5f, 2f);
         graphics.renderItem(wand, -10, -9);
         pose.popPose();

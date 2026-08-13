@@ -3,6 +3,7 @@ package com.astune.gyromancy.client.effect;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
+import com.astune.gyromancy.client.canvas.ProjectionCanvasRenderPose;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
@@ -450,7 +451,7 @@ public final class ClientRayEffects {
         if (effect.sourceEntityId >= 0 && Minecraft.getInstance().level != null
                 && Minecraft.getInstance().level.getEntity(effect.sourceEntityId)
                 instanceof ProjectionCanvasEntity projection) {
-            SurfaceFrame frame = projection.renderSurfaceFrame(partialTick);
+            SurfaceFrame frame = ProjectionCanvasRenderPose.frame(projection, partialTick);
             double entranceScale = projection.renderEntranceScale(partialTick);
             return projectionGeometry(
                     frame,

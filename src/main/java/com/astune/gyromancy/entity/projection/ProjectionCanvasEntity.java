@@ -46,6 +46,8 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
             SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Long> DATA_SPAWN_GAME_TICK =
             SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.LONG);
+    private static final EntityDataAccessor<java.util.Optional<UUID>> DATA_OWNER =
+            SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.OPTIONAL_UUID);
     private UUID owner;
     private int clientLerpSteps;
     private double clientLerpX;
@@ -76,6 +78,7 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         ProjectionCanvasEntity canvas = new ProjectionCanvasEntity(
                 ModEntities.CANVAS_PROJECTION.get(), level);
         canvas.owner = owner;
+        canvas.entityData.set(DATA_OWNER, java.util.Optional.of(owner));
         canvas.setPos(center);
         canvas.setDocumentInternal(document, false);
         canvas.setDirection(facing);
@@ -101,6 +104,7 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         canvas.setSurfaceOrientation(frame.normal(), frame.axisU(), frame.axisV());
         canvas.setProjectionView(0.0F, 0.0F);
         canvas.entityData.set(DATA_PROJECTION_OFFSET, 0.0F);
+        canvas.entityData.set(DATA_OWNER, java.util.Optional.empty());
         canvas.entityData.set(DATA_SPAWN_GAME_TICK, level.getGameTime());
         canvas.setPos(frame.origin());
         canvas.recalculateBoundingBox();
@@ -108,7 +112,11 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
     }
 
     public UUID owner() {
-        return owner;
+        return owner != null ? owner : entityData.get(DATA_OWNER).orElse(null);
+    }
+
+    public float projectionOffset() {
+        return entityData.get(DATA_PROJECTION_OFFSET);
     }
 
     /** BlockAttachedEntity only updates its integer anchor; projections need exact coordinates. */
@@ -234,6 +242,8 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
     public void readAdditionalSaveData(net.minecraft.nbt.CompoundTag compound) {
         super.readAdditionalSaveData(compound);
         owner = compound.hasUUID("wand_owner") ? compound.getUUID("wand_owner") : null;
+        entityData.set(DATA_OWNER, owner == null
+                ? java.util.Optional.empty() : java.util.Optional.of(owner));
         if (compound.contains("surface_normal_x")) {
             float roll = compound.getFloat("surface_roll");
             setProjectedOrientation(new Vec3(
@@ -275,6 +285,7 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         builder.define(DATA_PROJECTION_OFFSET, 1.0F);
         builder.define(DATA_ROLL_DEGREES, 0.0F);
         builder.define(DATA_SPAWN_GAME_TICK, Long.MIN_VALUE);
+        builder.define(DATA_OWNER, java.util.Optional.empty());
     }
 
     public void setProjectedNormal(Vec3 normal) {
@@ -315,13 +326,22 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         Vec3 previous = previousRenderNormal == null ? current : previousRenderNormal;
         Vec3 rendered = CanvasProjectionMotion.interpolateDirection(
                 previous, current, partialTick);
+        return renderSurfaceFrameAt(partialTick, renderCenter(partialTick), rendered);
+    }
+
+    /**
+     * Builds a frame from a render-time predicted pose. The server-synchronized
+     * roll is still interpolated, while position and normal may come from the
+     * local player's current render frame.
+     */
+    public SurfaceFrame renderSurfaceFrameAt(float partialTick, Vec3 center, Vec3 normal) {
         float currentRoll = projectionRoll();
         float previousRoll = previousRenderRoll == null ? currentRoll : previousRenderRoll;
         float renderedRoll = CanvasProjectionMotion.interpolateRoll(
                 previousRoll, currentRoll, partialTick);
         return WandProjectionVisuals.rolledFrame(
                 SurfaceFrame.facing(
-                        renderCenter(partialTick), rendered, new Vec3(0.0, 1.0, 0.0)),
+                        center, normal, new Vec3(0.0, 1.0, 0.0)),
                 renderedRoll);
     }
 
@@ -406,8 +426,11 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         Vec3 view = player.getViewVector(1.0F).normalize();
         Vec3 targetCenter = player.getEyePosition().add(
                 view.scale(entityData.get(DATA_PROJECTION_OFFSET)));
-        Vec3 nextCenter = CanvasProjectionMotion.smoothPosition(position(), targetCenter);
-        Vec3 nextNormal = CanvasProjectionMotion.smoothDirection(surfaceNormal(), view);
+        // The client predicts the pose every render frame. Keep the server
+        // state authoritative and current as well, instead of introducing a
+        // second multi-tick smoothing delay here.
+        Vec3 nextCenter = targetCenter;
+        Vec3 nextNormal = view;
         if (!projectionRollTargetInitialized) {
             projectionRollTarget = projectionRoll();
             projectionRollTargetInitialized = true;
