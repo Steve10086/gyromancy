@@ -3,8 +3,6 @@ package com.astune.gyromancy.entity.projection;
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasEntity;
-import com.astune.gyromancy.canvas.CanvasCompileService;
-import com.astune.gyromancy.item.WandItem;
 import com.astune.gyromancy.registry.ModEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -12,7 +10,6 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.server.level.ServerEntity;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity;
@@ -26,10 +23,8 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.util.Mth;
 
-import java.util.UUID;
-
-/** A non-attached canvas used as the world-side source for a wand projection. */
-public final class ProjectionCanvasEntity extends CanvasEntity {
+/** A non-attached projection canvas with a fixed world-space surface. */
+public class ProjectionCanvasEntity extends CanvasEntity {
     private static final EntityDataAccessor<Float> DATA_VIEW_YAW =
             SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_VIEW_PITCH =
@@ -40,60 +35,20 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
             SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_NORMAL_Z =
             SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<Float> DATA_PROJECTION_OFFSET =
-            SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_ROLL_DEGREES =
             SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Long> DATA_SPAWN_GAME_TICK =
             SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.LONG);
-    private static final EntityDataAccessor<java.util.Optional<UUID>> DATA_OWNER =
-            SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.OPTIONAL_UUID);
-    private static final EntityDataAccessor<Boolean> DATA_MIRROR_OFFSET =
-            SynchedEntityData.defineId(ProjectionCanvasEntity.class, EntityDataSerializers.BOOLEAN);
-    private UUID owner;
-    private int clientLerpSteps;
-    private double clientLerpX;
-    private double clientLerpY;
-    private double clientLerpZ;
     private boolean clientNormalSyncPending;
     private Vec3 previousRenderNormal;
     private Float previousRenderRoll;
     private float appliedProjectionRoll;
-    private float projectionRollTarget;
-    private boolean projectionRollTargetInitialized;
 
     public ProjectionCanvasEntity(EntityType<? extends ProjectionCanvasEntity> type,
                                   Level level) {
         super(type, level);
         setNoGravity(true);
         noPhysics = true;
-    }
-
-    public static ProjectionCanvasEntity create(Level level, Vec3 center,
-                                                Direction facing,
-                                                CanvasDocument document,
-                                                UUID owner,
-                                                Vec3 viewDirection,
-                                                float viewYaw,
-                                                float viewPitch,
-                                                float projectionOffset,
-                                                boolean mirrorOffset) {
-        ProjectionCanvasEntity canvas = new ProjectionCanvasEntity(
-                ModEntities.CANVAS_PROJECTION.get(), level);
-        canvas.owner = owner;
-        canvas.entityData.set(DATA_OWNER, java.util.Optional.of(owner));
-        canvas.setPos(center);
-        canvas.setDocumentInternal(document, false);
-        canvas.setDirection(facing);
-        canvas.setProjectedOrientation(viewDirection.normalize(), 0.0F);
-        canvas.setRollTarget(0.0F);
-        canvas.setProjectionView(viewYaw, viewPitch);
-        canvas.entityData.set(DATA_PROJECTION_OFFSET, projectionOffset);
-        canvas.entityData.set(DATA_MIRROR_OFFSET, mirrorOffset);
-        canvas.entityData.set(DATA_SPAWN_GAME_TICK, level.getGameTime());
-        canvas.setPos(center);
-        canvas.recalculateBoundingBox();
-        return canvas;
     }
 
     /** Creates a projection plane that keeps the supplied frame and never follows a player. */
@@ -107,25 +62,10 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         canvas.setDirection(Direction.getNearest(frame.normal()));
         canvas.setSurfaceOrientation(frame.normal(), frame.axisU(), frame.axisV());
         canvas.setProjectionView(0.0F, 0.0F);
-        canvas.entityData.set(DATA_PROJECTION_OFFSET, 0.0F);
-        canvas.entityData.set(DATA_OWNER, java.util.Optional.empty());
-        canvas.entityData.set(DATA_MIRROR_OFFSET, false);
-        canvas.entityData.set(DATA_SPAWN_GAME_TICK, level.getGameTime());
+        canvas.setSpawnGameTick(level.getGameTime());
         canvas.setPos(frame.origin());
         canvas.recalculateBoundingBox();
         return canvas;
-    }
-
-    public UUID owner() {
-        return owner != null ? owner : entityData.get(DATA_OWNER).orElse(null);
-    }
-
-    public float projectionOffset() {
-        return entityData.get(DATA_PROJECTION_OFFSET);
-    }
-
-    public boolean mirrorsWandOffset() {
-        return entityData.get(DATA_MIRROR_OFFSET);
     }
 
     /** BlockAttachedEntity only updates its integer anchor; projections need exact coordinates. */
@@ -205,28 +145,13 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
 
     @Override
     public void move(MoverType type, Vec3 movement) {
-        // Wand motion is applied explicitly by tick(); external movement is ignored.
+        // Projection planes never participate in external movement.
     }
 
     /** CanvasEntity disables interpolation because attached canvases never move. */
     @Override
     public void lerpTo(double x, double y, double z, float yaw, float pitch, int steps) {
-        if (!level().isClientSide) {
-            setPos(x, y, z);
-            return;
-        }
-        Vec3 target = new Vec3(x, y, z);
-        if (position().distanceToSqr(target)
-                >= CanvasProjectionMotion.TELEPORT_SNAP_DISTANCE
-                * CanvasProjectionMotion.TELEPORT_SNAP_DISTANCE) {
-            clientLerpSteps = 0;
-            setPos(target);
-            return;
-        }
-        clientLerpX = x;
-        clientLerpY = y;
-        clientLerpZ = z;
-        clientLerpSteps = Math.max(1, steps);
+        setPos(x, y, z);
     }
 
     @Override
@@ -238,12 +163,9 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
     @Override
     public void addAdditionalSaveData(net.minecraft.nbt.CompoundTag compound) {
         super.addAdditionalSaveData(compound);
-        if (owner != null) compound.putUUID("wand_owner", owner);
         compound.putDouble("surface_normal_x", surfaceNormal().x);
         compound.putDouble("surface_normal_y", surfaceNormal().y);
         compound.putDouble("surface_normal_z", surfaceNormal().z);
-        compound.putFloat("projection_offset", entityData.get(DATA_PROJECTION_OFFSET));
-        compound.putBoolean("mirror_offset", entityData.get(DATA_MIRROR_OFFSET));
         compound.putFloat("surface_roll", projectionRoll());
         compound.putLong("spawn_game_tick", entityData.get(DATA_SPAWN_GAME_TICK));
     }
@@ -251,9 +173,6 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
     @Override
     public void readAdditionalSaveData(net.minecraft.nbt.CompoundTag compound) {
         super.readAdditionalSaveData(compound);
-        owner = compound.hasUUID("wand_owner") ? compound.getUUID("wand_owner") : null;
-        entityData.set(DATA_OWNER, owner == null
-                ? java.util.Optional.empty() : java.util.Optional.of(owner));
         if (compound.contains("surface_normal_x")) {
             float roll = compound.getFloat("surface_roll");
             setProjectedOrientation(new Vec3(
@@ -262,12 +181,6 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
                     compound.getDouble("surface_normal_z")),
                     roll);
             setRollTarget(roll);
-        }
-        if (compound.contains("projection_offset")) {
-            entityData.set(DATA_PROJECTION_OFFSET, compound.getFloat("projection_offset"));
-        }
-        if (compound.contains("mirror_offset")) {
-            entityData.set(DATA_MIRROR_OFFSET, compound.getBoolean("mirror_offset"));
         }
         if (compound.contains("spawn_game_tick")) {
             entityData.set(DATA_SPAWN_GAME_TICK, compound.getLong("spawn_game_tick"));
@@ -287,6 +200,10 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         entityData.set(DATA_VIEW_PITCH, viewPitch);
     }
 
+    protected final void setSpawnGameTick(long gameTick) {
+        entityData.set(DATA_SPAWN_GAME_TICK, gameTick);
+    }
+
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
@@ -295,11 +212,8 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         builder.define(DATA_NORMAL_X, 0.0F);
         builder.define(DATA_NORMAL_Y, 0.0F);
         builder.define(DATA_NORMAL_Z, -1.0F);
-        builder.define(DATA_PROJECTION_OFFSET, 1.0F);
         builder.define(DATA_ROLL_DEGREES, 0.0F);
         builder.define(DATA_SPAWN_GAME_TICK, Long.MIN_VALUE);
-        builder.define(DATA_OWNER, java.util.Optional.empty());
-        builder.define(DATA_MIRROR_OFFSET, false);
     }
 
     public void setProjectedNormal(Vec3 normal) {
@@ -310,15 +224,15 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         return appliedProjectionRoll;
     }
 
-    private float projectionRollTarget() {
+    protected final float projectionRollTarget() {
         return entityData.get(DATA_ROLL_DEGREES);
     }
 
-    private void setRollTarget(float rollDegrees) {
+    protected final void setRollTarget(float rollDegrees) {
         entityData.set(DATA_ROLL_DEGREES, Mth.wrapDegrees(rollDegrees));
     }
 
-    private void setProjectedOrientation(Vec3 normal, float rollDegrees) {
+    protected final void setProjectedOrientation(Vec3 normal, float rollDegrees) {
         Vec3 normalized = normal.normalize();
         entityData.set(DATA_NORMAL_X, (float) normalized.x);
         entityData.set(DATA_NORMAL_Y, (float) normalized.y);
@@ -326,7 +240,7 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
         applyProjectedOrientation(normalized, rollDegrees);
     }
 
-    private void applyProjectedOrientation(Vec3 normal, float rollDegrees) {
+    protected final void applyProjectedOrientation(Vec3 normal, float rollDegrees) {
         SurfaceFrame frame = WandProjectionVisuals.rolledFrame(
                 SurfaceFrame.facing(position(), normal, new Vec3(0.0, 1.0, 0.0)),
                 rollDegrees);
@@ -425,52 +339,10 @@ public final class ProjectionCanvasEntity extends CanvasEntity {
             previousRenderRoll = appliedProjectionRoll;
         }
         super.tick();
-        if (level().isClientSide) {
-            tickClientInterpolation();
-            return;
-        }
-        if (!(level() instanceof ServerLevel serverLevel) || owner == null) return;
-        net.minecraft.world.entity.player.Player player = serverLevel.getPlayerByUUID(owner);
-        if (player == null || !player.isUsingItem()
-                || !(player.getUseItem().getItem() instanceof WandItem)) {
-            discard();
-            return;
-        }
-
-        Vec3 view = player.getViewVector(1.0F).normalize();
-        Vec3 targetCenter = WandProjectionPose.targetCenter(
-                player.getEyePosition(), view,
-                entityData.get(DATA_PROJECTION_OFFSET), player.getYRot(),
-                entityData.get(DATA_MIRROR_OFFSET));
-        // The client predicts the pose every render frame. Keep the server
-        // state authoritative and current as well, instead of introducing a
-        // second multi-tick smoothing delay here.
-        Vec3 nextCenter = targetCenter;
-        Vec3 nextNormal = view;
-        if (!projectionRollTargetInitialized) {
-            projectionRollTarget = projectionRoll();
-            projectionRollTargetInitialized = true;
-        }
-        projectionRollTarget = CanvasProjectionMotion.advanceRollTarget(
-                projectionRollTarget, CanvasProjectionMotion.ROLL_DEGREES_PER_TICK);
-        setRollTarget(projectionRollTarget);
-        float nextRoll = CanvasProjectionMotion.smoothRoll(
-                projectionRoll(), projectionRollTarget);
-        setProjectionView(player.getYRot() + 180.0F, player.getXRot());
-        setPos(nextCenter);
-        setProjectedOrientation(nextNormal, nextRoll);
-        CanvasCompileService.refreshWorldGeometry(serverLevel, this);
+        if (level().isClientSide) tickClientInterpolation();
     }
 
     private void tickClientInterpolation() {
-        if (clientLerpSteps > 0) {
-            double divisor = clientLerpSteps;
-            setPos(
-                    getX() + (clientLerpX - getX()) / divisor,
-                    getY() + (clientLerpY - getY()) / divisor,
-                    getZ() + (clientLerpZ - getZ()) / divisor);
-            clientLerpSteps--;
-        }
         Vec3 nextNormal = surfaceNormal();
         if (clientNormalSyncPending) {
             clientNormalSyncPending = false;

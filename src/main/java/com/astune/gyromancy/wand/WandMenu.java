@@ -19,10 +19,10 @@ public final class WandMenu extends AbstractContainerMenu {
     public static final int INVENTORY_LEFT = 8;
     public static final int INVENTORY_TOP = 140;
 
-    // The first four positions are painted into wand_config_container.png.
-    // They form two inward-facing pairs around the central wand display.
+    // The first four positions are reserved for the left/right wand slot
+    // sprites. They form two inward-facing pairs around the central display.
     private static final int[][] CONFIG_SLOT_POSITIONS = {
-            {32, 32}, {48, 52}, {128, 68}, {112, 88}
+            {32, 32}, {42, 52}, {128, 68}, {118, 88}
     };
 
     private final Inventory playerInventory;
@@ -43,7 +43,7 @@ public final class WandMenu extends AbstractContainerMenu {
         int slotIndex = 0;
         for (int slot = 0; slot < layout.slotCount(); slot++) {
             for (int entry = 0; entry < layout.slotCapacity(slot); entry++) {
-                addSlot(new CanvasSlot(wandContainer, slotIndex++, canvasSlotX(layout, slot),
+                addSlot(new CanvasSlot(wandContainer, slotIndex++, canvasSlotX(layout, slot, entry),
                         canvasSlotY(layout, slot, entry)));
             }
         }
@@ -102,8 +102,8 @@ public final class WandMenu extends AbstractContainerMenu {
         return INVENTORY_LEFT;
     }
 
-    public static int canvasSlotX(WandLayout layout, int slot) {
-        int position = positionIndex(layout, slot, 0);
+    public static int canvasSlotX(WandLayout layout, int slot, int entry) {
+        int position = positionIndex(layout, slot, entry);
         return position < CONFIG_SLOT_POSITIONS.length
                 ? CONFIG_SLOT_POSITIONS[position][0] : fallbackSlotX(slot);
     }
@@ -111,7 +111,7 @@ public final class WandMenu extends AbstractContainerMenu {
     public static int canvasSlotY(WandLayout layout, int slot, int entry) {
         int position = positionIndex(layout, slot, entry);
         return position < CONFIG_SLOT_POSITIONS.length
-                ? CONFIG_SLOT_POSITIONS[position][1] : 32 + entry * 22;
+                ? CONFIG_SLOT_POSITIONS[position][1] : fallbackSlotY(entry);
     }
 
     private static int positionIndex(WandLayout layout, int slot, int entry) {
@@ -124,6 +124,10 @@ public final class WandMenu extends AbstractContainerMenu {
 
     private static int fallbackSlotX(int slot) {
         return (slot & 1) == 0 ? 32 : 128;
+    }
+
+    private static int fallbackSlotY(int entry) {
+        return 32 + entry * 22;
     }
 
     @Override

@@ -54,7 +54,7 @@ public final class WandProjectionService {
                     WandProjectionPose.mirrorForHand(player.getMainArm(), hand));
             CanvasDocument document = cachedDocument.get();
             projectedGlyphs += document.glyphs().size();
-            ProjectionCanvasEntity projection = ProjectionCanvasEntity.create(
+            WandProjectionEntity projection = WandProjectionEntity.create(
                     serverLevel, center, facing, copyForProjection(document), player.getUUID(),
                     view,
                     player.getYRot() + 180.0F, player.getXRot(),
@@ -88,9 +88,9 @@ public final class WandProjectionService {
     }
 
     private static int discardOwned(ServerLevel level, UUID owner) {
-        List<ProjectionCanvasEntity> owned = new ArrayList<>();
+        List<WandProjectionEntity> owned = new ArrayList<>();
         for (Entity entity : level.getAllEntities()) {
-            if (entity instanceof ProjectionCanvasEntity projection
+            if (entity instanceof WandProjectionEntity projection
                     && owner.equals(projection.owner())) {
                 owned.add(projection);
             }

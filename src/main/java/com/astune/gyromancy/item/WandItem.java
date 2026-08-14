@@ -1,7 +1,6 @@
 package com.astune.gyromancy.item;
 
 import com.astune.gyromancy.registry.ModDataComponents;
-import com.astune.gyromancy.client.item.WandClientItemExtensions;
 import com.astune.gyromancy.wand.WandContents;
 import com.astune.gyromancy.wand.WandLayout;
 import com.astune.gyromancy.wand.WandMenu;
@@ -18,9 +17,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 
-import java.util.function.Consumer;
 import java.util.List;
 
 /** A reusable projector for cached canvas drawings and magic arrays. */
@@ -40,11 +37,6 @@ public class WandItem extends Item {
 
     public WandLayout layout() {
         return layout;
-    }
-
-    @Override
-    public void initializeClient(Consumer<IClientItemExtensions> consumer) {
-        consumer.accept(WandClientItemExtensions.INSTANCE);
     }
 
     @Override

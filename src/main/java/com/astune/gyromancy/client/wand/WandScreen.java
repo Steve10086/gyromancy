@@ -18,6 +18,10 @@ import net.minecraft.world.item.ItemStack;
 public final class WandScreen extends AbstractContainerScreen<WandMenu> {
     private static final ResourceLocation BACKGROUND = ResourceLocation.fromNamespaceAndPath(
             "gyromancy", "textures/gui/sprites/wand_config_container.png");
+    private static final ResourceLocation SLOT_LEFT = ResourceLocation.fromNamespaceAndPath(
+            "gyromancy", "wand_slot_left");
+    private static final ResourceLocation SLOT_RIGHT = ResourceLocation.fromNamespaceAndPath(
+            "gyromancy", "wand_slot_right");
     private static final int BACKGROUND_SOURCE_WIDTH = 256;
     private static final int BACKGROUND_SOURCE_HEIGHT = 256;
     private static final float WAND_CENTER_X = 81.5f;
@@ -50,7 +54,21 @@ public final class WandScreen extends AbstractContainerScreen<WandMenu> {
     protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         graphics.blit(BACKGROUND, leftPos, topPos, 0, 0, imageWidth, imageHeight,
                 BACKGROUND_SOURCE_WIDTH, BACKGROUND_SOURCE_HEIGHT);
+        renderWandSlotBackgrounds(graphics);
         drawWandModel(graphics, leftPos + WAND_CENTER_X, topPos + WAND_CENTER_Y);
+    }
+
+    private void renderWandSlotBackgrounds(GuiGraphics graphics) {
+        for (int slot = 0; slot < menu.layout().slotCount(); slot++) {
+            for (int entry = 0; entry < menu.layout().slotCapacity(slot); entry++) {
+                int slotX = WandMenu.canvasSlotX(menu.layout(), slot, entry);
+                boolean left = slotX < imageWidth / 2;
+                ResourceLocation sprite = left ? SLOT_LEFT : SLOT_RIGHT;
+                int x = leftPos + slotX - 1;
+                int y = topPos + WandMenu.canvasSlotY(menu.layout(), slot, entry) - 1;
+                graphics.blitSprite(sprite, x, y, WandMenu.SLOT_SIZE + 1, WandMenu.SLOT_SIZE + 1);
+            }
+        }
     }
 
     private void drawWandModel(GuiGraphics graphics, float centerX, int centerY) {
@@ -97,15 +115,15 @@ public final class WandScreen extends AbstractContainerScreen<WandMenu> {
 
 
         for (int slot = 0; slot < menu.layout().slotCount(); slot++) {
-            boolean left = (slot & 1) == 0;
-            int slotX = WandMenu.canvasSlotX(menu.layout(), slot);
+            int slotX = WandMenu.canvasSlotX(menu.layout(), slot, 0);
+            boolean left = slotX < imageWidth / 2;
             int slotY = WandMenu.canvasSlotY(menu.layout(), slot, 0);
             Component plane = Component.translatable("screen.gyromancy.wand.plane", slot + 1);
             int labelX = left ? 8 : imageWidth - font.width(plane) - 8;
-            graphics.drawString(font, plane, labelX, slotY + 5, TEXT, false);
+            graphics.drawString(font, plane, labelX, slotY - 10, TEXT, false);
             String offset = String.format(java.util.Locale.ROOT, "%.1f", menu.layout().slotOffset(slot));
             int offsetX = left ? 8 : imageWidth - font.width(offset) - 8;
-            graphics.drawString(font, offset, offsetX, slotY + 15, MAGICAL, false);
+            graphics.drawString(font, offset, offsetX, slotY, MAGICAL, false);
         }
     }
 
