@@ -25,7 +25,7 @@ import java.util.*;
 
 @RegisteredOp
 public final class FireProjectileOp extends ProjectileEntityOp {
-    private static final int ELEMENT_EXCHANGE_INTERVAL = 10;
+
     private static final double FIRE_VOLUME_LOSS = 0.1;
     private static final double FIRE_EQUILIBRIUM = 100.0;
     private static final double MAX_VOLUME_FIRE_LEVEL = 2000.0;

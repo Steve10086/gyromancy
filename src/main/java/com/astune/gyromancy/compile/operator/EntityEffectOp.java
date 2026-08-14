@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
-
+    protected static final int ELEMENT_EXCHANGE_INTERVAL = 10;
     private final ElementType element;
     private final ResourceLocation id;
     private final PositionedGlyph boundary;

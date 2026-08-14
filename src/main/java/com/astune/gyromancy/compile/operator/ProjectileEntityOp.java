@@ -36,7 +36,9 @@ public abstract class ProjectileEntityOp  extends EntityEffectOp {
             Vec3 pos = center.add(normal.scale(size * 2.0));
             Vec3 acceleration = emission.hasMotion() ? new Vec3(0.0, -0.04 * 0.5, 0.0) : Vec3.ZERO;
             MagicBallEntity entity = create(level, pos, emission.velocity(), acceleration, size);
-            entity.setPayload(payload(payloadFor()));
+            List<EntityPayload> entityPayload = new ArrayList<>(payloadFor());
+            entityPayload.add(new FollowingOp());
+            entity.setPayload(entityPayload);
             EntityEmitter.INSTANCE.emit(level, getId(), entity, result);
         }
         return result.toRuntimeHandle();

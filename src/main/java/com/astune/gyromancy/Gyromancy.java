@@ -2,6 +2,7 @@ package com.astune.gyromancy;
 
 import com.astune.gyromancy.command.DebugCommands;
 import com.astune.gyromancy.array.MagicArrayDetector;
+import com.astune.gyromancy.compile.operator.LoopOp;
 import com.astune.gyromancy.compile.operator.TriggerOp;
 import com.astune.gyromancy.element.ElementChunkEventHandler;
 import com.astune.gyromancy.element.ElementTickProcessor;
@@ -56,6 +57,8 @@ public class Gyromancy {
                 e -> MagicArrayDetector.onServerTick(e));
         NeoForge.EVENT_BUS.<ServerTickEvent.Pre>addListener(
                 TriggerOp::onServerTick);
+        NeoForge.EVENT_BUS.<ServerTickEvent.Post>addListener(
+                LoopOp::onServerTick);
 
         // Chunk lifecycle for element tracking
         NeoForge.EVENT_BUS.<ChunkEvent.Load>addListener(

@@ -126,6 +126,7 @@ public final class ManaProjectileOp extends EntityEffectOp {
 
     public static List<EntityPayload> defaultPayload() {
         return List.of(
+                new FollowingOp(),
                 new ElementOp(ElementType.MANA, 2.0f, 0.0f)
         );
     }

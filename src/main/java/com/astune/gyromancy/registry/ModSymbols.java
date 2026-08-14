@@ -2,27 +2,7 @@ package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.SymbolTemplate;
-import com.astune.gyromancy.symbol.ArrowSymbol;
-import com.astune.gyromancy.symbol.ArrowUpSymbol;
-import com.astune.gyromancy.symbol.CircleOuterSymbol;
-import com.astune.gyromancy.symbol.CrossSymbol;
-import com.astune.gyromancy.symbol.CurlSymbol;
-import com.astune.gyromancy.symbol.DarkSymbol;
-import com.astune.gyromancy.symbol.DrainSymbol;
-import com.astune.gyromancy.symbol.EarthSymbol;
-import com.astune.gyromancy.symbol.EliminateSymbol;
-import com.astune.gyromancy.symbol.EngagingSymbol;
-import com.astune.gyromancy.symbol.FireSymbol;
-import com.astune.gyromancy.symbol.FixSymbol;
-import com.astune.gyromancy.symbol.ManaSymbol;
-import com.astune.gyromancy.symbol.RevertSymbol;
-import com.astune.gyromancy.symbol.SkeletonMatcher;
-import com.astune.gyromancy.symbol.SpaceSymbol;
-import com.astune.gyromancy.symbol.SplitSymbol;
-import com.astune.gyromancy.symbol.StarSymbol;
-import com.astune.gyromancy.symbol.Symbol;
-import com.astune.gyromancy.symbol.WaterSymbol;
-import com.astune.gyromancy.symbol.WindSymbol;
+import com.astune.gyromancy.symbol.*;
 import com.astune.gyromancy.util.TemplateLoader;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
@@ -56,6 +36,7 @@ public final class ModSymbols {
         registerSymbol(StarSymbol.INSTANCE);
         registerSymbol(WaterSymbol.INSTANCE);
         registerSymbol(WindSymbol.INSTANCE);
+        registerSymbol(LoopSymbol.INSTANCE);
     }
 
     private ModSymbols() {}

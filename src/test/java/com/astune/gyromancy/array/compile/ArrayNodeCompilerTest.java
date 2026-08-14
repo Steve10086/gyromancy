@@ -10,6 +10,7 @@ import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.compile.operator.EntityEffectOp;
 import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.MomentumOp;
+import com.astune.gyromancy.compile.operator.LoopOp;
 import com.astune.gyromancy.compile.operator.PersistentOp;
 import com.astune.gyromancy.compile.operator.ProjectionOp;
 import com.astune.gyromancy.compile.operator.RotationOp;
@@ -30,6 +31,23 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 class ArrayNodeCompilerTest {
+    @Test
+    void loopWrapsAPersistentChildEffect() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph loop = glyph("loop", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
+        PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 4);
+
+        GroupNode ast = group(outer, new SymbolNode(loop), group(inner, new SymbolNode(fire)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+
+        assertInstanceOf(LoopOp.class, success.value().root());
+        assertInstanceOf(PersistentOp.class, success.value().root());
+    }
+
     @Test
     void compilesProjectileOperatorFromRawRuneInputs() {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);

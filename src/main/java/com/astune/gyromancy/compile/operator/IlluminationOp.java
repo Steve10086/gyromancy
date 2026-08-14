@@ -15,7 +15,9 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Star-bound projectile that leaves temporary light blocks around its ball. */
 @RegisteredOp
@@ -40,7 +42,6 @@ public final class IlluminationOp extends ProjectileEntityOp {
                     OpInputMatcher.rune("arrow"),
                     OpInputMatcher.rune("engaging"),
                     OpInputMatcher.rune("fix"),
-                    OpInputMatcher.rune("revert"),
                     OpInputMatcher.op(CompiledOp.class));
         }
 
@@ -69,8 +70,25 @@ public final class IlluminationOp extends ProjectileEntityOp {
     }
 
     @Override
-    Collection<? extends EntityPayload> conditionalPayload() {
-        return null;
+    public List<EntityPayload> conditionalPayload() {
+        Set<EntityPayload> payload = new HashSet<>();
+        for (OpInput o : inputs){
+            if (o instanceof OpInput.Rune rune){
+                switch (rune.symbolName()){
+                    case "engaging" -> {
+                        payload.add(new ElementConversionOp(ElementType.LIGHT, ELEMENT_EXCHANGE_INTERVAL));
+                    }
+                    case "fix" -> {
+                        payload.add(new FollowingOp());
+                    }
+                }
+            }
+        }
+        if (payload.isEmpty()) {
+            payload.add(new ExplosionOp());
+            //payload.add(new RemoveOnHitOp());
+        }
+        return payload.stream().toList();
     }
 
     @Override

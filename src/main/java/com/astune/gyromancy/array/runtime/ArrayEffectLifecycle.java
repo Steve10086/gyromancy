@@ -15,6 +15,7 @@ import com.astune.gyromancy.compile.operator.PersistentOp;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.runtime.emit.EmittedObject;
 import com.astune.gyromancy.entity.ball.MagicBallEntity;
+import com.astune.gyromancy.entity.field.MagicFieldEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.symbol.GlyphStrokeValidator;
 import net.minecraft.server.level.ServerLevel;
@@ -189,17 +190,31 @@ public final class ArrayEffectLifecycle {
         if (array == null) return;
 
         List<EmittedObject> emitted = EmitResult.emissions(scratchData);
-        if (emitted.isEmpty()) return;
-
-        List<EmittedObject> all = new java.util.ArrayList<>(EmitResult.emissions(array.scratchData()));
-        all.addAll(emitted);
-        Map<String, Object> updated = new HashMap<>(array.scratchData());
-        updated.put(EmitResult.EMISSIONS_KEY, List.copyOf(all));
-        mgr.setArrayScratchData(arrayId, updated);
+        if (!emitted.isEmpty()) {
+            List<EmittedObject> all = new java.util.ArrayList<>(EmitResult.emissions(array.scratchData()));
+            for (EmittedObject object : emitted) {
+                if (!all.contains(object)) all.add(object);
+            }
+            Map<String, Object> updated = new HashMap<>(array.scratchData());
+            updated.put(EmitResult.EMISSIONS_KEY, List.copyOf(all));
+            mgr.setArrayScratchData(arrayId, updated);
+        }
 
         for (EmittedObject object : emitted) {
             if (!(object.ref() instanceof ArrayObject.EntityRef ref)) continue;
-            if (ref.resolve(level) instanceof MagicBallEntity ball) ball.bindToArray(arrayId);
+            bindEntityToArray(level, arrayId, ref);
+        }
+        for (Map.Entry<String, Object> entry : scratchData.entrySet()) {
+            if (!(entry.getValue() instanceof ArrayObject.EntityRef ref)) continue;
+            bindEntityToArray(level, arrayId, ref);
+        }
+    }
+
+    private static void bindEntityToArray(ServerLevel level, UUID arrayId, ArrayObject.EntityRef ref) {
+        if (ref.resolve(level) instanceof MagicBallEntity ball) {
+            ball.bindToArray(arrayId);
+        } else if (ref.resolve(level) instanceof MagicFieldEntity field) {
+            field.bindToArray(arrayId);
         }
     }
 
@@ -228,6 +243,9 @@ public final class ArrayEffectLifecycle {
             if (ref.resolve(level) instanceof MagicBallEntity ball) {
                 ball.bindToArray(arrayId);
                 bound.add(ball.getUUID());
+            } else if (ref.resolve(level) instanceof MagicFieldEntity field) {
+                field.bindToArray(arrayId);
+                bound.add(field.getUUID());
             }
         }
         for (EmittedObject emitted : EmitResult.emissions(scratchData)) {
@@ -235,6 +253,9 @@ public final class ArrayEffectLifecycle {
             if (ref.resolve(level) instanceof MagicBallEntity ball
                     && bound.add(ball.getUUID())) {
                 ball.bindToArray(arrayId);
+            } else if (ref.resolve(level) instanceof MagicFieldEntity field
+                    && bound.add(field.getUUID())) {
+                field.bindToArray(arrayId);
             }
         }
     }
