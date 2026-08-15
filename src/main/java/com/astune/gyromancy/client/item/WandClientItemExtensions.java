@@ -29,6 +29,8 @@ public final class WandClientItemExtensions implements IClientItemExtensions {
                 -WandUseAnimation.forwardExtension(usingTicks));
         poseStack.mulPose(Axis.XP.rotationDegrees(
                 -WandUseAnimation.pitchDegrees(extensionProgress)));
+        poseStack.mulPose(Axis.YP.rotationDegrees(
+                 WandUseAnimation.pitchDegrees(extensionProgress)));
 
         // Keep vanilla's base arm/equip transform and add this action on top.
         return false;

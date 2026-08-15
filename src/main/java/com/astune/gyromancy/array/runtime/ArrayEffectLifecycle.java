@@ -73,15 +73,24 @@ public final class ArrayEffectLifecycle {
         CompiledArray compiled = success.value();
         if (!(compiled.root() instanceof PersistentOp)) return Optional.empty();
 
-        RuntimeHandle handle = OpRuntimeDispatcher.activate(compiled, level);
+        UUID arrayId = UUID.randomUUID();
+        long compilationEffectEndTick =
+                level.getGameTime() + ArrayObject.COMPILATION_EFFECT_TICKS;
+        ArrayObject activationArray = new ArrayObject(
+                arrayId,
+                compiled.rootCircleGlyph(),
+                compiled.boundGlyphs(),
+                compilationEffectEndTick,
+                Map.of("__array_color", compiled.color()));
+        RuntimeHandle handle = OpRuntimeDispatcher.activate(compiled, level, activationArray);
         Map<String, Object> scratchData = new HashMap<>(handle.scratchData());
         scratchData.put("__array_color", compiled.color());
 
         ArrayObject arr = new ArrayObject(
-                UUID.randomUUID(),
+                arrayId,
                 compiled.rootCircleGlyph(),
                 compiled.boundGlyphs(),
-                level.getGameTime() + ArrayObject.COMPILATION_EFFECT_TICKS,
+                compilationEffectEndTick,
                 Map.copyOf(scratchData));
         mgr.registerArrayObj(arr);
         bindPersistentEntities(level, arr.arrayId(), arr.scratchData());

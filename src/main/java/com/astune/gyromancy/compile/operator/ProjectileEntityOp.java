@@ -29,10 +29,10 @@ public abstract class ProjectileEntityOp  extends EntityEffectOp {
         PositionedGlyph centerGlyph = primaryRune();
         if (centerGlyph == null) return new RuntimeHandle(Map.of());
         EmitResult result = new EmitResult();
-        Vec3 center = ctx.origin() != null ? ctx.origin() : CenterSymbol.glyphCenter(level, centerGlyph);
-        Vec3 normal = ctx.normal() != null ? ctx.normal() : CenterSymbol.faceNormal(centerGlyph);
-        for (EmitOp.Emission emission : emissions()) {
-            float size = Math.max(0.1F, scale() * emission.sizeScale());
+        Vec3 center = ctx.positionFor(centerGlyph);
+        Vec3 normal = ctx.normalFor(centerGlyph);
+        for (EmitOp.Emission emission : emissions(ctx)) {
+            float size = Math.max(0.1F, scale(ctx) * emission.sizeScale());
             Vec3 pos = center.add(normal.scale(size * 2.0));
             Vec3 acceleration = emission.hasMotion() ? new Vec3(0.0, -0.04 * 0.5, 0.0) : Vec3.ZERO;
             MagicBallEntity entity = create(level, pos, emission.velocity(), acceleration, size);

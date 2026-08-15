@@ -1,5 +1,6 @@
 package com.astune.gyromancy.wand;
 
+import com.astune.gyromancy.item.CanvasItem;
 import com.astune.gyromancy.item.WandItem;
 import com.astune.gyromancy.registry.ModMenus;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -13,6 +14,9 @@ import net.minecraft.world.item.ItemStack;
 
 /** Server-synchronised screen container for a wand's canvas slots. */
 public final class WandMenu extends AbstractContainerMenu {
+    private static final int PLAYER_MAIN_SLOT_COUNT = 27;
+    private static final int HOTBAR_SLOT_COUNT = 9;
+    private static final int PLAYER_SLOT_COUNT = PLAYER_MAIN_SLOT_COUNT + HOTBAR_SLOT_COUNT;
     public static final int SLOT_SIZE = 18;
     public static final int SCREEN_WIDTH = 176;
     public static final int SCREEN_HEIGHT = 227;
@@ -30,6 +34,9 @@ public final class WandMenu extends AbstractContainerMenu {
     private final ItemStack wandStack;
     private final WandContainer wandContainer;
     private final WandLayout layout;
+    private final int canvasSlotCount;
+    private final int playerInventoryStart;
+    private final int playerInventoryEnd;
 
     public WandMenu(int containerId, Inventory inventory, InteractionHand hand) {
         super(ModMenus.WAND.get(), containerId);
@@ -39,8 +46,10 @@ public final class WandMenu extends AbstractContainerMenu {
         this.layout = wandStack.getItem() instanceof WandItem item
                 ? item.layout() : WandLayout.DEFAULT;
         this.wandContainer = new WandContainer(wandStack, layout);
+        this.canvasSlotCount = wandContainer.getContainerSize();
+        this.playerInventoryStart = canvasSlotCount;
 
-        int slotIndex = 0;
+        int slotIndex = canvasSlotStart();
         for (int slot = 0; slot < layout.slotCount(); slot++) {
             for (int entry = 0; entry < layout.slotCapacity(slot); entry++) {
                 addSlot(new CanvasSlot(wandContainer, slotIndex++, canvasSlotX(layout, slot, entry),
@@ -58,6 +67,10 @@ public final class WandMenu extends AbstractContainerMenu {
         }
         for (int column = 0; column < 9; column++) {
             addSlot(new Slot(inventory, column, inventoryX + column * 18, inventoryY + 58));
+        }
+        this.playerInventoryEnd = slots.size();
+        if (playerInventoryEnd - playerInventoryStart != PLAYER_SLOT_COUNT) {
+            throw new IllegalStateException("Wand menu player inventory slot count changed");
         }
     }
 
@@ -80,6 +93,50 @@ public final class WandMenu extends AbstractContainerMenu {
 
     public InteractionHand hand() {
         return hand;
+    }
+
+    /**
+     * The menu index at which the wand's canvas slots begin.
+     *
+     * <p>Keeping this range explicit is important because all vanilla
+     * container shortcuts eventually operate on menu slot indexes rather
+     * than on the backing inventory's indexes.</p>
+     */
+    public static int canvasSlotStart() {
+        return 0;
+    }
+
+    public int canvasSlotCount() {
+        return canvasSlotCount;
+    }
+
+    public int playerInventoryStart() {
+        return playerInventoryStart;
+    }
+
+    public int playerInventoryEnd() {
+        return playerInventoryEnd;
+    }
+
+    public int playerMainInventoryStart() {
+        return playerInventoryStart;
+    }
+
+    public int hotbarStart() {
+        return playerInventoryStart + PLAYER_MAIN_SLOT_COUNT;
+    }
+
+    public boolean isPlayerMainInventorySlot(int menuSlot) {
+        return menuSlot >= playerMainInventoryStart()
+                && menuSlot < hotbarStart();
+    }
+
+    public boolean isHotbarSlot(int menuSlot) {
+        return menuSlot >= hotbarStart() && menuSlot < playerInventoryEnd;
+    }
+
+    public boolean isCanvasSlot(int menuSlot) {
+        return menuSlot >= canvasSlotStart() && menuSlot < playerInventoryStart;
     }
 
     public static int screenWidth(WandLayout layout) {
@@ -132,25 +189,45 @@ public final class WandMenu extends AbstractContainerMenu {
 
     @Override
     public ItemStack quickMoveStack(Player player, int slotIndex) {
-        if (slotIndex < 0 || slotIndex >= slots.size()) return ItemStack.EMPTY;
+        if (slotIndex < 0 || slotIndex >= playerInventoryEnd) return ItemStack.EMPTY;
         Slot sourceSlot = slots.get(slotIndex);
         if (!sourceSlot.hasItem()) return ItemStack.EMPTY;
         ItemStack source = sourceSlot.getItem();
         ItemStack original = source.copy();
-        int playerInventoryStart = wandContainer.getContainerSize();
-        if (slotIndex < playerInventoryStart) {
-            if (!moveItemStackTo(source, playerInventoryStart, slots.size(), true)) {
-                return ItemStack.EMPTY;
-            }
-        } else if (source.getItem() instanceof com.astune.gyromancy.item.CanvasItem) {
-            if (!moveItemStackTo(source, 0, playerInventoryStart, false)) {
-                return ItemStack.EMPTY;
+
+        boolean moved;
+        if (isCanvasSlot(slotIndex)) {
+            // Match the vanilla chest/inventory routing: merge into existing
+            // stacks first, then search the player inventory backwards so the
+            // hotbar is preferred for a newly moved stack.
+            moved = moveItemStackTo(source, playerInventoryStart,
+                    playerInventoryEnd, true);
+        } else if (isPlayerMainInventorySlot(slotIndex)
+                || isHotbarSlot(slotIndex)) {
+            // Canvas items get the container's preferred destination first.
+            // If that area is full, fall back to the same main-inventory /
+            // hotbar routing used by InventoryMenu.
+            moved = source.getItem() instanceof CanvasItem
+                    && moveItemStackTo(source, canvasSlotStart(),
+                    canvasSlotCount, false);
+            if (!moved) {
+                moved = isPlayerMainInventorySlot(slotIndex)
+                        ? moveItemStackTo(source, hotbarStart(),
+                        playerInventoryEnd, false)
+                        : moveItemStackTo(source, playerMainInventoryStart(),
+                        hotbarStart(), false);
             }
         } else {
             return ItemStack.EMPTY;
         }
-        if (source.isEmpty()) sourceSlot.setByPlayer(ItemStack.EMPTY);
-        else sourceSlot.setChanged();
+
+        if (!moved) return ItemStack.EMPTY;
+        if (source.isEmpty()) {
+            sourceSlot.setByPlayer(ItemStack.EMPTY);
+        } else {
+            sourceSlot.setChanged();
+        }
+        if (source.getCount() == original.getCount()) return ItemStack.EMPTY;
         sourceSlot.onTake(player, source);
         return original;
     }
@@ -180,7 +257,7 @@ public final class WandMenu extends AbstractContainerMenu {
 
         @Override
         public boolean mayPlace(ItemStack stack) {
-            return stack.isEmpty() || stack.getItem() instanceof com.astune.gyromancy.item.CanvasItem;
+            return stack.isEmpty() || stack.getItem() instanceof CanvasItem;
         }
     }
 }

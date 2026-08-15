@@ -77,11 +77,11 @@ public final class ManaProjectileOp extends EntityEffectOp {
         if (hasUnsupportedDirectRune(center)) return new RuntimeHandle(Map.of());
 
         EmitResult result = new EmitResult();
-        double liftDirection = CenterSymbol.isFacingDown(boundary()) ? -1.0 : 1.0;
-        Vec3 centerPos = ctx.origin() != null ? ctx.origin() : CenterSymbol.glyphCenter(level, center);
-        Vec3 normal = ctx.normal() != null ? ctx.normal() : CenterSymbol.faceNormal(center);
-        for (EmitOp.Emission emission : emissions()) {
-            float size = Math.max(0.1F, scale() * emission.sizeScale());
+        Vec3 centerPos = ctx.positionFor(center);
+        Vec3 normal = ctx.normalFor(center);
+        double liftDirection = normal.y < -0.999 ? -1.0 : 1.0;
+        for (EmitOp.Emission emission : emissions(ctx)) {
+            float size = Math.max(0.1F, scale(ctx) * emission.sizeScale());
             Vec3 pos = centerPos.add(normal.scale(size * 2.0));
             Vec3 acceleration = Vec3.ZERO;
             ManaballEntity manaball = new ManaballEntity(level, pos, emission.velocity(),

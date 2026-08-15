@@ -42,15 +42,20 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
     }
 
     protected List<EmitOp.Emission> emissions() {
+        return emissions(null);
+    }
+
+    protected List<EmitOp.Emission> emissions(OpRuntimeContext context) {
         List<EmitOp.Emission> emissions = new ArrayList<>();
         boolean hasEmitOp = false;
         for (OpInput input : inputs) {
             if (input instanceof OpInput.Op op && op.operator() instanceof EmitOp emitOp) {
                 hasEmitOp = true;
-                emissions.addAll(emitOp.emissions());
+                emissions.addAll(emitOp.emissions(context));
             }
         }
-        List<EmitOp.Emission> resolved = hasEmitOp ? List.copyOf(emissions) : List.of(defaultEmission());
+        List<EmitOp.Emission> resolved = hasEmitOp
+                ? List.copyOf(emissions) : List.of(defaultEmission(context));
         for (OpInput input : inputs) {
             if (!(input instanceof OpInput.Op op)) continue;
             resolved = resolved.stream()
@@ -70,28 +75,34 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
         return List.copyOf(payload);
     }
 
-    private EmitOp.Emission defaultEmission() {
+    private EmitOp.Emission defaultEmission(OpRuntimeContext context) {
         Vec3 velocity = Vec3.ZERO;
         double motionSum = 0.0;
         boolean hasMotion = false;
         for (OpInput input : inputs) {
             if (!(input instanceof OpInput.Rune rune) || !"arrow".equals(rune.symbolName())) continue;
-            double speed = rune.glyph().length();
+            PositionedGlyph glyph = context == null ? rune.glyph() : context.liveGlyph(rune.glyph());
+            double speed = glyph.length();
             motionSum += speed;
             hasMotion = true;
-            Vec3 direction = rune.glyph().front();
+            Vec3 direction = glyph.front();
             if (direction.lengthSqr() >= 1e-8) {
                 velocity = velocity.add(direction.normalize().scale(speed));
             }
         }
         double speed = velocity.length();
-        velocity = velocity.add(boundary.surface().normal().scale(((motionSum - speed) + 0.2 * speed)));
+        Vec3 normal = context == null ? boundary.surface().normal() : context.normalFor(boundary);
+        velocity = velocity.add(normal.scale(((motionSum - speed) + 0.2 * speed)));
 
         return new EmitOp.Emission(velocity, motionSum, 1.0F, hasMotion);
     }
 
     public float scale() {
         return scaleFor(boundary);
+    }
+
+    public float scale(OpRuntimeContext context) {
+        return scaleFor(context == null ? boundary : context.liveGlyph(boundary));
     }
 
     @Override

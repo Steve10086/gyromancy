@@ -7,6 +7,7 @@ import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.RegisteredOp;
+import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.symbol.CenterSymbol;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import net.minecraft.resources.ResourceLocation;
@@ -53,11 +54,18 @@ public final class SplitEmitOp extends EmitOp {
 
     @Override
     public List<Emission> emissions() {
-        Vec3 arrayNormal = CenterSymbol.faceNormal(boundary());
+        return emissions(null);
+    }
+
+    @Override
+    public List<Emission> emissions(OpRuntimeContext context) {
+        Vec3 arrayNormal = context == null
+                ? CenterSymbol.faceNormal(boundary()) : context.normalFor(boundary());
         List<Emission> emissions = new ArrayList<>();
         for (OpInput input : inputs()) {
             if (input instanceof OpInput.Rune rune) {
-                decodeEmissionSource(rune, arrayNormal)
+                PositionedGlyph glyph = context == null ? rune.glyph() : context.liveGlyph(rune.glyph());
+                decodeEmissionSource(rune.symbolName(), glyph, arrayNormal)
                         .map(SplitEmitOp::emission)
                         .ifPresent(emissions::add);
             } else if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp momentum) {
@@ -77,10 +85,11 @@ public final class SplitEmitOp extends EmitOp {
                 .toList();
     }
 
-    private static Optional<EmissionSource> decodeEmissionSource(OpInput.Rune rune, Vec3 arrayNormal) {
-        return switch (rune.symbolName()) {
-            case "arrow" -> Optional.of(new EmissionSource(rune.glyph().front(), rune.glyph().length()));
-            case "arrow_up" -> Optional.of(new EmissionSource(arrayNormal, rune.glyph().length()));
+    private static Optional<EmissionSource> decodeEmissionSource(
+            String symbolName, PositionedGlyph glyph, Vec3 arrayNormal) {
+        return switch (symbolName) {
+            case "arrow" -> Optional.of(new EmissionSource(glyph.front(), glyph.length()));
+            case "arrow_up" -> Optional.of(new EmissionSource(arrayNormal, glyph.length()));
             default -> Optional.empty();
         };
     }

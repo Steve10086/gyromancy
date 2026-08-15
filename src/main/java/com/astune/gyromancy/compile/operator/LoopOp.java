@@ -147,7 +147,19 @@ public final class LoopOp implements CompiledOp, PersistentOp {
     }
 
     private OpRuntimeContext childContext(OpRuntimeContext context) {
-        return new OpRuntimeContext(context.level(), child, context.origin(), context.normal());
+        ArrayObject array = null;
+        if (context.level() != null) {
+            array = context.level().getData(ModAttachments.ARRAY_MANAGER)
+                    .getArrayForGlyph(boundary.glyphUuid());
+        }
+        if (array == null) array = context.array();
+
+        OpRuntimeContext childContext = context.forOp(child);
+        if (array == null) return childContext;
+
+        PositionedGlyph rootGlyph = context.arrayRootGlyph() != null
+                ? context.arrayRootGlyph() : boundary;
+        return childContext.withArray(array, rootGlyph);
     }
 
     private void checkAndRestart(ServerLevel level) {

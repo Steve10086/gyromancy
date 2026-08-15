@@ -7,7 +7,7 @@ final class WandUseAnimation {
     static final float EXTENSION_DISTANCE = 0.1F;
     static final float EXTENSION_TICKS = 7.0F;
     static final float TREMBLE_AMPLITUDE = 0.005F;
-    static final float TREMBLE_ANGULAR_SPEED = 0.5F;
+    static final float TREMBLE_ANGULAR_SPEED = 0.1F;
 
     private WandUseAnimation() {}
 

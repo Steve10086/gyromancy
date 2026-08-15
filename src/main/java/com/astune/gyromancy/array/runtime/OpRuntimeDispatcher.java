@@ -24,9 +24,19 @@ public final class OpRuntimeDispatcher {
     private OpRuntimeDispatcher() {}
 
     public static RuntimeHandle activate(CompiledArray compiled, ServerLevel level) {
+        return activate(compiled, level, null);
+    }
+
+    /** Activates a runtime with its array frame available before registration. */
+    public static RuntimeHandle activate(
+            CompiledArray compiled, ServerLevel level, ArrayObject array) {
         if (!(compiled.root() instanceof PersistentOp persistent)) return new RuntimeHandle(Map.of());
 
-        RuntimeHandle handle = persistent.activate(new OpRuntimeContext(level, compiled.root()));
+        OpRuntimeContext context = new OpRuntimeContext(level, compiled.root());
+        if (array != null) {
+            context = context.withArray(array, compiled.rootCircleGlyph());
+        }
+        RuntimeHandle handle = persistent.activate(context);
         Map<String, Object> data = new HashMap<>(handle.scratchData());
         data.put(RUNTIME_KEY, compiled.root().id().toString());
         data.put(COMPILED_OP_KEY, compiled.root());
@@ -40,7 +50,9 @@ public final class OpRuntimeDispatcher {
                 : recoverPersistentOp(array, level.getData(ModAttachments.ARRAY_MANAGER));
         if (persistent != null) {
             CompiledOp op = persistent;
-            persistent.deactivate(new OpRuntimeContext(level, op), array.scratchData());
+            OpRuntimeContext context = new OpRuntimeContext(level, op)
+                    .withArray(array, array.rootCircleGlyph());
+            persistent.deactivate(context, array.scratchData());
         }
     }
 

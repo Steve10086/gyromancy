@@ -120,8 +120,9 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
                     boundary.glyphId());
             return new RuntimeHandle(Map.of());
         }
-        Optional<SourceCircle> source = sourceInput.flatMap(
-                circle -> resolveSource(level, circle));
+        Optional<SourceCircle> source = sourceInput
+                .map(circle -> new SourceCircle(context.liveGlyph(circle.circle()), null))
+                .flatMap(circle -> resolveSource(level, circle));
         if (source.isEmpty()) {
             SourceCircle sourceCircle = sourceInput.get();
             String canvasDescription = sourceCircle.circle().sourceCanvasId()
@@ -155,7 +156,7 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
         CanvasDocument document = WandProjectionService.copySelectedGlyphsForProjection(
                 sourceCircle.canvas().document(), selected,
                 sourceCircle.circle(), sourceFrame);
-        Vec3 offset = projectionOffset();
+        Vec3 offset = projectionOffset(context);
         SurfaceFrame targetFrame = new SurfaceFrame(
                 sourceFrame.origin().add(offset),
                 sourceFrame.axisU(), sourceFrame.axisV(), sourceFrame.normal());
@@ -182,12 +183,14 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
         // EmitResult ownership discards the fixed projection before this hook.
     }
 
-    private Vec3 projectionOffset() {
-        Vec3 offset = boundary.surface().normal().normalize().scale(2.0 - (double) 1 /16);
+    private Vec3 projectionOffset(OpRuntimeContext context) {
+        PositionedGlyph liveBoundary = context.liveGlyph(boundary);
+        Vec3 normal = liveBoundary.surface().normal();
+        Vec3 offset = normal.normalize().scale(2.0 - (double) 1 /16);
         double arrowSizeSum = 0.0;
         for (OpInput input : inputs) {
             if (!(input instanceof OpInput.Rune rune)) continue;
-            PositionedGlyph glyph = rune.glyph();
+            PositionedGlyph glyph = context.liveGlyph(rune.glyph());
             double size = glyph.length();
             switch (rune.symbolName()) {
                 case "arrow" -> {
@@ -198,14 +201,14 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
                 }
                 case "arrow_up" -> {
                     arrowSizeSum += size;
-                    offset = offset.add(boundary.surface().normal().scale(size));
+                    offset = offset.add(normal.scale(size));
                 }
                 default -> {
                 }
             }
         }
         double speed = max(0, offset.length() - 2);
-        offset = offset.add(boundary.surface().normal().scale(
+        offset = offset.add(normal.scale(
                 (arrowSizeSum - speed) + 0.2 * speed));
         return offset;
     }

@@ -2,6 +2,7 @@ package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.OpInput;
+import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
@@ -40,6 +41,11 @@ public abstract class EmitOp implements CompiledOp {
     }
 
     public abstract List<Emission> emissions();
+
+    /** Allows an emitted effect to resolve refreshed array geometry at activation time. */
+    public List<Emission> emissions(OpRuntimeContext context) {
+        return emissions();
+    }
 
     public record Emission(Vec3 velocity, double motionSum, float sizeScale, boolean hasMotion) {}
 }

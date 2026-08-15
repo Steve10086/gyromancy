@@ -51,6 +51,15 @@ public final class WandScreen extends AbstractContainerScreen<WandMenu> {
     }
 
     @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        // AbstractContainerScreen updates hoveredSlot while rendering, but
+        // NeoForge's replicated render method leaves tooltip dispatch to each
+        // concrete container screen.
+        renderTooltip(graphics, mouseX, mouseY);
+    }
+
+    @Override
     protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         graphics.blit(BACKGROUND, leftPos, topPos, 0, 0, imageWidth, imageHeight,
                 BACKGROUND_SOURCE_WIDTH, BACKGROUND_SOURCE_HEIGHT);
