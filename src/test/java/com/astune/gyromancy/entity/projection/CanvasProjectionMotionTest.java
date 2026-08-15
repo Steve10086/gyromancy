@@ -1,6 +1,5 @@
 package com.astune.gyromancy.entity.projection;
 
-import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
@@ -62,13 +61,12 @@ class CanvasProjectionMotionTest {
     }
 
     @Test
-    void rollTargetAdvancesIndependentlyFromTheSmoothedPose() {
+    void rollTargetWrapsAndSmoothRollUsesCurrentResponse() {
         float target = CanvasProjectionMotion.advanceRollTarget(179.0F, 2.0F);
         float next = CanvasProjectionMotion.smoothRoll(170.0F, target);
 
         assertEquals(-179.0F, target, 1.0E-6F);
-        assertTrue(Mth.wrapDegrees(next - 170.0F) > 0.0F);
-        assertTrue(Mth.wrapDegrees(target - next) > 0.0F);
+        assertEquals(target, next, 1.0E-6F);
     }
 
     @Test

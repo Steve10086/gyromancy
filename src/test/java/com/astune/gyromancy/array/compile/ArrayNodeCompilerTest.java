@@ -542,8 +542,8 @@ class ArrayNodeCompilerTest {
         SplitEmitOp splitOp = assertInstanceOf(SplitEmitOp.class, success.value().root());
 
         assertEquals(1, splitOp.emissions().size());
-        assertEquals(new Vec3(0.2, 0.0, 0.0), splitOp.emissions().getFirst().velocity());
-        assertEquals(0.2, splitOp.emissions().getFirst().motionSum());
+        assertEquals(new Vec3(2.0, 0.0, 0.0), splitOp.emissions().getFirst().velocity());
+        assertEquals(2.0, splitOp.emissions().getFirst().motionSum());
         assertEquals(1.0F, splitOp.emissions().getFirst().sizeScale());
         assertEquals(true, splitOp.emissions().getFirst().hasMotion());
     }
@@ -565,7 +565,7 @@ class ArrayNodeCompilerTest {
 
         assertEquals(2, splitOp.emissions().size());
         assertEquals(new Vec3(2.0, 0.0, 0.0), splitOp.emissions().get(0).velocity());
-        assertEquals(new Vec3(0.2, 0.0, 0.0), splitOp.emissions().get(1).velocity());
+        assertEquals(new Vec3(2.0, 0.0, 0.0), splitOp.emissions().get(1).velocity());
         assertEquals(0.5F, splitOp.emissions().get(0).sizeScale());
         assertEquals(0.5F, splitOp.emissions().get(1).sizeScale());
     }

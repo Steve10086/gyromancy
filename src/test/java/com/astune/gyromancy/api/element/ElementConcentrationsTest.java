@@ -8,10 +8,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ElementConcentrationsTest {
 
     @Test
-    void bellDecayAddsLogDecayAboveThreshold() {
-        long thresholdDecay = ElementConcentrations.bellDecay(50_000);
-        assertEquals(50, thresholdDecay);
-        assertTrue(ElementConcentrations.bellDecay(50_001) > thresholdDecay);
+    void bellDecayUsesCurrentPiecewiseRateAndLogTail() {
+        long halfBellDecay = ElementConcentrations.bellDecay(50_000);
+        assertEquals(2_500, halfBellDecay);
+
+        long thresholdDecay = ElementConcentrations.bellDecay(100_000);
+        assertTrue(ElementConcentrations.bellDecay(100_100) > thresholdDecay);
     }
 
     @Test

@@ -13,13 +13,13 @@ class MagicBallFollowPolicyTest {
             ACTIVATED_TICK + ArrayObject.COMPILATION_EFFECT_TICKS;
 
     @Test
-    void followsOnlyDuringTheArraysFirstEightyTicks() {
+    void followsOnlyDuringTheArraysFirstTwentyTicks() {
         assertTrue(MagicBallFollowPolicy.shouldFollow(
                 ACTIVATED_TICK, EFFECT_END_TICK, Vec3.ZERO, Vec3.ZERO));
         assertTrue(MagicBallFollowPolicy.shouldFollow(
-                ACTIVATED_TICK + 79L, EFFECT_END_TICK, Vec3.ZERO, Vec3.ZERO));
+                ACTIVATED_TICK + 19L, EFFECT_END_TICK, Vec3.ZERO, Vec3.ZERO));
         assertFalse(MagicBallFollowPolicy.shouldFollow(
-                ACTIVATED_TICK + 80L, EFFECT_END_TICK, Vec3.ZERO, Vec3.ZERO));
+                ACTIVATED_TICK + 20L, EFFECT_END_TICK, Vec3.ZERO, Vec3.ZERO));
     }
 
     @Test

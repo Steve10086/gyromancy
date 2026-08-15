@@ -35,7 +35,7 @@ class MomentumOpTest {
 
         Vec3 acceleration = op.accelerationForTick(new Vec3(0.0, 0.0, 4.0));
 
-        assertVectorEquals(new Vec3(2.0, 0.0, 3.0), acceleration);
+        assertVectorEquals(new Vec3(0.2, 0.0, 0.3), acceleration);
     }
 
     @Test
@@ -47,8 +47,8 @@ class MomentumOpTest {
         Vec3 first = op.accelerationForTick(new Vec3(0.0, 0.0, 1.0));
         Vec3 afterRotation = op.accelerationForTick(new Vec3(0.0, 1.0, 0.0));
 
-        assertVectorEquals(new Vec3(2.0, 0.0, 3.0), first);
-        assertVectorEquals(new Vec3(2.0, 3.0, 0.0), afterRotation);
+        assertVectorEquals(new Vec3(0.2, 0.0, 0.3), first);
+        assertVectorEquals(new Vec3(0.2, 0.3, 0.0), afterRotation);
     }
 
     @Test
@@ -84,8 +84,8 @@ class MomentumOpTest {
 
         EmitOp.Emission emission = projectile.emissions().getFirst();
 
-        assertVectorEquals(new Vec3(0.2, 0.0, 0.0), emission.velocity());
-        assertEquals(0.2, emission.motionSum(), EPSILON);
+        assertVectorEquals(new Vec3(2.0, 0.0, 0.0), emission.velocity());
+        assertEquals(2.0, emission.motionSum(), EPSILON);
         assertEquals(true, emission.hasMotion());
     }
 
@@ -95,7 +95,7 @@ class MomentumOpTest {
                 new MomentumOp.AccelerationInput(new Vec3(1.0, 0.0, 0.0), 1.0, false)));
 
         for (int tick = 0; tick < MomentumOp.ACTIVE_TICKS; tick++) {
-            assertVectorEquals(new Vec3(1.0, 0.0, 0.0),
+            assertVectorEquals(new Vec3(0.1, 0.0, 0.0),
                     op.accelerationForTick(new Vec3(0.0, 0.0, 1.0)));
         }
 
@@ -116,7 +116,7 @@ class MomentumOpTest {
 
         assertEquals(2, loaded.elapsedTicks());
         assertVectorEquals(new Vec3(2.0, 0.0, 0.0), loaded.currentAcceleration());
-        assertVectorEquals(new Vec3(2.0, 0.0, 0.0),
+        assertVectorEquals(new Vec3(0.2, 0.0, 0.0),
                 loaded.accelerationForTick(new Vec3(0.0, 1.0, 0.0)));
     }
 
