@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " B ",
+    "SI ",
+    "WS "
+  ],
+  "key": {
+    "B": {
+      "tag": "minecraft:wooden_buttons"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "S": {
+      "item": "minecraft:stick"
+    },
+    "W": {
+      "item": "minecraft:string"
+    }
+  },
+  "result": {
+    "id": "gyromancy:compass",
+    "count": 1
+  }
+}

@@ -15,6 +15,7 @@ import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.symbol.SymbolCatalog;
+import com.mojang.serialization.Codec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -23,11 +24,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.WeakHashMap;
 
 /** Re-activates a persistent child effect when its bound effect disappears. */
 @RegisteredOp
-public final class LoopOp implements CompiledOp, PersistentOp {
+public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     private static final int CHECK_INTERVAL = 10;
     private static final Map<ServerLevel, Set<LoopOp>> ACTIVE = new WeakHashMap<>();
 
@@ -35,6 +37,7 @@ public final class LoopOp implements CompiledOp, PersistentOp {
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "loop");
     private static final ResourceLocation LOOP_SYMBOL =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "loop");
+    public static final Codec<LoopOp> CODEC = Codec.unit(LoopOp::new);
 
     public static final OpDefinition DEFINITION = new OpDefinition() {
         @Override
@@ -83,7 +86,13 @@ public final class LoopOp implements CompiledOp, PersistentOp {
     private final List<OpInput> matchedInputs;
     private final List<OpInput> inputs;
     private final PersistentOp child;
+    private UUID boundArrayId;
     private Set<String> childScratchKeys = Set.of();
+
+    /** Payload-only instance created when an entity is loaded from NBT. */
+    private LoopOp() {
+        this(null, List.of(), List.of(), null);
+    }
 
     private LoopOp(PositionedGlyph boundary, List<OpInput> matchedInputs,
                    List<OpInput> inputs, PersistentOp child) {
@@ -96,6 +105,16 @@ public final class LoopOp implements CompiledOp, PersistentOp {
     @Override
     public ResourceLocation id() {
         return ID;
+    }
+
+    @Override
+    public ResourceLocation typeId() {
+        return ID;
+    }
+
+    @Override
+    protected Codec<LoopOp> codec() {
+        return CODEC;
     }
 
     @Override
@@ -118,6 +137,24 @@ public final class LoopOp implements CompiledOp, PersistentOp {
     }
 
     @Override
+    public void contributeEntityPayloads(List<EntityPayload> payloads) {
+        payloads.add(this);
+    }
+
+    @Override
+    public void bindToArray(UUID arrayId) {
+        boundArrayId = arrayId;
+    }
+
+    @Override
+    public void onEntityTick(EntityTickContext ctx) {
+        if (ctx.isClientSide() || boundArrayId == null
+                || ctx.tickCount() % CHECK_INTERVAL != 0
+                || child == null) return;
+        if (ctx.level() instanceof ServerLevel level) checkAndRestart(level);
+    }
+
+    @Override
     public RuntimeHandle activate(OpRuntimeContext context) {
         RuntimeHandle handle = activateChild(context);
         register(context.level(), this);
@@ -127,7 +164,7 @@ public final class LoopOp implements CompiledOp, PersistentOp {
     @Override
     public void deactivate(OpRuntimeContext context, Map<String, Object> scratchData) {
         unregister(context.level(), this);
-        child.deactivate(childContext(context), scratchData);
+        if (child != null) child.deactivate(childContext(context), scratchData);
     }
 
     /** Called from the common server tick after entity effects have ticked. */
@@ -164,7 +201,9 @@ public final class LoopOp implements CompiledOp, PersistentOp {
 
     private void checkAndRestart(ServerLevel level) {
         MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);
-        ArrayObject array = manager.getArrayForGlyph(boundary.glyphUuid());
+        ArrayObject array = boundArrayId == null
+                ? manager.getArrayForGlyph(boundary.glyphUuid())
+                : manager.getArrayObj(boundArrayId);
         if (array == null || hasLiveChildEffect(level, array.scratchData())) return;
 
         Set<String> oldChildScratchKeys = childScratchKeys;

@@ -1,0 +1,37 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " D ",
+    " S ",
+    "CCC"
+  ],
+  "key": {
+    "D": {
+      "tag": "minecraft:planks"
+    },
+    "C": {
+      "item": "minecraft:smooth_stone_slab"
+    },
+    "S": {
+      "type": "gyromancy:carving",
+      "item": {
+        "item": "gyromancy:copper_ring"
+      },
+      "outer_circle": [
+        {
+          "runes": [
+            "gyromancy:split",
+            "gyromancy:earth",
+            "gyromancy:fix",
+            "gyromancy:fix"
+          ]
+        }
+      ]
+    }
+  },
+  "result": {
+    "id": "gyromancy:stamp",
+    "count": 1
+  }
+}

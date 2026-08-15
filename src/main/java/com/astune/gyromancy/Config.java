@@ -25,10 +25,6 @@ public class Config {
             .comment("Whether elements spread to nearby positions during element ticks")
             .define("enableElementDiffusion", true);
 
-    public static final ModConfigSpec.IntValue MAGIC_NUMBER = BUILDER
-            .comment("A magic number")
-            .defineInRange("magicNumber", 42, 0, Integer.MAX_VALUE);
-
     public static final ModConfigSpec.DoubleValue PAINT_CAMERA_PAN_RANGE = BUILDER
             .comment("The side length, in blocks, of the paint camera panning area.")
             .defineInRange("paintCameraPanRange", 4.0, 0.0, 64.0);
@@ -37,18 +33,5 @@ public class Config {
             .comment("The maximum extra camera distance, in blocks, used for paint camera zooming.")
             .defineInRange("paintCameraZoomRange", 2.0, 0.0, 16.0);
 
-    public static final ModConfigSpec.ConfigValue<String> MAGIC_NUMBER_INTRODUCTION = BUILDER
-            .comment("What you want the introduction message to be for the magic number")
-            .define("magicNumberIntroduction", "The magic number is... ");
-
-    // a list of strings that are treated as resource locations for items
-    public static final ModConfigSpec.ConfigValue<List<? extends String>> ITEM_STRINGS = BUILDER
-            .comment("A list of items to log on common setup.")
-            .defineListAllowEmpty("items", List.of("minecraft:iron_ingot"), () -> "", Config::validateItemName);
-
     static final ModConfigSpec SPEC = BUILDER.build();
-
-    private static boolean validateItemName(final Object obj) {
-        return obj instanceof String itemName && BuiltInRegistries.ITEM.containsKey(ResourceLocation.parse(itemName));
-    }
 }

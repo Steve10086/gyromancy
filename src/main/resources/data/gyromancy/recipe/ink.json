@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " B ",
+    " I ",
+    " D "
+  ],
+  "key": {
+    "D": {
+      "item": "minecraft:glass_bottle"
+    },
+    "B": {
+      "tag": "minecraft:wooden_buttons"
+    },
+    "I": {
+      "item": "minecraft:ink_sac"
+    }
+  },
+  "result": {
+    "id": "gyromancy:ink_bottle",
+    "count": 1
+  }
+}

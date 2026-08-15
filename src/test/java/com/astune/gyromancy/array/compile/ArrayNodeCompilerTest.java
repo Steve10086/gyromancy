@@ -11,6 +11,7 @@ import com.astune.gyromancy.compile.operator.EntityEffectOp;
 import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.MomentumOp;
 import com.astune.gyromancy.compile.operator.LoopOp;
+import com.astune.gyromancy.compile.operator.OnEntityTickOp;
 import com.astune.gyromancy.compile.operator.PersistentOp;
 import com.astune.gyromancy.compile.operator.ProjectionOp;
 import com.astune.gyromancy.compile.operator.RotationOp;
@@ -46,6 +47,11 @@ class ArrayNodeCompilerTest {
 
         assertInstanceOf(LoopOp.class, success.value().root());
         assertInstanceOf(PersistentOp.class, success.value().root());
+        assertInstanceOf(OnEntityTickOp.class, success.value().root());
+
+        List<EntityPayload> payloads = new ArrayList<>();
+        success.value().root().contributeEntityPayloads(payloads);
+        assertEquals(List.of(success.value().root()), payloads);
     }
 
     @Test

@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " D ",
+    " S ",
+    " I "
+  ],
+  "key": {
+    "D": {
+      "item": "minecraft:glass_bottle"
+    },
+    "S": {
+      "item": "minecraft:stick"
+    },
+    "I": {
+      "item": "minecraft:iron_nugget"
+    }
+  },
+  "result": {
+    "id": "gyromancy:pen",
+    "count": 1
+  }
+}
