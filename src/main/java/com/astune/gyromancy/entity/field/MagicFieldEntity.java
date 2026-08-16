@@ -6,6 +6,7 @@ import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.EntityTickContext;
 import com.astune.gyromancy.compile.operator.ElementVolumeOp;
 import com.astune.gyromancy.element.ElementStorageManager;
+import com.astune.gyromancy.entity.ArrayRelativePosition;
 import com.astune.gyromancy.entity.MagicEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.util.MagicBallGeometry;
@@ -47,8 +48,10 @@ public abstract class MagicFieldEntity extends MagicEntity {
     private static final int GROWTH_RATE = 2;
     private static final double RESISTANCE_ACCELERATION = 0.002D;
     private static final double SPEED_EPSILON = 1.0E-12;
+    private static final int FOLLOW_TICKS = 20;
 
     private UUID boundArrayId;
+    private ArrayRelativePosition arrayRelativePosition;
     private final ElementType targetElement;
     private double averageElementLevel;
     private boolean impactThisTick;
@@ -86,6 +89,7 @@ public abstract class MagicFieldEntity extends MagicEntity {
 
     @Override
     protected boolean tickBeforePayload() {
+        updateArrayRelativePosition();
         growIntoTargetSize();
 
         Vec3 velocity = cappedSpeed(velocityThisTick);
@@ -231,7 +235,50 @@ public abstract class MagicFieldEntity extends MagicEntity {
 
     public void bindToArray(UUID arrayId) {
         this.boundArrayId = arrayId;
+        captureArrayRelativePosition();
         bindPayloadToArray(arrayId);
+    }
+
+    private void updateArrayRelativePosition() {
+        if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return;
+        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
+                .getArrayObj(boundArrayId);
+        if (array == null) {
+            arrayRelativePosition = null;
+            return;
+        }
+        if (!shouldFollow(serverLevel.getGameTime(), array.compilationEffectEndTick(),
+                getDeltaMovement(), payloadAcceleration())) {
+            arrayRelativePosition = null;
+            return;
+        }
+        if (arrayRelativePosition == null) {
+            arrayRelativePosition = ArrayRelativePosition.capture(
+                    position(), array.rootCircleGlyph().center(),
+                    array.rootCircleGlyph().surface());
+        }
+        setPos(arrayRelativePosition.resolve(
+                array.rootCircleGlyph().center(), array.rootCircleGlyph().surface()));
+    }
+
+    private static boolean shouldFollow(long gameTime, long compilationEffectEndTick,
+                                        Vec3 velocity, Vec3 acceleration) {
+        long activatedTick = compilationEffectEndTick - ArrayObject.COMPILATION_EFFECT_TICKS;
+        long age = gameTime - activatedTick;
+        return compilationEffectEndTick > 0L
+                && age >= 0L && age < FOLLOW_TICKS
+                && velocity.lengthSqr() == 0.0
+                && acceleration.lengthSqr() == 0.0;
+    }
+
+    private void captureArrayRelativePosition() {
+        if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return;
+        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
+                .getArrayObj(boundArrayId);
+        if (array == null) return;
+        arrayRelativePosition = ArrayRelativePosition.capture(
+                position(), array.rootCircleGlyph().center(),
+                array.rootCircleGlyph().surface());
     }
 
     public void bindGeneratedEntity(com.astune.gyromancy.entity.ball.MagicBallEntity entity,
@@ -284,6 +331,12 @@ public abstract class MagicFieldEntity extends MagicEntity {
             setInitialSize(tag.getFloat("CurrentSize"));
         }
         if (tag.hasUUID("ArrayId")) boundArrayId = tag.getUUID("ArrayId");
+        if (tag.contains("ArrayRelativeU")) {
+            arrayRelativePosition = new ArrayRelativePosition(
+                    tag.getDouble("ArrayRelativeU"),
+                    tag.getDouble("ArrayRelativeV"),
+                    tag.getDouble("ArrayRelativeNormal"));
+        }
         if (tag.contains("AccelX")) {
             acceleration = new Vec3(tag.getDouble("AccelX"),
                     tag.getDouble("AccelY"), tag.getDouble("AccelZ"));
@@ -304,6 +357,11 @@ public abstract class MagicFieldEntity extends MagicEntity {
         tag.putFloat("Size", getTargetFieldSize());
         tag.putFloat("CurrentSize", getFieldSize());
         if (boundArrayId != null) tag.putUUID("ArrayId", boundArrayId);
+        if (arrayRelativePosition != null) {
+            tag.putDouble("ArrayRelativeU", arrayRelativePosition.u());
+            tag.putDouble("ArrayRelativeV", arrayRelativePosition.v());
+            tag.putDouble("ArrayRelativeNormal", arrayRelativePosition.normal());
+        }
         tag.putDouble("AccelX", acceleration.x);
         tag.putDouble("AccelY", acceleration.y);
         tag.putDouble("AccelZ", acceleration.z);

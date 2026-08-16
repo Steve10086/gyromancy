@@ -7,6 +7,7 @@ import com.astune.gyromancy.compile.operator.EntityTickContext;
 import com.astune.gyromancy.compile.operator.ElementVolumeOp;
 import com.astune.gyromancy.element.ElementStorageManager;
 import com.astune.gyromancy.entity.MagicEntity;
+import com.astune.gyromancy.entity.ArrayRelativePosition;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.util.MagicBallGeometry;
 import net.minecraft.core.BlockPos;
@@ -35,6 +36,7 @@ public abstract class MagicBallEntity extends MagicEntity {
     protected static final float SPAWN_SIZE = 0.1F;
     private static final int GROWTH_RATE = 2;
     private UUID boundArrayId;
+    private ArrayRelativePosition arrayRelativePosition;
     private final ElementType targetElement;
     private double averageElementLevel;
     private boolean impactThisTick;
@@ -60,6 +62,7 @@ public abstract class MagicBallEntity extends MagicEntity {
 
     @Override
     protected boolean tickBeforePayload() {
+        updateArrayRelativePosition();
         growIntoTargetSize();
 
         if (!launched && !isFullyGrown()) {
@@ -173,7 +176,43 @@ public abstract class MagicBallEntity extends MagicEntity {
 
     public void bindToArray(UUID arrayId) {
         this.boundArrayId = arrayId;
+        captureArrayRelativePosition();
         bindPayloadToArray(arrayId);
+    }
+
+    private void updateArrayRelativePosition() {
+        if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return;
+        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
+                .getArrayObj(boundArrayId);
+        if (array == null) {
+            arrayRelativePosition = null;
+            return;
+        }
+        // Pending launch values intentionally do not participate in this policy.
+        // MagicBallEntity alone decides whether it follows; the array only
+        // supplies its persisted creation window and current geometry.
+        if (!MagicBallFollowPolicy.shouldFollow(serverLevel.getGameTime(),
+                array.compilationEffectEndTick(), getDeltaMovement(), payloadAcceleration())) {
+            arrayRelativePosition = null;
+            return;
+        }
+        if (arrayRelativePosition == null) {
+            arrayRelativePosition = ArrayRelativePosition.capture(
+                    position(), array.rootCircleGlyph().center(),
+                    array.rootCircleGlyph().surface());
+        }
+        setPos(arrayRelativePosition.resolve(
+                array.rootCircleGlyph().center(), array.rootCircleGlyph().surface()));
+    }
+
+    private void captureArrayRelativePosition() {
+        if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return;
+        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
+                .getArrayObj(boundArrayId);
+        if (array == null) return;
+        arrayRelativePosition = ArrayRelativePosition.capture(
+                position(), array.rootCircleGlyph().center(),
+                array.rootCircleGlyph().surface());
     }
 
     public void bindGeneratedEntity(MagicBallEntity entity, String scratchKey) {
@@ -224,6 +263,12 @@ public abstract class MagicBallEntity extends MagicEntity {
         if (tag.contains("Size")) setBallSize(tag.getFloat("Size"));
         if (tag.contains("CurrentSize")) entityData.set(DATA_CURRENT_SIZE, tag.getFloat("CurrentSize"));
         if (tag.hasUUID("ArrayId")) boundArrayId = tag.getUUID("ArrayId");
+        if (tag.contains("ArrayRelativeU")) {
+            arrayRelativePosition = new ArrayRelativePosition(
+                    tag.getDouble("ArrayRelativeU"),
+                    tag.getDouble("ArrayRelativeV"),
+                    tag.getDouble("ArrayRelativeNormal"));
+        }
         if (tag.contains("PendingVelX")) {
             pendingVelocity = new Vec3(tag.getDouble("PendingVelX"), tag.getDouble("PendingVelY"), tag.getDouble("PendingVelZ"));
         }
@@ -241,6 +286,11 @@ public abstract class MagicBallEntity extends MagicEntity {
         tag.putFloat("Size", getTargetBallSize());
         tag.putFloat("CurrentSize", getBallSize());
         if (boundArrayId != null) tag.putUUID("ArrayId", boundArrayId);
+        if (arrayRelativePosition != null) {
+            tag.putDouble("ArrayRelativeU", arrayRelativePosition.u());
+            tag.putDouble("ArrayRelativeV", arrayRelativePosition.v());
+            tag.putDouble("ArrayRelativeNormal", arrayRelativePosition.normal());
+        }
         tag.putDouble("PendingVelX", pendingVelocity.x);
         tag.putDouble("PendingVelY", pendingVelocity.y);
         tag.putDouble("PendingVelZ", pendingVelocity.z);

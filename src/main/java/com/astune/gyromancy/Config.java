@@ -25,6 +25,10 @@ public class Config {
             .comment("Whether elements spread to nearby positions during element ticks")
             .define("enableElementDiffusion", true);
 
+    public static final ModConfigSpec.BooleanValue ENABLE_SYMBOL_MATCH_DEBUG_OUTPUT = BUILDER
+            .comment("Whether to save every glyph rasterized by the symbol matching pipeline for debugging")
+            .define("enableSymbolMatchDebugOutput", false);
+
     public static final ModConfigSpec.DoubleValue PAINT_CAMERA_PAN_RANGE = BUILDER
             .comment("The side length, in blocks, of the paint camera panning area.")
             .defineInRange("paintCameraPanRange", 4.0, 0.0, 64.0);

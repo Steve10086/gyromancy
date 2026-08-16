@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.lowdragmc.photon.core.mixins",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "com.lowdragmc.photon.core.mixins.PhotonMixinPlugin",
+  "client": [
+    "MinecraftMixin",
+    "ParticleEngineMixin",
+    "accessor.ParticleEngineAccessor",
+    "iris.ExtendedShaderAccessor"
+  ],
+  "mixins": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

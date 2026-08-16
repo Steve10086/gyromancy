@@ -1,5 +1,6 @@
 package com.astune.gyromancy.symbol;
 
+import com.astune.gyromancy.Config;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolTemplate;
@@ -43,7 +44,10 @@ public final class SymbolRecognizer {
             float confidenceThreshold,
             boolean saveDebugImage
     ) {
-        /** Kept for API compatibility; SkeletonMatcher now owns all match thresholds. */
+        /**
+         * Kept for API compatibility; SkeletonMatcher now owns all match thresholds.
+         * Raw glyph export also requires Config.ENABLE_SYMBOL_MATCH_DEBUG_OUTPUT.
+         */
         public static final RecognizerConfig DEFAULT = new RecognizerConfig(0.40f, true);
         public static final RecognizerConfig CLIENT_PREVIEW = new RecognizerConfig(0.40f, false);
 
@@ -74,7 +78,9 @@ public final class SymbolRecognizer {
                 String.format("%.1f", glyph.minWorldX()), String.format("%.1f", glyph.minWorldY()),
                 String.format("%.1f", glyph.maxWorldX()), String.format("%.1f", glyph.maxWorldY()));
 
-        if (config.saveDebugImage()) saveDebugMatrixPng(rawMatrix);
+        if (config.saveDebugImage() && Config.ENABLE_SYMBOL_MATCH_DEBUG_OUTPUT.get()) {
+            saveDebugMatrixPng(rawMatrix);
+        }
 
         SkeletonMatcher matcher = SkeletonMatcher.getInstance();
         List<SkeletonMatcher.Match> results = matcher.recognize(rawMatrix);
