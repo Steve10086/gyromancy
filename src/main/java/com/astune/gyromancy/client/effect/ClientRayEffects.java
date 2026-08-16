@@ -2,6 +2,8 @@ package com.astune.gyromancy.client.effect;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
+import com.astune.gyromancy.client.compat.iris.PhotonIrisRenderBridge;
+import com.lowdragmc.lowdraglib2.client.shader.HDRTarget;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.astune.gyromancy.client.canvas.ProjectionCanvasRenderPose;
 import com.mojang.blaze3d.pipeline.RenderTarget;
@@ -49,6 +51,7 @@ public final class ClientRayEffects {
     private static final MeshVertex[] NO_MESH_VERTICES = new MeshVertex[0];
     private static MeshBeamRenderer meshRenderer;
     private static AdvancedFbo rayCompositeFbo;
+    private static HDRTarget rayOutputFbo;
     private static int rayCompositeWidth = -1;
     private static int rayCompositeHeight = -1;
     private static boolean warnedMissingMeshShader;
@@ -378,9 +381,18 @@ public final class ClientRayEffects {
         if (effects.isEmpty()) return;
 
         AdvancedFbo compositeFbo = ensureRayCompositeFbo();
+        PhotonIrisRenderBridge.Target irisTarget =
+                PhotonIrisRenderBridge.currentTarget();
         if (compositeFbo != null) {
             compositeFbo.clear(0f, 0f, 0f, 0f, GL11.GL_COLOR_BUFFER_BIT);
-            AdvancedFbo.getMainFramebuffer().resolveToAdvancedFbo(compositeFbo, GL11.GL_DEPTH_BUFFER_BIT, GL11.GL_NEAREST);
+            if (irisTarget != null) {
+                if (!PhotonIrisRenderBridge.shareDepthTo(irisTarget, compositeFbo)) {
+                    PhotonIrisRenderBridge.copyDepthTo(irisTarget, compositeFbo);
+                }
+            } else {
+                AdvancedFbo.getMainFramebuffer().resolveToAdvancedFbo(
+                        compositeFbo, GL11.GL_DEPTH_BUFFER_BIT, GL11.GL_NEAREST);
+            }
         }
 
         Camera camera = event.getCamera();
@@ -400,7 +412,9 @@ public final class ClientRayEffects {
             needsComposite |= renderOne(e, camPos, partialTick, gameTime);
         }
 
-        if (needsComposite && compositeFbo != null) compositeRayBuffer(compositeFbo);
+        if (needsComposite && compositeFbo != null) {
+            compositeRayBuffer(compositeFbo, irisTarget);
+        }
     }
 
     private static boolean renderOne(
@@ -444,6 +458,10 @@ public final class ClientRayEffects {
                     (float) projection.sourceV.x, (float) projection.sourceV.y, (float) projection.sourceV.z);
             meshShader.getUniform("BeamWorld").setVector((float) projection.beamWorldX, (float) projection.beamWorldY, (float) projection.beamWorldZ);
             meshShader.getUniform("EffectTint").setVector(r, g, b2, a);
+            // Veil's Iris ShaderProgram wrapper binds Iris' simple FBO when
+            // the shader is applied. Re-assert the explicit effect target
+            // after that wrapper has finished so the mesh remains off-screen.
+            rayCompositeFbo.bind(true);
         });
     }
 
@@ -499,6 +517,7 @@ public final class ClientRayEffects {
         }
 
         if (rayCompositeFbo != null) rayCompositeFbo.free();
+        if (rayOutputFbo != null) rayOutputFbo.destroyBuffers();
         rayCompositeFbo = AdvancedFbo.withSize(main.width, main.height)
                 .setFormat(FramebufferAttachmentDefinition.Format.RGBA16F)
                 .addColorTextureBuffer()
@@ -511,7 +530,16 @@ public final class ClientRayEffects {
         return rayCompositeFbo;
     }
 
-    private static void compositeRayBuffer(AdvancedFbo compositeFbo) {
+    private static HDRTarget ensureRayOutputFbo() {
+        if (rayOutputFbo != null) return rayOutputFbo;
+
+        RenderTarget main = Minecraft.getInstance().getMainRenderTarget();
+        rayOutputFbo = new HDRTarget(main.width, main.height, GL11.GL_NEAREST, true);
+        return rayOutputFbo;
+    }
+
+    private static void compositeRayBuffer(AdvancedFbo compositeFbo,
+                                           PhotonIrisRenderBridge.Target irisTarget) {
         ShaderProgram shader = VeilRenderSystem.renderer().getShaderManager().getShader(RAY_COMPOSITE_SHADER);
         if (shader == null || !shader.isValid()) {
             if (!warnedMissingCompositeShader) {
@@ -521,23 +549,46 @@ public final class ClientRayEffects {
             return;
         }
 
-        AdvancedFbo.getMainFramebuffer().bind(true);
-        RenderSystem.disableDepthTest();
-        RenderSystem.depthMask(false);
-        RenderSystem.enableBlend();
-        RenderSystem.blendEquation(GL14.GL_FUNC_ADD);
-        RenderSystem.blendFunc(GL11.GL_ONE, GL11.GL_ONE);
-        shader.bind();
-        shader.setFramebufferSamplers(compositeFbo);
-        shader.setDefaultUniforms(VertexFormat.Mode.TRIANGLE_STRIP);
-        shader.bindSamplers(0);
-        VeilRenderSystem.drawScreenQuad();
-        shader.clearSamplers();
-        ShaderProgram.unbind();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.disableBlend();
-        RenderSystem.depthMask(true);
-        RenderSystem.enableDepthTest();
+        HDRTarget outputFbo = irisTarget == null ? null : ensureRayOutputFbo();
+        if (irisTarget != null) {
+            if (!PhotonIrisRenderBridge.copyColorAndDepthTo(irisTarget, outputFbo)) {
+                return;
+            }
+            outputFbo.bindWrite(false);
+        } else {
+            AdvancedFbo.getMainFramebuffer().bind(true);
+        }
+
+        boolean rendered = false;
+        try {
+            RenderSystem.disableDepthTest();
+            RenderSystem.depthMask(false);
+            RenderSystem.enableBlend();
+            RenderSystem.blendEquation(GL14.GL_FUNC_ADD);
+            RenderSystem.blendFunc(GL11.GL_ONE, GL11.GL_ONE);
+            shader.bind();
+            shader.setFramebufferSamplers(compositeFbo);
+            shader.setDefaultUniforms(VertexFormat.Mode.TRIANGLE_STRIP);
+            shader.bindSamplers(0);
+            if (irisTarget != null) outputFbo.bindWrite(false);
+            VeilRenderSystem.drawScreenQuad();
+            rendered = true;
+        } finally {
+            shader.clearSamplers();
+            ShaderProgram.unbind();
+            RenderSystem.defaultBlendFunc();
+            RenderSystem.disableBlend();
+            RenderSystem.depthMask(true);
+            RenderSystem.enableDepthTest();
+            if (irisTarget != null) {
+                PhotonIrisRenderBridge.restoreMainFramebuffer();
+            }
+        }
+
+        if (irisTarget != null && rendered && outputFbo != null) {
+            PhotonIrisRenderBridge.blitTextureTo(
+                    irisTarget, outputFbo.getColorTextureId());
+        }
     }
 
     static Projection projectionPlane(Vec3 center, Vec3 normal, Vec3 worldRayDir, Vec3 cameraPos) {

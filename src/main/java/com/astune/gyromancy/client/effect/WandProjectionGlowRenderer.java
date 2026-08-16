@@ -4,6 +4,8 @@ import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.client.canvas.CanvasClientState;
 import com.astune.gyromancy.client.canvas.ProjectionCanvasRenderPose;
+import com.astune.gyromancy.client.compat.iris.PhotonIrisRenderBridge;
+import com.lowdragmc.lowdraglib2.client.shader.HDRTarget;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -31,6 +33,9 @@ public final class WandProjectionGlowRenderer {
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "canvas_projection_glow");
 
     private static VertexArray vertexArray;
+    private static HDRTarget irisOutputFbo;
+    private static int irisOutputWidth = -1;
+    private static int irisOutputHeight = -1;
     private static boolean warnedMissingShader;
 
     private WandProjectionGlowRenderer() {}
@@ -84,19 +89,33 @@ public final class WandProjectionGlowRenderer {
         MeshData mesh = builder.buildOrThrow();
         if (vertexArray == null) vertexArray = VertexArray.create();
         vertexArray.upload(mesh, VertexArray.DrawUsage.STREAM);
-        vertexArray.bind();
-        vertexArray.setup(renderType);
-        RenderSystem.setShaderTexture(0, texture);
-        shader.bind();
-        shader.setDefaultUniforms(VertexFormat.Mode.QUADS);
-        shader.bindSamplers(0);
-        RenderSystem.enableDepthTest();
-        RenderSystem.enableBlend();
-        RenderSystem.blendEquation(GL14.GL_FUNC_ADD);
-        RenderSystem.blendFunc(GL11.GL_ONE, GL11.GL_ONE);
-        RenderSystem.depthMask(false);
+        PhotonIrisRenderBridge.Target irisTarget = PhotonIrisRenderBridge.currentTarget();
+        HDRTarget outputFbo = null;
+        if (irisTarget != null) {
+            outputFbo = ensureIrisOutputFbo();
+            if (outputFbo == null
+                    || !PhotonIrisRenderBridge.copyColorAndDepthTo(irisTarget, outputFbo)) {
+                return;
+            }
+            outputFbo.bindWrite(false);
+        }
+
+        boolean rendered = false;
         try {
+            vertexArray.bind();
+            vertexArray.setup(renderType);
+            RenderSystem.setShaderTexture(0, texture);
+            shader.bind();
+            shader.setDefaultUniforms(VertexFormat.Mode.QUADS);
+            shader.bindSamplers(0);
+            if (irisTarget != null) outputFbo.bindWrite(false);
+            RenderSystem.enableDepthTest();
+            RenderSystem.enableBlend();
+            RenderSystem.blendEquation(GL14.GL_FUNC_ADD);
+            RenderSystem.blendFunc(GL11.GL_ONE, GL11.GL_ONE);
+            RenderSystem.depthMask(false);
             vertexArray.draw();
+            rendered = true;
         } finally {
             shader.clearSamplers();
             ShaderProgram.unbind();
@@ -106,7 +125,30 @@ public final class WandProjectionGlowRenderer {
             RenderSystem.disableBlend();
             RenderSystem.depthMask(true);
             VertexArray.unbind();
+            if (irisTarget != null) {
+                PhotonIrisRenderBridge.restoreMainFramebuffer();
+            }
         }
+
+        if (irisTarget != null && rendered && outputFbo != null) {
+            PhotonIrisRenderBridge.blitTextureTo(
+                    irisTarget, outputFbo.getColorTextureId());
+        }
+    }
+
+    private static HDRTarget ensureIrisOutputFbo() {
+        var main = Minecraft.getInstance().getMainRenderTarget();
+        if (irisOutputFbo != null
+                && irisOutputWidth == main.width
+                && irisOutputHeight == main.height) {
+            return irisOutputFbo;
+        }
+
+        if (irisOutputFbo != null) irisOutputFbo.destroyBuffers();
+        irisOutputFbo = new HDRTarget(main.width, main.height, GL11.GL_NEAREST, true);
+        irisOutputWidth = main.width;
+        irisOutputHeight = main.height;
+        return irisOutputFbo;
     }
 
     private static void addVertex(BufferBuilder builder, Vec3 position, float u, float v) {

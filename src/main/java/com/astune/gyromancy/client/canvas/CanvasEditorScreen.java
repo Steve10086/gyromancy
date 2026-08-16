@@ -11,6 +11,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
@@ -191,6 +192,13 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         int latestToolbarY = inventoryY - 112;
         toolbarY = Math.max(TOP_MARGIN, Math.min(panelY, latestToolbarY));
         viewState.clamp(fittedCanvasRect(), viewportRect());
+    }
+
+    /** Area reserved for JEI's right-side ingredient panel. */
+    public Rect2i jeiToolbarArea() {
+        int padding = 3;
+        return new Rect2i(toolbarX - padding, toolbarY - padding,
+                SIDE_TOOLBAR_WIDTH + padding * 2, 112 + padding * 2);
     }
 
     private int inventoryBackgroundWidth() {

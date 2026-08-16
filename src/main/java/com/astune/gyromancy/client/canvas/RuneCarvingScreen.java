@@ -12,6 +12,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
@@ -247,6 +248,12 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
         toolbarX = drawingRight + SIDE_GAP;
         toolbarY = Math.max(TOP_MARGIN, Math.min(panelY, inventoryY - 122));
         viewState.clamp(fittedCanvasRect(), viewportRect());
+    }
+
+    /** Area reserved for JEI's right-side ingredient panel. */
+    public Rect2i jeiToolbarArea() {
+        return new Rect2i(toolbarX - 3, toolbarY - 3,
+                TOOLBAR_WIDTH + 6, 123);
     }
 
     @Override
