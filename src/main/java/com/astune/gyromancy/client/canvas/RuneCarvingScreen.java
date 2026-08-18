@@ -31,6 +31,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
     private static final int MARGIN = 12;
     private static final int TOP_MARGIN = 24;
     private static final int SIDE_GAP = 8;
+    private static final double CANVAS_AREA_WIDTH_FRACTION = 0.4D;
     private static final int TOOLBAR_WIDTH = 100;
     private static final int HOTBAR_SLOT_SPACING = 20;
     private static final int HOTBAR_WIDTH = 182;
@@ -228,11 +229,16 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
         inventoryToggleX = inventoryX + inventoryWidth;
         inventoryToggleY = inventoryY + (inventoryHeight - INVENTORY_TOGGLE_SIZE) / 2;
 
-        int drawingRight = Math.max(MARGIN + 1,
-                width - MARGIN - TOOLBAR_WIDTH - SIDE_GAP);
-        int availableWidth = Math.max(1, drawingRight - MARGIN);
+        int canvasAreaWidth = Math.max(1,
+                (int) Math.round(width * CANVAS_AREA_WIDTH_FRACTION));
+        int maxCanvasWidth = Math.max(1,
+                width - MARGIN * 2 - TOOLBAR_WIDTH - SIDE_GAP);
+        int availableWidth = Math.max(1,
+                Math.min(canvasAreaWidth, maxCanvasWidth));
         int availableHeight = Math.max(1, inventoryY - TOP_MARGIN - 41);
-        viewportX = MARGIN;
+        int contentWidth = availableWidth + SIDE_GAP + TOOLBAR_WIDTH;
+        int contentX = Math.max(MARGIN, (width - contentWidth) / 2);
+        viewportX = contentX;
         viewportY = TOP_MARGIN;
         viewportWidth = availableWidth;
         viewportHeight = availableHeight;
@@ -243,9 +249,9 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
             panelHeight = availableHeight;
             panelWidth = Math.max(1, (int) Math.round(panelHeight * aspect));
         }
-        panelX = MARGIN + (availableWidth - panelWidth) / 2;
+        panelX = viewportX + (availableWidth - panelWidth) / 2;
         panelY = TOP_MARGIN + (availableHeight - panelHeight) / 2;
-        toolbarX = drawingRight + SIDE_GAP;
+        toolbarX = viewportX + availableWidth + SIDE_GAP;
         toolbarY = Math.max(TOP_MARGIN, Math.min(panelY, inventoryY - 122));
         viewState.clamp(fittedCanvasRect(), viewportRect());
     }

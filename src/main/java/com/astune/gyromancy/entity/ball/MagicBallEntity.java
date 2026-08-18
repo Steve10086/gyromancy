@@ -8,6 +8,7 @@ import com.astune.gyromancy.compile.operator.ElementVolumeOp;
 import com.astune.gyromancy.element.ElementStorageManager;
 import com.astune.gyromancy.entity.MagicEntity;
 import com.astune.gyromancy.entity.ArrayRelativePosition;
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.util.MagicBallGeometry;
 import net.minecraft.core.BlockPos;
@@ -37,6 +38,7 @@ public abstract class MagicBallEntity extends MagicEntity {
     private static final int GROWTH_RATE = 2;
     private UUID boundArrayId;
     private ArrayRelativePosition arrayRelativePosition;
+    private SurfaceFrame creationArraySurface;
     private final ElementType targetElement;
     private double averageElementLevel;
     private boolean impactThisTick;
@@ -169,7 +171,10 @@ public abstract class MagicBallEntity extends MagicEntity {
 
     private void launchIfReady() {
         if (launched) return;
+
+        rotatePendingMotionToCurrentArraySurface();
         launched = true;
+
         acceleration = pendingAcceleration;
         setDeltaMovement(pendingVelocity);
     }
@@ -191,8 +196,8 @@ public abstract class MagicBallEntity extends MagicEntity {
         // Pending launch values intentionally do not participate in this policy.
         // MagicBallEntity alone decides whether it follows; the array only
         // supplies its persisted creation window and current geometry.
-        if (!MagicBallFollowPolicy.shouldFollow(serverLevel.getGameTime(),
-                array.compilationEffectEndTick(), getDeltaMovement(), payloadAcceleration())) {
+        if (launched //MagicBallFollowPolicy.shouldFollow(serverLevel.getGameTime(),array.compilationEffectEndTick(), getDeltaMovement(), payloadAcceleration())
+        ) {
             arrayRelativePosition = null;
             return;
         }
@@ -210,9 +215,71 @@ public abstract class MagicBallEntity extends MagicEntity {
         ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
                 .getArrayObj(boundArrayId);
         if (array == null) return;
+        if (creationArraySurface == null) {
+            creationArraySurface = array.rootCircleGlyph().surface();
+        }
         arrayRelativePosition = ArrayRelativePosition.capture(
                 position(), array.rootCircleGlyph().center(),
                 array.rootCircleGlyph().surface());
+    }
+
+    /**
+     * Reorients motion authored against the array's creation frame to the
+     * frame that exists when this ball is actually launched.
+     */
+    private void rotatePendingMotionToCurrentArraySurface() {
+        if (!(level() instanceof ServerLevel serverLevel)
+                || boundArrayId == null || creationArraySurface == null) return;
+
+        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
+                .getArrayObj(boundArrayId);
+        if (array == null) return;
+
+        SurfaceFrame currentSurface = array.rootCircleGlyph().surface();
+        pendingVelocity = rotateBetweenArraySurfaces(
+                pendingVelocity, creationArraySurface, currentSurface);
+        //pendingAcceleration = rotateBetweenArraySurfaces(
+        //        pendingAcceleration, creationArraySurface, currentSurface);
+    }
+
+    /**
+     * Calculates the angle between two orthonormal array frames and applies
+     * that frame rotation to a world-space vector using Rodrigues' formula.
+     */
+    private static Vec3 rotateBetweenArraySurfaces(
+            Vec3 vector, SurfaceFrame from, SurfaceFrame to) {
+        double trace = from.axisU().dot(to.axisU())
+                + from.axisV().dot(to.axisV())
+                + from.normal().dot(to.normal());
+        double cosine = Math.max(-1.0, Math.min(1.0, (trace - 1.0) * 0.5));
+        double angle = Math.acos(cosine);
+        if (angle < 1.0E-10 || vector.lengthSqr() < 1.0E-12) return vector;
+
+        Vec3 axis = from.axisU().cross(to.axisU())
+                .add(from.axisV().cross(to.axisV()))
+                .add(from.normal().cross(to.normal()));
+        if (axis.lengthSqr() < 1.0E-12) {
+            axis = halfTurnAxis(from.axisU(), to.axisU());
+            if (axis.lengthSqr() < 1.0E-12) {
+                axis = halfTurnAxis(from.axisV(), to.axisV());
+            }
+            if (axis.lengthSqr() < 1.0E-12) {
+                axis = halfTurnAxis(from.normal(), to.normal());
+            }
+        }
+        if (axis.lengthSqr() < 1.0E-12) return vector;
+
+        axis = axis.normalize();
+        double sine = Math.sin(angle);
+        double cosineAngle = Math.cos(angle);
+        return vector.scale(cosineAngle)
+                .add(axis.cross(vector).scale(sine))
+                .add(axis.scale(axis.dot(vector) * (1.0 - cosineAngle)));
+    }
+
+    private static Vec3 halfTurnAxis(Vec3 from, Vec3 to) {
+        Vec3 axis = from.add(to);
+        return axis.lengthSqr() < 1.0E-12 ? Vec3.ZERO : axis.normalize();
     }
 
     public void bindGeneratedEntity(MagicBallEntity entity, String scratchKey) {
@@ -269,6 +336,21 @@ public abstract class MagicBallEntity extends MagicEntity {
                     tag.getDouble("ArrayRelativeV"),
                     tag.getDouble("ArrayRelativeNormal"));
         }
+        if (tag.contains("ArrayCreationAxisUX")) {
+            Vec3 axisU = new Vec3(
+                    tag.getDouble("ArrayCreationAxisUX"),
+                    tag.getDouble("ArrayCreationAxisUY"),
+                    tag.getDouble("ArrayCreationAxisUZ"));
+            Vec3 axisV = new Vec3(
+                    tag.getDouble("ArrayCreationAxisVX"),
+                    tag.getDouble("ArrayCreationAxisVY"),
+                    tag.getDouble("ArrayCreationAxisVZ"));
+            Vec3 normal = new Vec3(
+                    tag.getDouble("ArrayCreationNormalX"),
+                    tag.getDouble("ArrayCreationNormalY"),
+                    tag.getDouble("ArrayCreationNormalZ"));
+            creationArraySurface = new SurfaceFrame(Vec3.ZERO, axisU, axisV, normal);
+        }
         if (tag.contains("PendingVelX")) {
             pendingVelocity = new Vec3(tag.getDouble("PendingVelX"), tag.getDouble("PendingVelY"), tag.getDouble("PendingVelZ"));
         }
@@ -290,6 +372,17 @@ public abstract class MagicBallEntity extends MagicEntity {
             tag.putDouble("ArrayRelativeU", arrayRelativePosition.u());
             tag.putDouble("ArrayRelativeV", arrayRelativePosition.v());
             tag.putDouble("ArrayRelativeNormal", arrayRelativePosition.normal());
+        }
+        if (creationArraySurface != null) {
+            tag.putDouble("ArrayCreationAxisUX", creationArraySurface.axisU().x);
+            tag.putDouble("ArrayCreationAxisUY", creationArraySurface.axisU().y);
+            tag.putDouble("ArrayCreationAxisUZ", creationArraySurface.axisU().z);
+            tag.putDouble("ArrayCreationAxisVX", creationArraySurface.axisV().x);
+            tag.putDouble("ArrayCreationAxisVY", creationArraySurface.axisV().y);
+            tag.putDouble("ArrayCreationAxisVZ", creationArraySurface.axisV().z);
+            tag.putDouble("ArrayCreationNormalX", creationArraySurface.normal().x);
+            tag.putDouble("ArrayCreationNormalY", creationArraySurface.normal().y);
+            tag.putDouble("ArrayCreationNormalZ", creationArraySurface.normal().z);
         }
         tag.putDouble("PendingVelX", pendingVelocity.x);
         tag.putDouble("PendingVelY", pendingVelocity.y);
