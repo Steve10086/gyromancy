@@ -12,7 +12,11 @@ public sealed interface OpInput permits OpInput.Rune, OpInput.Op, OpInput.RawGro
         }
     }
 
-    record Op(CompiledOp operator) implements OpInput {}
+    record Op(CompiledOp operator, GroupNode sourceGroup) implements OpInput {
+        public Op(CompiledOp operator) {
+            this(operator, null);
+        }
+    }
 
     /**
      * A nested group which could not compile into an operator. It remains a

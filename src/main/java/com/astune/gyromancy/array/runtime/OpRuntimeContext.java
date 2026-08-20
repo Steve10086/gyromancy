@@ -1,6 +1,7 @@
 package com.astune.gyromancy.array.runtime;
 
 import com.astune.gyromancy.api.array.ArrayObject;
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.entity.ArrayRelativePosition;
@@ -14,27 +15,43 @@ public record OpRuntimeContext(
         Vec3 origin,
         Vec3 normal,
         ArrayObject array,
-        PositionedGlyph arrayRootGlyph
+        PositionedGlyph arrayRootGlyph,
+        SurfaceFrame activationFrame
 ) {
+    public static OpRuntimeContext empty() {
+        return new OpRuntimeContext(null, null);
+    }
+
     public OpRuntimeContext(ServerLevel level, CompiledOp op, Vec3 origin, Vec3 normal) {
-        this(level, op, origin, normal, null, null);
+        this(level, op, origin, normal, null, null, null);
     }
 
     public OpRuntimeContext(ServerLevel level, CompiledOp op) {
-        this(level, op, null, null, null, null);
+        this(level, op, null, null, null, null, null);
     }
 
     public OpRuntimeContext at(Vec3 origin, Vec3 normal) {
-        return new OpRuntimeContext(level, op, origin, normal, array, arrayRootGlyph);
+        return new OpRuntimeContext(level, op, origin, normal, array, arrayRootGlyph, activationFrame);
     }
 
     public OpRuntimeContext forOp(CompiledOp nestedOp) {
-        return new OpRuntimeContext(level, nestedOp, origin, normal, array, arrayRootGlyph);
+        return new OpRuntimeContext(level, nestedOp, origin, normal, array, arrayRootGlyph, activationFrame);
     }
 
     /** Adds the live array plus the root frame captured when the runtime was compiled. */
     public OpRuntimeContext withArray(ArrayObject array, PositionedGlyph arrayRootGlyph) {
-        return new OpRuntimeContext(level, op, origin, normal, array, arrayRootGlyph);
+        SurfaceFrame captured = activationFrame != null
+                ? activationFrame
+                : array == null ? null : array.rootCircleGlyph().surface();
+        return new OpRuntimeContext(level, op, origin, normal, array, arrayRootGlyph, captured);
+    }
+
+    public SurfaceFrame compileFrame() {
+        return arrayRootGlyph == null ? null : arrayRootGlyph.surface();
+    }
+
+    public SurfaceFrame liveFrame() {
+        return array == null ? null : array.rootCircleGlyph().surface();
     }
 
     /** Returns the current geometry for a compiled glyph when the array refreshed it. */
@@ -67,5 +84,15 @@ public record OpRuntimeContext(
     public Vec3 normalFor(PositionedGlyph glyph) {
         if (normal != null) return normal;
         return array == null ? glyph.surface().normal() : array.rootCircleGlyph().surface().normal();
+    }
+
+    /**
+     * Returns the current array frame for runtime resolution. The supplied
+     * glyph is only used as the compile-time fallback when no live array is
+     * attached; its refreshed geometry is deliberately not consulted here.
+     */
+    public SurfaceFrame frameFor(PositionedGlyph glyph) {
+        if (array == null || arrayRootGlyph == null) return glyph.surface();
+        return array.rootCircleGlyph().surface();
     }
 }

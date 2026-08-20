@@ -7,6 +7,7 @@ import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.RegisteredOp;
+import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import net.minecraft.resources.ResourceLocation;
 
@@ -91,7 +92,7 @@ public final class OnDiscardOp implements CompiledOp {
     }
 
     @Override
-    public void contributeEntityPayloads(List<EntityPayload> payloads) {
+    public void contributeEntityPayloads(List<EntityPayload> payloads, OpRuntimeContext context) {
         payloads.add(new OnDiscardPayload(new OnDiscardContent(effects, null)));
     }
 }

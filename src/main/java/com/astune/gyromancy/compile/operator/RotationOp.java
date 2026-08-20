@@ -7,6 +7,7 @@ import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.RegisteredOp;
+import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -123,7 +124,7 @@ public final class RotationOp extends OnEntityTickOp implements CompiledOp {
     }
 
     @Override
-    public void contributeEntityPayloads(List<EntityPayload> payloads) {
+    public void contributeEntityPayloads(List<EntityPayload> payloads, OpRuntimeContext context) {
         payloads.add(new RotationOp(rotationSpeed));
     }
 

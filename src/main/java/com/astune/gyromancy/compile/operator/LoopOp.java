@@ -137,7 +137,7 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     }
 
     @Override
-    public void contributeEntityPayloads(List<EntityPayload> payloads) {
+    public void contributeEntityPayloads(List<EntityPayload> payloads, OpRuntimeContext context) {
         payloads.add(this);
     }
 

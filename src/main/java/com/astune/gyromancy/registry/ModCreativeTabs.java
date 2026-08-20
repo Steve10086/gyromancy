@@ -35,6 +35,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.STAMP.get());
                         output.accept(ModItems.WAND.get());
                         output.accept(ModItems.RUNE_CARVING_TABLE.get());
+                        output.accept(ModItems.GUIDEBOOK.get());
                     })
                     .build());
 }

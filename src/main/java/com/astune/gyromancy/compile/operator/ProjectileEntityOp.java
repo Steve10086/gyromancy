@@ -36,7 +36,7 @@ public abstract class ProjectileEntityOp  extends EntityEffectOp {
             Vec3 pos = center.add(normal.scale(size * 2.0));
             Vec3 acceleration = emission.hasMotion() ? new Vec3(0.0, -0.04 * 0.5, 0.0) : Vec3.ZERO;
             MagicBallEntity entity = create(level, pos, emission.velocity(), acceleration, size);
-            List<EntityPayload> entityPayload = new ArrayList<>(payloadFor());
+            List<EntityPayload> entityPayload = new ArrayList<>(payloadFor(ctx));
             entityPayload.add(new FollowingOp());
             entity.setPayload(entityPayload);
             EntityEmitter.INSTANCE.emit(level, getId(), entity, result);
@@ -50,6 +50,10 @@ public abstract class ProjectileEntityOp  extends EntityEffectOp {
         Set<EntityPayload> payload = new HashSet<>(defaultPayload());
         payload.addAll(conditionalPayload());
         return payload(payload.stream().toList());
+    }
+
+    protected List<EntityPayload> payloadFor(OpRuntimeContext context) {
+        return payloadFor();
     }
 
     abstract Collection<? extends EntityPayload> conditionalPayload();

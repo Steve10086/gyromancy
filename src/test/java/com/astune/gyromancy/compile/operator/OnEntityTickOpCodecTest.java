@@ -1,6 +1,8 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.compile.vector.VectorContext;
+import com.astune.gyromancy.compile.vector.StaticVectorOp;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
@@ -19,9 +21,12 @@ class OnEntityTickOpCodecTest {
                 new WaterBurstOp(),
                 new BrewingOp(),
                 new MomentumOp(List.of(
-                        new MomentumOp.AccelerationInput(new net.minecraft.world.phys.Vec3(1.0, 2.0, 3.0),
-                                4.0, false),
-                        new MomentumOp.AccelerationInput(net.minecraft.world.phys.Vec3.ZERO, 5.0, true))),
+                        new MomentumOp.AccelerationInput(StaticVectorOp.literal(
+                                new net.minecraft.world.phys.Vec3(1.0, 2.0, 3.0).normalize().scale(4.0)),
+                                MomentumOp.MotionMode.TANGENTIAL),
+                        new MomentumOp.AccelerationInput(StaticVectorOp.literal(
+                                new net.minecraft.world.phys.Vec3(0.0, 0.0, 5.0)),
+                                MomentumOp.MotionMode.DIRECT))),
                 new RotationOp(-3.0),
                 new ElementOp(ElementType.WATER),
                 new ElementVolumeOp(ElementType.FIRE, "storedMana", 10,
@@ -40,8 +45,15 @@ class OnEntityTickOpCodecTest {
         assertInstanceOf(BrewingOp.class, loaded.get(4));
         MomentumOp momentum = assertInstanceOf(MomentumOp.class, loaded.get(5));
         assertEquals(2, momentum.accelerationInputs().size());
-        assertEquals(4.0, momentum.accelerationInputs().getFirst().magnitude());
-        assertEquals(true, momentum.accelerationInputs().get(1).alongFacing());
+        assertEquals(4.0, momentum.accelerationInputs().getFirst()
+                .vector().provide(new VectorContext((com.astune.gyromancy.api.geometry.SurfaceFrame) null,
+                        (com.astune.gyromancy.api.geometry.SurfaceFrame) null,
+                        (com.astune.gyromancy.api.geometry.SurfaceFrame) null,
+                        net.minecraft.world.phys.Vec3.ZERO,
+                        net.minecraft.world.phys.Vec3.ZERO,
+                        net.minecraft.world.phys.Vec3.ZERO)).length());
+        assertEquals(MomentumOp.MotionMode.DIRECT,
+                momentum.accelerationInputs().get(1).motionMode());
         RotationOp rotation = assertInstanceOf(RotationOp.class, loaded.get(6));
         assertEquals(-3.0, rotation.rotationSpeed());
         ElementOp elementPayload = assertInstanceOf(ElementOp.class, loaded.get(7));

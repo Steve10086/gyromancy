@@ -17,6 +17,7 @@ import com.astune.gyromancy.compile.operator.ProjectionOp;
 import com.astune.gyromancy.compile.operator.RotationOp;
 import com.astune.gyromancy.compile.operator.SplitEmitOp;
 import com.astune.gyromancy.compile.operator.WaterProjectileOp;
+import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -50,7 +51,7 @@ class ArrayNodeCompilerTest {
         assertInstanceOf(OnEntityTickOp.class, success.value().root());
 
         List<EntityPayload> payloads = new ArrayList<>();
-        success.value().root().contributeEntityPayloads(payloads);
+        success.value().root().contributeEntityPayloads(payloads, OpRuntimeContext.empty());
         assertEquals(List.of(success.value().root()), payloads);
     }
 
@@ -102,8 +103,9 @@ class ArrayNodeCompilerTest {
     @Test
     void arrowOnlyCircleCompilesMomentumOperator() {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
-        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 2);
-        GroupNode ast = group(circle, new SymbolNode(arrow));
+        PositionedGlyph motion = glyph("motion", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
+        GroupNode ast = group(circle, new SymbolNode(motion), new SymbolNode(arrow));
 
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
@@ -115,8 +117,9 @@ class ArrayNodeCompilerTest {
     @Test
     void arrowUpOnlyCircleCompilesMomentumOperator() {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
-        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 2);
-        GroupNode ast = group(circle, new SymbolNode(arrowUp));
+        PositionedGlyph motion = glyph("motion", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 3);
+        GroupNode ast = group(circle, new SymbolNode(motion), new SymbolNode(arrowUp));
 
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
@@ -128,18 +131,68 @@ class ArrayNodeCompilerTest {
     @Test
     void momentumReadsEveryDirectArrowVariant() {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
-        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 2);
-        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 3);
-        GroupNode ast = group(circle, new SymbolNode(arrow), new SymbolNode(arrowUp));
+        PositionedGlyph motion = glyph("motion", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 4);
+        GroupNode ast = group(circle, new SymbolNode(motion), new SymbolNode(arrow),
+                new SymbolNode(arrowUp));
 
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
         MomentumOp momentum = assertInstanceOf(MomentumOp.class, success.value().root());
 
-        assertEquals(2, momentum.accelerationInputs().size());
-        assertEquals(false, momentum.accelerationInputs().get(0).alongFacing());
-        assertEquals(true, momentum.accelerationInputs().get(1).alongFacing());
+        assertEquals(2, momentum.velocityInputs().size());
+        assertEquals(MomentumOp.MotionMode.TANGENTIAL,
+                momentum.velocityInputs().get(0).motionMode());
+        assertEquals(MomentumOp.MotionMode.DIRECT,
+                momentum.velocityInputs().get(1).motionMode());
+        assertEquals(List.of(), momentum.accelerationInputs());
+    }
+
+    @Test
+    void momentumCompilesNonMomentumGroupsAsAdditionalVelocityVectors() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph motion = glyph("motion", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph vectorCircle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 4);
+        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 5);
+        GroupNode ast = group(circle, new SymbolNode(motion), new SymbolNode(arrow),
+                group(vectorCircle, new SymbolNode(arrowUp)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        MomentumOp momentum = assertInstanceOf(MomentumOp.class, success.value().root());
+
+        assertEquals(2, momentum.velocityInputs().size());
+        assertEquals(List.of(), momentum.accelerationInputs());
+    }
+
+    @Test
+    void directLoopMarksNestedMomentumAccelerationAsDynamic() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph outerMotion = glyph("motion", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
+        PositionedGlyph innerMotion = glyph("motion", SymbolRole.PARAMETER_RUNE, 4);
+        PositionedGlyph loop = glyph("loop", SymbolRole.PARAMETER_RUNE, 5);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 6);
+        GroupNode ast = group(outer, new SymbolNode(outerMotion),
+                group(inner, new SymbolNode(innerMotion), new SymbolNode(loop),
+                        new SymbolNode(arrow)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        MomentumOp parent = assertInstanceOf(MomentumOp.class, success.value().root());
+        MomentumOp child = assertInstanceOf(MomentumOp.class,
+                assertInstanceOf(OpInput.Op.class, parent.inputs().get(1)).operator());
+
+        assertEquals(List.of(), parent.velocityInputs());
+        assertEquals(1, parent.accelerationInputs().size());
+        assertEquals(MomentumOp.UpdateMode.DYNAMIC,
+                parent.accelerationInputs().getFirst().updateMode());
+        assertEquals(true, child.dynamic());
     }
 
     @Test
@@ -203,7 +256,7 @@ class ArrayNodeCompilerTest {
                 assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator());
         List<EntityPayload> payloads = new ArrayList<>();
 
-        child.contributeEntityPayloads(payloads);
+        child.contributeEntityPayloads(payloads, OpRuntimeContext.empty());
 
         RotationOp payload = assertInstanceOf(RotationOp.class, payloads.getFirst());
         assertEquals(-drain.length() * RotationOp.ROTATION_SPEED_SCALE, payload.rotationSpeed());
@@ -214,10 +267,11 @@ class ArrayNodeCompilerTest {
         PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
         PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 3);
-        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 4);
-        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 5);
+        PositionedGlyph motion = glyph("motion", SymbolRole.PARAMETER_RUNE, 4);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 5);
+        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 6);
         GroupNode ast = group(outer, new SymbolNode(fire),
-                group(inner, new SymbolNode(arrow), new SymbolNode(arrowUp)));
+                group(inner, new SymbolNode(motion), new SymbolNode(arrow), new SymbolNode(arrowUp)));
 
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
@@ -227,7 +281,7 @@ class ArrayNodeCompilerTest {
                 assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator());
         List<EntityPayload> payloads = new ArrayList<>();
 
-        child.contributeEntityPayloads(payloads);
+        child.contributeEntityPayloads(payloads, OpRuntimeContext.empty());
 
         assertEquals(List.of(), payloads);
     }
@@ -238,11 +292,14 @@ class ArrayNodeCompilerTest {
         PositionedGlyph momentumBoundary = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
         PositionedGlyph accelerationBoundary = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
         PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 4);
-        PositionedGlyph launchArrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 5);
-        PositionedGlyph accelerationArrow = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 6);
+        PositionedGlyph launchMotion = glyph("motion", SymbolRole.PARAMETER_RUNE, 5);
+        PositionedGlyph accelerationMotion = glyph("motion", SymbolRole.PARAMETER_RUNE, 6);
+        PositionedGlyph launchArrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 7);
+        PositionedGlyph accelerationArrow = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 8);
         GroupNode ast = group(outer, new SymbolNode(fire),
-                group(momentumBoundary, new SymbolNode(launchArrow),
-                        group(accelerationBoundary, new SymbolNode(accelerationArrow))));
+                group(momentumBoundary, new SymbolNode(launchMotion), new SymbolNode(launchArrow),
+                        group(accelerationBoundary, new SymbolNode(accelerationMotion),
+                                new SymbolNode(accelerationArrow))));
 
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
@@ -250,40 +307,45 @@ class ArrayNodeCompilerTest {
         FireProjectileOp root = assertInstanceOf(FireProjectileOp.class, success.value().root());
         MomentumOp launchMomentum = assertInstanceOf(MomentumOp.class,
                 assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator());
-        MomentumOp accelerationMomentum = assertInstanceOf(MomentumOp.class,
-                assertInstanceOf(OpInput.Op.class, launchMomentum.inputs().get(1)).operator());
         List<EntityPayload> payloads = new ArrayList<>();
 
-        launchMomentum.contributeEntityPayloads(payloads);
+        launchMomentum.contributeEntityPayloads(payloads, OpRuntimeContext.empty());
 
         MomentumOp payload = assertInstanceOf(MomentumOp.class, payloads.getFirst());
         assertEquals(1, payloads.size());
-        assertEquals(accelerationMomentum.accelerationInputs(), payload.accelerationInputs());
-        assertEquals(true, payload.accelerationInputs().getFirst().alongFacing());
+        assertEquals(launchMomentum.accelerationInputs(), payload.accelerationInputs());
+        assertEquals(MomentumOp.MotionMode.DIRECT,
+                payload.accelerationInputs().getFirst().motionMode());
     }
 
     @Test
     void momentumCanCompileFromOnlyOneDirectMomentumChild() {
         PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
-        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
-        GroupNode ast = group(outer, group(inner, new SymbolNode(arrow)));
+        PositionedGlyph outerMotion = glyph("motion", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph innerMotion = glyph("motion", SymbolRole.PARAMETER_RUNE, 4);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 5);
+        GroupNode ast = group(outer, new SymbolNode(outerMotion),
+                group(inner, new SymbolNode(innerMotion), new SymbolNode(arrow)));
 
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
         MomentumOp parent = assertInstanceOf(MomentumOp.class, success.value().root());
         MomentumOp child = assertInstanceOf(MomentumOp.class,
-                assertInstanceOf(OpInput.Op.class, parent.matchedInputs().getFirst()).operator());
+                assertInstanceOf(OpInput.Op.class, parent.inputs().get(1)).operator());
         List<EntityPayload> payloads = new ArrayList<>();
 
-        parent.contributeEntityPayloads(payloads);
+        parent.contributeEntityPayloads(payloads, OpRuntimeContext.empty());
 
         assertEquals(List.of(child), parent.childOps());
-        assertEquals(List.of(), parent.accelerationInputs());
+        assertEquals(List.of(), parent.velocityInputs());
         MomentumOp payload = assertInstanceOf(MomentumOp.class, payloads.getFirst());
         assertEquals(1, payloads.size());
-        assertEquals(child.accelerationInputs(), payload.accelerationInputs());
+        assertEquals(child.velocityInputs().size(), payload.accelerationInputs().size());
+        assertEquals(child.velocityInputs().getFirst().motionMode(),
+                payload.accelerationInputs().getFirst().motionMode());
+        assertEquals(MomentumOp.ApplicationPhase.TICK, payload.phase());
     }
 
     @Test
@@ -418,7 +480,7 @@ class ArrayNodeCompilerTest {
 
         assertEquals(ElementType.MANA, root.absorbedElement());
         List<EntityPayload> payloads = new ArrayList<>();
-        root.contributeEntityPayloads(payloads);
+        root.contributeEntityPayloads(payloads, OpRuntimeContext.empty());
         EntityPayload payload = payloads.getFirst();
         assertEquals(ElementType.MANA, assertInstanceOf(ElementOp.class, payload).absorbedElement());
     }
@@ -437,7 +499,7 @@ class ArrayNodeCompilerTest {
 
         assertEquals(ElementType.FIRE, root.absorbedElement());
         List<EntityPayload> payloads = new ArrayList<>();
-        root.contributeEntityPayloads(payloads);
+        root.contributeEntityPayloads(payloads, OpRuntimeContext.empty());
         EntityPayload payload = payloads.getFirst();
         assertEquals(ElementType.FIRE, assertInstanceOf(ElementOp.class, payload).absorbedElement());
     }
@@ -532,9 +594,10 @@ class ArrayNodeCompilerTest {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph momentumBoundary = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
         PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 3);
-        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 4);
+        PositionedGlyph motion = glyph("motion", SymbolRole.PARAMETER_RUNE, 4);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 5);
         GroupNode ast = group(circle, new SymbolNode(split),
-                group(momentumBoundary, new SymbolNode(arrow)));
+                group(momentumBoundary, new SymbolNode(motion), new SymbolNode(arrow)));
 
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
@@ -554,9 +617,10 @@ class ArrayNodeCompilerTest {
         PositionedGlyph momentumBoundary = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
         PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 3);
         PositionedGlyph directArrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 4);
-        PositionedGlyph momentumArrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 5);
+        PositionedGlyph momentumMotion = glyph("motion", SymbolRole.PARAMETER_RUNE, 5);
+        PositionedGlyph momentumArrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 6);
         GroupNode ast = group(circle, new SymbolNode(split), new SymbolNode(directArrow),
-                group(momentumBoundary, new SymbolNode(momentumArrow)));
+                group(momentumBoundary, new SymbolNode(momentumMotion), new SymbolNode(momentumArrow)));
 
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,

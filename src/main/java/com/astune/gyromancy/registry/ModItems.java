@@ -3,6 +3,7 @@ package com.astune.gyromancy.registry;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.item.CompassItem;
 import com.astune.gyromancy.item.DebugBrushItem;
+import com.astune.gyromancy.item.GuidebookItem;
 import com.astune.gyromancy.item.InkBottleItem;
 import com.astune.gyromancy.item.PenItem;
 import com.astune.gyromancy.item.CanvasItem;
@@ -62,4 +63,8 @@ public final class ModItems {
     public static final DeferredItem<BlockItem> RUNE_CARVING_TABLE = ITEMS.register(
             "rune_carving_table",
             () -> new BlockItem(ModBlocks.RUNE_CARVING_TABLE.get(), new Item.Properties()));
+
+    /** In-game manual for the basic Gyromancy workflow. */
+    public static final DeferredItem<GuidebookItem> GUIDEBOOK = ITEMS.register(
+            "guidebook", GuidebookItem::new);
 }

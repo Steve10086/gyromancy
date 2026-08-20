@@ -8,6 +8,7 @@ import com.astune.gyromancy.compile.operator.ElementVolumeOp;
 import com.astune.gyromancy.element.ElementStorageManager;
 import com.astune.gyromancy.entity.ArrayRelativePosition;
 import com.astune.gyromancy.entity.MagicEntity;
+import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.util.MagicBallGeometry;
 import net.minecraft.core.BlockPos;
@@ -237,6 +238,12 @@ public abstract class MagicFieldEntity extends MagicEntity {
         this.boundArrayId = arrayId;
         captureArrayRelativePosition();
         bindPayloadToArray(arrayId);
+    }
+
+    public SurfaceFrame currentArrayFrame() {
+        if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return null;
+        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER).getArrayObj(boundArrayId);
+        return array == null ? null : array.rootCircleGlyph().surface();
     }
 
     private void updateArrayRelativePosition() {

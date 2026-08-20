@@ -30,6 +30,7 @@ public final class ModSymbols {
         registerSymbol(FireSymbol.INSTANCE);
         registerSymbol(FixSymbol.INSTANCE);
         registerSymbol(ManaSymbol.INSTANCE);
+        registerSymbol(MotionSymbol.INSTANCE);
         registerSymbol(RevertSymbol.INSTANCE);
         registerSymbol(SpaceSymbol.INSTANCE);
         registerSymbol(SplitSymbol.INSTANCE);

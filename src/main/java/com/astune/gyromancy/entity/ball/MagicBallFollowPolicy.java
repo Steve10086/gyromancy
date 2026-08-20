@@ -5,7 +5,7 @@ import net.minecraft.world.phys.Vec3;
 
 /** Pure eligibility policy invoked by MagicBallEntity's own tick. */
 final class MagicBallFollowPolicy {
-    static final int FOLLOW_TICKS = 20;
+    static final int FOLLOW_TICKS = 80;
 
     private MagicBallFollowPolicy() {}
 

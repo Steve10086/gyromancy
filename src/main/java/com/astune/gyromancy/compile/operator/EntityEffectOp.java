@@ -42,7 +42,7 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
     }
 
     protected List<EmitOp.Emission> emissions() {
-        return emissions(null);
+        return emissions(OpRuntimeContext.empty());
     }
 
     protected List<EmitOp.Emission> emissions(OpRuntimeContext context) {
@@ -59,17 +59,22 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
         for (OpInput input : inputs) {
             if (!(input instanceof OpInput.Op op)) continue;
             resolved = resolved.stream()
-                    .map(op.operator()::modifyEntityEmission)
+                    .map(emission -> op.operator().modifyEntityEmission(emission, context))
                     .toList();
         }
         return resolved;
     }
 
     protected List<EntityPayload> payload(List<? extends EntityPayload> defaults) {
+        return payload(defaults, OpRuntimeContext.empty());
+    }
+
+    protected List<EntityPayload> payload(List<? extends EntityPayload> defaults,
+                                          OpRuntimeContext context) {
         List<EntityPayload> payload = new ArrayList<>(defaults);
         for (OpInput input : inputs) {
             if (input instanceof OpInput.Op op) {
-                op.operator().contributeEntityPayloads(payload);
+                op.operator().contributeEntityPayloads(payload, context);
             }
         }
         return List.copyOf(payload);

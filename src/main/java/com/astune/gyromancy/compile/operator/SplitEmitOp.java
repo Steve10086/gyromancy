@@ -54,7 +54,7 @@ public final class SplitEmitOp extends EmitOp {
 
     @Override
     public List<Emission> emissions() {
-        return emissions(null);
+        return emissions(OpRuntimeContext.empty());
     }
 
     @Override
@@ -70,7 +70,7 @@ public final class SplitEmitOp extends EmitOp {
                         .ifPresent(emissions::add);
             } else if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp momentum) {
                 emissions.add(momentum.modifyEntityEmission(
-                        new Emission(Vec3.ZERO, 0.0, 1.0F, false)));
+                        new Emission(Vec3.ZERO, 0.0, 1.0F, false), context));
             }
         }
         if (emissions.isEmpty()) return List.of();

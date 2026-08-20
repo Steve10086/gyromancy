@@ -10,7 +10,9 @@
     "CameraMixin",
     "GameRendererMixin",
     "GuiMixin",
-    "PaintInputHandlerMixin"
+    "PaintInputHandlerMixin",
+    "BookViewScreenAccessor",
+    "BookViewScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

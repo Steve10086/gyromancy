@@ -110,9 +110,14 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
 
     @Override
     protected List<EntityPayload> payloadFor() {
+        return payloadFor(null);
+    }
+
+    @Override
+    protected List<EntityPayload> payloadFor(OpRuntimeContext context) {
         Set<EntityPayload> payload = new HashSet<>(defaultPayload());
         payload.addAll(conditionalPayload());
-        return payload(payload.stream().toList());
+        return payload(payload.stream().toList(), context);
     }
 
     @Override

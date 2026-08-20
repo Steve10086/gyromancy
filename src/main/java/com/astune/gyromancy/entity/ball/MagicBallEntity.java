@@ -185,6 +185,12 @@ public abstract class MagicBallEntity extends MagicEntity {
         bindPayloadToArray(arrayId);
     }
 
+    public SurfaceFrame currentArrayFrame() {
+        if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return null;
+        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER).getArrayObj(boundArrayId);
+        return array == null ? null : array.rootCircleGlyph().surface();
+    }
+
     private void updateArrayRelativePosition() {
         if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return;
         ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
@@ -196,7 +202,7 @@ public abstract class MagicBallEntity extends MagicEntity {
         // Pending launch values intentionally do not participate in this policy.
         // MagicBallEntity alone decides whether it follows; the array only
         // supplies its persisted creation window and current geometry.
-        if (launched //MagicBallFollowPolicy.shouldFollow(serverLevel.getGameTime(),array.compilationEffectEndTick(), getDeltaMovement(), payloadAcceleration())
+        if (launched || !MagicBallFollowPolicy.shouldFollow(serverLevel.getGameTime(),array.compilationEffectEndTick(), getDeltaMovement(), payloadAcceleration())
         ) {
             arrayRelativePosition = null;
             return;
