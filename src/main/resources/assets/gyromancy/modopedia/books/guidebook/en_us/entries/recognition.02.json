@@ -1,0 +1,80 @@
+{
+  "title": "Connected components and templates",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Connected components and templates",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "The server flood-fills from mana seeds and extracts connected glyphs across canvas boundaries. SymbolRecognizer then gives the glyph skeleton, endpoints, loops, and orientation"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "features to SkeletonMatcher."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• A broken stroke may become several glyphs; two touching runes may become one glyph.\n• Each template has its own soft thresholds and allowRotation setting."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• A match carries confidence, bounds, orientation, and SymbolRole."
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 14,
+          "y": 8,
+          "width": 72,
+          "height": 72,
+          "images": [
+            "gyromancy:textures/symbol/circle_outer.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 85,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "高阈值外环 / Strict boundary template"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:symbols.04)Read the template catalog$(/el)"
+    }
+  ]
+}

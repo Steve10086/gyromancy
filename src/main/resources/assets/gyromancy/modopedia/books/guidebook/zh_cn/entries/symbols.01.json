@@ -1,0 +1,84 @@
+{
+  "title": "一座法阵的三个位置",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "先看位置，不看名字",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "法阵不是一堆图案。图案落在哪里，决定它在法阵中说什么。"
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 18,
+          "y": 5,
+          "width": 26,
+          "height": 26,
+          "images": [
+            "gyromancy:textures/symbol/circle_outer.png"
+          ]
+        },
+        {
+          "type": "modopedia:image",
+          "x": 47,
+          "y": 5,
+          "width": 26,
+          "height": 26,
+          "images": [
+            "gyromancy:textures/symbol/fire.png"
+          ]
+        },
+        {
+          "type": "modopedia:image",
+          "x": 76,
+          "y": 5,
+          "width": 18,
+          "height": 18,
+          "images": [
+            "gyromancy:textures/symbol/arrow.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 38,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "环：边界      火：中心      前：参数"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "外环划出法阵的范围。中心符文说出法术要做什么。参数符文补充方向、数量或动作。一个环里只能有一个中心符文。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "没有中心，法阵没有主意；有两个中心，法阵不知道听谁的。两种情况都不会成形。"
+    }
+  ]
+}

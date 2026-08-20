@@ -1,0 +1,72 @@
+{
+  "title": "Mana pixels",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Mana pixels",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "Recognition starts from the gyromancy:mana effect layer. ManaPixelDetector does not treat every opaque color as a stroke; visible pixels without the mana effect are ignored."
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• The ink's manaValue is written to every covered brush pixel.\n• Additional effectKeys leave room for elemental inks, markers, and filters."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Erasing must clear both color and effects or visual and recognition state diverge."
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 10,
+          "y": 8,
+          "width": 80,
+          "height": 80,
+          "images": [
+            "gyromancy:textures/symbol/mana.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 93,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "魔力中心模板 / Mana template"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:materials.02)Back to ink components$(/el)"
+    }
+  ]
+}

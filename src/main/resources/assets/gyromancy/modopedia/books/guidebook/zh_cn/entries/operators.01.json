@@ -1,0 +1,49 @@
+{
+  "title": "中心先定事，参数再改事",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "法术怎么做事",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "把法阵想成一句短话：中心说出动作，参数补上动作的方向和方式。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "火 + 前，是向前放出的火焰。\n水 + 前，是向前放出的水流。\n魔力 + 前，是向前放出的魔力弹。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "同一个中心可以接纳的参数并不相同。不要把所有看得见的符文都放进去；只加入这道法术需要的那一枚。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:arrays.03)先查可用组合$(/el)\n$(el:operators.02)再看多层法术如何组合$(/el)"
+    }
+  ]
+}

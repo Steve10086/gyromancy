@@ -1,0 +1,65 @@
+{
+  "title": "Glossary",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Glossary",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "Several terms have precise meanings throughout the manual. Knowing them makes logs, packets, and compiler diagnostics much easier to read."
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Glyph: one connected shape extracted from canvas pixels.\n• Boundary: an outer-circle glyph that scopes inner content.\n• CenterSymbol: the center behavior or type of an array."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• ParameterRune: a parameter supplied to a center or compiler.\n• OpInput: a rune, compiled operation, or raw child array seen by the compiler."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• CompiledOp: an executable node with a boundary, inputs, and runtime behavior.\n• ArrayObject: the server-side live array and its reverse indexes."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:symbols.01)Read symbol roles$(/el)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:arrays.02)Read compiler matchers$(/el)"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "title": "book.gyromancy.guidebook.title",
+  "subtitle": "book.gyromancy.guidebook.subtitle",
+  "landing_text": "Gyromancy Manual / 法阵学手册\n\n$(c:#7B3F75)From a quiet line of mana to a spell that answers.$()\n从一笔安静的魔力，到一场应声而起的法术。",
+  "texture": "modopedia:purple_copper",
+  "model": "gyromancy:item/modopedia_books/guidebook",
+  "font": "modopedia:default",
+  "text_colour": "2D1F2A",
+  "header_colour": "7B3F75",
+  "line_width": 96,
+  "type": {
+    "id": "modopedia:classic",
+    "locked_view_type": "translucent"
+  }
+}

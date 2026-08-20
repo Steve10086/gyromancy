@@ -1,0 +1,57 @@
+{
+  "title": "Painting gates",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Painting gates",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "The Painter API writes a pen's PaintPattern to the surface. Gyromancy then uses effect layers to decide which pixels enter recognition. A pixel that looks correct is not"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "necessarily a mana pixel."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Hold the pen in the main hand, hold use, and hit the canvas surface.\n• PenItem gates repeated samples by distance; StampItem uses its own step."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• In the editor, left draws and right erases; Shift pans or zooms the view.\n• Undo, redo, and clear change edit history; the complete snapshot is submitted at the end."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:recognition.01)Why color alone is not enough$(/el)"
+    }
+  ]
+}

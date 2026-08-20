@@ -1,0 +1,41 @@
+{
+  "title": "没有符文被认出",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "先查笔迹",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "如果画布上只有颜色，没有符文回应，按下面顺序检查。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "一、笔在主手，魔力墨水在副手。\n二、墨水没有用尽。\n三、图形线条没有断点。\n四、相邻图形没有相碰。\n五、旧笔迹已经擦干净。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "先单独画一个前符文或火符文测试。单个图形仍认不出时，不要继续画整座法阵；先解决笔迹问题。"
+    }
+  ]
+}

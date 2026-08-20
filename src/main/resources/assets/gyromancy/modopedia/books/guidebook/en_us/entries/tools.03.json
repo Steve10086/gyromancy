@@ -1,0 +1,80 @@
+{
+  "title": "Projection wand",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Projection wand",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "The wand stores tested canvases in WAND_CONTENTS and projects them onto multiple planes using WandLayout. The default layout has planes at 1 and 1.5 blocks."
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Shift+right-click opens configuration; canvases in slots are copied into wand data."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Hold right-click to create projection entities; release to stop through WandProjectionService."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Projection reuses rendering and compiled data; it does not delete the source canvas."
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 12,
+          "y": 8,
+          "width": 76,
+          "height": 76,
+          "images": [
+            "gyromancy:textures/item/wand.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 89,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "投影法杖 / Projection wand"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:operators.01)Read ProjectionOp$(/el)"
+    }
+  ]
+}

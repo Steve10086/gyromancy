@@ -1,0 +1,84 @@
+{
+  "title": "照着做：火焰法阵",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "第一次释放",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "按顺序做，不要先加别的符文。"
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 10,
+          "y": 5,
+          "width": 30,
+          "height": 30,
+          "images": [
+            "gyromancy:textures/symbol/circle_outer.png"
+          ]
+        },
+        {
+          "type": "modopedia:image",
+          "x": 35,
+          "y": 5,
+          "width": 30,
+          "height": 30,
+          "images": [
+            "gyromancy:textures/symbol/fire.png"
+          ]
+        },
+        {
+          "type": "modopedia:image",
+          "x": 60,
+          "y": 5,
+          "width": 30,
+          "height": 30,
+          "images": [
+            "gyromancy:textures/symbol/arrow.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 42,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "外环    火    前"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "一、用圆规画一个完整外环。\n二、在环内画一个火符文。\n三、在环内另画一个前符文；不要让两枚符文相碰。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "退出绘画界面并保存画布。画布会重新检查图案；成功后，火焰法术会从画布表面向前方放出。若没有回应，直接读$(el:troubleshooting.01)排错$(/el)。"
+    }
+  ]
+}

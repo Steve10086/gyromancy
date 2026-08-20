@@ -1,0 +1,103 @@
+{
+  "title": "Center symbols",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Center symbols",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "A center rune is the semantic entry point of an array, but the final effect usually comes from the operation tree inside it. Fire, Water, and Mana already have direct runtime"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "integration; Earth and Wind also serve as semantic compilation centers."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• mana: with arrow parameters it launches a Manaball; arrow count affects launch data.\n• fire: the fireball center template, commonly combined with FireProjectileOp."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• water: the center for water projectiles and collision-triggered behavior.\n• wind / star: rotation-capable templates suited to direction and local-frame experiments."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• dark / earth / space: registered center roles whose effects depend on matched operation definitions."
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 18,
+          "y": 8,
+          "width": 64,
+          "height": 64,
+          "images": [
+            "gyromancy:textures/symbol/mana.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 77,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "Mana center"
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 18,
+          "y": 8,
+          "width": 64,
+          "height": 64,
+          "images": [
+            "gyromancy:textures/symbol/fire.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 77,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "Fire center"
+        }
+      ]
+    }
+  ]
+}

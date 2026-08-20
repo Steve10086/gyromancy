@@ -1,0 +1,57 @@
+{
+  "title": "Ink and data components",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Ink and data components",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "InkBottleItem does not hard-code a color. The bottle stores ink_type and ink_remaining; the pen resolves the custom ink registry while painting."
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(f:minecraft:uniform)INK_TYPE      -> gyromancy:mana_ink\nINK_REMAINING  -> 64 charges by default\nPenProperties  -> brush size / precision / speed\nPaint effect   ->$(/f)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(f:minecraft:uniform)gyromancy:mana + ink effect keys$(/f)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Without a bottle, ink_type, or remaining charges, the pen returns no color and paints nothing.\n• By default one charge is consumed per ten valid paint actions."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:canvas.02)Read painting rules$(/el)"
+    }
+  ]
+}

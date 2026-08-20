@@ -1,0 +1,57 @@
+{
+  "title": "Nested boundaries",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Nested boundaries",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "ArrayAstBuilder starts from an outer circle and builds a GroupNode. Direct children become SymbolNodes or nested GroupNodes by role, allowing a finished child array to become input"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "to a parent array."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(f:minecraft:uniform)GroupNode(boundary)\n  └─ SequenceNode(children)\n       ├─ SymbolNode(parameter)\n       ├─ SymbolNode(center)\n       └─ GroupNode(nested boundary)$(/f)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Children are filtered by bounds and valid strokes first.\n• Nesting lets projection, emission, and composition operations consume another array."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:arrays.02)Read input matchers$(/el)"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "title": "把复杂法术拆成几层",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "进阶组合",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "复杂法术有两种增加力量的方式：把完整小环放进大环，或让一个参数去改变另一道法术。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "轮：让一项已经能持续回应的法术结束后再次开始。轮本身不能单独使用，必须有一项完整的小环或法术交给它。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "裂：把多个方向交给同一项释放，让它分成多道。动量和旋转则改变移动方式。它们属于进阶参数，先让火 + 前成功，再一次只加一种。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "记住：多一枚符文不等于多一种力量。若当前中心不认识它，法阵不会部分成功，而是整环不回应。"
+    }
+  ]
+}

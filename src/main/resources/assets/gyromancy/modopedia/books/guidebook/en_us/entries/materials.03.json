@@ -1,0 +1,80 @@
+{
+  "title": "Carving materials",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Carving materials",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "Copper nuggets craft into copper rings. Rings are carvable components used by the stamp and wand recipes. The Rune Carving Table performs an input-to-output carving flow and has no"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "persistent inventory of its own."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• A Stamp stores a CanvasDocument, not just a list of recognized runes.\n• CarvingProperties define the material color, effect layer, and resolution scale."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• A carving ingredient can check an outer circle and an ordered rune sequence."
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 14,
+          "y": 8,
+          "width": 72,
+          "height": 72,
+          "images": [
+            "gyromancy:textures/carve/copper_ring.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 85,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "可雕刻铜环 / Carvable ring"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:tools.02)Read stamps and projection$(/el)"
+    }
+  ]
+}

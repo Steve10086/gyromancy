@@ -77,5 +77,7 @@
   "block.gyromancy.rune_carving_table": "Rune Carving Table",
   "container.gyromancy.rune_carving_table": "Rune Carving Table",
   "screen.gyromancy.rune_carving.empty": "Place a carvable item in the slot",
-  "screen.gyromancy.rune_carving.input": "Carvable item"
+  "screen.gyromancy.rune_carving.input": "Carvable item",
+  "book.gyromancy.guidebook.title": "Gyromancy Manual",
+  "book.gyromancy.guidebook.subtitle": "Gyromancy Research Guild"
 }

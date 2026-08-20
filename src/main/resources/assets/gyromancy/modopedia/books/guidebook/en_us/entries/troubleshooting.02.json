@@ -1,0 +1,65 @@
+{
+  "title": "Glyphs exist, array does not form",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Glyphs exist, array does not form",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "This means recognition passed but spatial validation or compilation failed. An array needs one outer circle and exactly one center; parameters and child arrays must lie inside the"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "correct boundary."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Two centers are rejected rather than choosing one at random.\n• A boundary that is too small excludes inputs; with nesting, check the nearest parent boundary."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• On compile failure, look for missing match inputs, unconsumed runes, and nested operation types."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:arrays.01)Read AST structure$(/el)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:arrays.03)Read compile results$(/el)"
+    }
+  ]
+}

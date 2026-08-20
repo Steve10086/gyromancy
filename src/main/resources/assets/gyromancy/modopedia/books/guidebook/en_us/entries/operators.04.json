@@ -1,0 +1,65 @@
+{
+  "title": "Extending operations",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Extending operations",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "When adding an operation, define a clear OpDefinition and Codec first, then keep execution inside the runtime class. The registry scans @RegisteredOp classes under com.astune."
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "gyromancy.compile.operator."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• IDs must be stable and use the gyromancy namespace to protect saves and caches.\n• Keep match specific; use accepted to declare consumable extra inputs."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Return CompileResult.Failure with readable diagnostics; do not use null for failure."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(f:minecraft:uniform)@RegisteredOp\npublic final class MyOp implements CompiledOp {\n    public static final OpDefinition DEFINITION = ...;\n}$(/f)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:operators.01)Back to operation map$(/el)"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "title": "第一次只带四样东西",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "准备",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "第一次施法只带四样东西：画布、笔、墨水瓶和圆规。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "画布保存图案，也是在世界中施法的表面。笔负责落笔。墨水瓶提供颜色和魔力；当前可用的是魔力墨水。圆规负责画出完整、稳定的外环。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "笔握主手，墨水瓶放副手。没有副手墨水时，笔不会留下可被法阵认出的笔迹。圆规还要先存入一支笔；它会使用这支笔的落笔方式。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "画布放下后，右键画布进入编辑。画完关闭界面，法阵才会按新的图案重新判断。"
+    }
+  ]
+}

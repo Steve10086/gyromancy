@@ -1,0 +1,41 @@
+{
+  "title": "法杖：把画布带到面前",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "法杖",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "法杖不储存新的法术。它把画布上的图案投到施法者面前，适合在没有墙面时使用。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "Shift + 右键法杖打开配置界面，把画布放入投影槽。普通右键并按住，会在面前展开投影；松开右键，投影就会停止。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "投影使用画布的副本，不会消耗槽里的画布。投影仍按普通画布的规则检查法阵；图案不完整时，投影也不会替你施法。"
+    }
+  ]
+}

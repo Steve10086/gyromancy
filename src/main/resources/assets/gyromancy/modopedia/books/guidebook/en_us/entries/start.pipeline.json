@@ -1,0 +1,110 @@
+{
+  "title": "Recommended route",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Recommended route",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "Do not begin with a complex spell. First give the recognizer one stable mana stroke, then add the boundary, center, and parameter runes one layer at a time. Change one variable per"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "experiment."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(f:minecraft:uniform)blank canvas -> mana stroke -> recognized glyph\n              -> boundary + center -> valid array\n              -> op runes/nested arrays -> runtime$(/f)"
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 26,
+          "y": 8,
+          "width": 48,
+          "height": 48,
+          "images": [
+            "gyromancy:textures/symbol/circle_outer.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 61,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "外环 / Boundary"
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 26,
+          "y": 8,
+          "width": 48,
+          "height": 48,
+          "images": [
+            "gyromancy:textures/symbol/mana.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 61,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "魔力中心 / Mana center"
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 26,
+          "y": 8,
+          "width": 48,
+          "height": 48,
+          "images": [
+            "gyromancy:textures/symbol/arrow.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 61,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "方向参数 / Direction rune"
+        }
+      ]
+    }
+  ]
+}

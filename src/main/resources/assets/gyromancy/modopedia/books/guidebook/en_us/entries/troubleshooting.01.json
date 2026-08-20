@@ -1,0 +1,65 @@
+{
+  "title": "No glyph detected",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "No glyph detected",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "Check the lowest layer first instead of immediately changing templates. No glyph usually means missing mana effects, disconnected strokes, touching glyphs, or a surface orientation"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "that distorts the shape."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Confirm the offhand contains gyromancy:mana_ink and is not empty.\n• Use Debug Brush dots to verify that the canvas accepts effect layers."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Separate glyphs so flood fill does not merge them into one component.\n• Check the client glyph overlay and confidence values in the server log."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:recognition.01)Back to mana pixels$(/el)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:symbols.04)Back to template resources$(/el)"
+    }
+  ]
+}

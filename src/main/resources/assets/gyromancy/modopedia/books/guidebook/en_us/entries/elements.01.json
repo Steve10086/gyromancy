@@ -1,0 +1,65 @@
+{
+  "title": "Nine concentrations",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Nine concentrations",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "Each world cell stores nine concentrations: eight elements plus raw Mana. Elements are not one-shot items; they form a field affected by biomes, flow, and array operations."
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(f:minecraft:uniform)WIND  FIRE  WATER  EARTH\nLIGHT DARK  SPACE  TIME\nMANA = universal magical energy$(/f)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Wind: motion and speed; Fire: destruction and heat; Water: fluids and wet environments."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Earth: stability and underground; Light: purification and healing; Dark: void and shadows."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Space: storage and dimensions; Time: speed and time scale; Mana: the raw input for magic."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:elements.03)Read element operations$(/el)"
+    }
+  ]
+}

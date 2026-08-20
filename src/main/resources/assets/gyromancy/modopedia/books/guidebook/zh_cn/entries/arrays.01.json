@@ -1,0 +1,49 @@
+{
+  "title": "外环是法阵的边界",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "法阵的骨架",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "外环不是装饰。它告诉法阵：哪些符文属于同一个愿望。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "一个完整法阵必须有：一枚完整外环、一个中心符文，以及中心能够接纳的参数符文。外环内的图案才会被拿来组合。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "环要闭合，符文不能压到环线上，也不要让不同符文相碰。环外的笔迹不会帮助法阵；误画的环外线条反而会干扰认出。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:symbols.01)先分清三个位置$(/el)\n$(el:start.pipeline)用最小组合验证法阵$(/el)"
+    }
+  ]
+}

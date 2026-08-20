@@ -1,0 +1,49 @@
+{
+  "title": "圆规：先固定边界",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "圆规",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "圆规只做一件事：画出完整外环。先把笔放进圆规，再把魔力墨水放在副手。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "对着物体使用圆规时，第一次命中的位置会成为圆心。按住右键并转动视角，绕满一圈后松开；没有转满就只是未完成的笔迹。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "Shift + 滚轮调整半径。圆规里的笔只负责落笔，墨水仍从你的副手读取。没有存入笔，圆规不会画出有效外环。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "把圆规放在物品栏中，对准一支笔使用副键即可存入；对准空槽使用副键可以取出。"
+    }
+  ]
+}

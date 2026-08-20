@@ -50,6 +50,15 @@ repositories {
         }
     }
 
+    // ── Modopedia ──
+    maven {
+        name = "CurseMaven"
+        url = "https://www.cursemaven.com"
+        content {
+            includeGroup "curse.maven"
+        }
+    }
+
     // ── Veil — FoundryMC rendering library ──
     maven {
         name = "BlameJared"
@@ -162,6 +171,7 @@ sourceSets { test { compileClasspath += sourceSets.main.compileClasspath; runtim
 
 dependencies {
     implementation "maven.modrinth:pigmentum:0.6.1beta"
+    implementation "curse.maven:modopedia-1132038:8043293"
     implementation "foundry.veil:veil-neoforge-${minecraft_version}:${veil_version}"
 
     // ── Photon + LDLib2 — VFX library ──
@@ -325,3 +335,33 @@ tasks.register('autoInstallLocalDeps') {
 
 // Wire into compilation so dropping a JAR is enough — no manual Gradle task needed.
 tasks.named('compileJava') { dependsOn autoInstallLocalDeps }
+
+// The IDE's forgeclientdev configuration scans run/mods directly and does not
+// always include remote mod artifacts from Gradle's runtime classpath. Keep the
+// Modopedia library available for that launch path without bundling it into the
+// Gyromancy artifact or changing the other runtime dependencies.
+def modopediaStagingClasspath = configurations.runtimeClasspath
+def modopediaDevModsDir = file("${project.projectDir}/run/mods")
+tasks.register('stageModopediaForDev') {
+    group = 'mod development'
+    description = 'Copies the resolved Modopedia mod into run/mods for IDE launches.'
+    inputs.files(modopediaStagingClasspath)
+
+    doLast {
+        def modopediaJars = modopediaStagingClasspath.files.findAll {
+            it.name.toLowerCase(Locale.ROOT).contains('modopedia')
+        }
+        if (modopediaJars.size() != 1) {
+            throw new GradleException("Expected exactly one resolved Modopedia JAR, found ${modopediaJars.size()}")
+        }
+
+        def modopediaJar = modopediaJars[0]
+        modopediaDevModsDir.mkdirs()
+        java.nio.file.Files.copy(
+                modopediaJar.toPath(),
+                new File(modopediaDevModsDir, modopediaJar.name).toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+        )
+        logger.lifecycle("Staged Modopedia: ${modopediaJar.name}")
+    }
+}

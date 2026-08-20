@@ -1,0 +1,49 @@
+{
+  "title": "这本书只教你第一次施法",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "先做出一个法阵",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "你要先学会一件事：在画布上画出一个完整法阵，让它放出法术。其余符文和工具，等这一步稳定后再学。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "第一次需要：画布、笔、魔力墨水和圆规。笔放主手，魔力墨水放副手。画布放下后，右键打开绘画界面。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "法阵只有三层意思：外环划定范围，中心符文决定法术，参数符文改变方向或动作。先画外环，再画中心，最后补参数。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:materials.01)先准备物品$(/el)\n$(el:canvas.01)再学会画布$(/el)\n$(el:start.pipeline)最后照着完成第一次释放$(/el)"
+    }
+  ]
+}

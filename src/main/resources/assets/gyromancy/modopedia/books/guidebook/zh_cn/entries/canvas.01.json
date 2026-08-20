@@ -1,0 +1,49 @@
+{
+  "title": "画布上的三种动作",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "画布",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "放置画布后，右键它打开编辑界面。画布会记住颜色、魔力和已认出的符文。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "左键落笔，右键擦除。画错时使用界面里的撤销、重做或清除。不要在旧笔迹上反复涂抹；先擦干净，再用魔力墨水重画。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "画布里的视图修饰键只改变你看到的画面，不会改变法阵。用它平移或缩放视野；画布太大时，先把图案放在画面中央再落笔。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:recognition.01)笔迹怎样才会被认出$(/el)\n$(el:start.pipeline)照着画一个最小法阵$(/el)"
+    }
+  ]
+}

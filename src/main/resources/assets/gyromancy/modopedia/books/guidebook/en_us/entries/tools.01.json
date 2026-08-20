@@ -1,0 +1,72 @@
+{
+  "title": "Compass",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Compass",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "The compass is not the recognizer itself; it is a precision drawing tool. It stores its radius in compass_radius and an optional pen in compass_pen."
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Shift+scroll changes radius; the client shows a radius overlay and syncs it to the server.\n• Hold right-click and turn your view to draw a circle or arc on the hit surface."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• The compass reduces broken boundaries, but it still needs ink with the mana effect."
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 21,
+          "y": 8,
+          "width": 58,
+          "height": 58,
+          "images": [
+            "gyromancy:textures/item/compass.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 71,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "圆规 / Compass"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:recognition.01)Read recognition gates$(/el)"
+    }
+  ]
+}

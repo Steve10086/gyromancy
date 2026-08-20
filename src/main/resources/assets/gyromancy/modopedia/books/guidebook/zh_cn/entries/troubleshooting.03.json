@@ -1,0 +1,49 @@
+{
+  "title": "法阵成形，却没有释放",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "最后查法术",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "先确认你看到的是完整组合，而不是只有发光的外环。外环只划定范围，不会单独释放法术。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "然后只保留一个已知组合：火 + 前、水 + 前或魔力 + 前。箭头必须被认出，并且要和中心留有空隙。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "如果你刚刚改过图案，关闭画布让它重新判断。修改正在运行的法阵会先让旧法术停下，这是正常的。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "仍然没有释放时，回到$(el:arrays.03)可用组合$(/el)，不要继续堆叠符文。复杂法阵必须从一个已验证的小法阵开始。"
+    }
+  ]
+}

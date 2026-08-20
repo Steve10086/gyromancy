@@ -1,0 +1,73 @@
+{
+  "title": "Absorb, convert, and release",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Absorb, convert, and release",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "ElementOp enters through engaging and can infer the absorbed element from inner runes. It drains concentration outside the array and releases Mana into the interior based on target"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "volume."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• ElementConversionOp drains interior MANA and converts it to a chosen element on an interval.\n• ElementVolumeOp uses element volume to affect spatial or projectile volume."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• These operations run on the server so concentration cannot diverge between sides."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(f:minecraft:uniform)engaging + fire  -> ElementOp(absorbedElement = FIRE)\nengaging + water -> ElementOp(absorbedElement = WATER)\nMANA in volume  ->$(/f)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(f:minecraft:uniform)ElementConversionOp(target, interval)$(/f)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:elements.01)Back to elements$(/el)"
+    }
+  ]
+}

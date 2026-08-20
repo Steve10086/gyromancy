@@ -1,0 +1,65 @@
+{
+  "title": "Template resources",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Template resources",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "Each Symbol points to a PNG template and a set of SkeletonMatcher thresholds. The resource file is part of recognition truth; changing a shape requires checking samples, rotation"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "settings, and test images."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(f:minecraft:uniform)src/main/resources/assets/gyromancy/textures/symbol/*.png\nsrc/test/resources/test_images/symbol/*.png\nModSymbols -> Symbol -> SymbolTemplate ->$(/f)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(f:minecraft:uniform)SkeletonMatcher$(/f)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Templates with allowRotation=false must be drawn in their expected orientation.\n• Confidence is only a match signal; mana layers and spatial relations must still be correct."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:recognition.02)Back to recognition$(/el)"
+    }
+  ]
+}

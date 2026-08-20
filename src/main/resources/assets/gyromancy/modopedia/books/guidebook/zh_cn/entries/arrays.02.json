@@ -1,0 +1,49 @@
+{
+  "title": "小环可以成为大环的一部分",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "嵌套法阵",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "复杂法术不是把符文挤在一圈里，而是让一座完整小环成为另一座法阵的一项。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "画法：先画完整的小环，再在它外面画大环。小环必须完全落在大环内，两个环不能相交。大环会把小环当成一个整体，而不是把小环里的每个符文拆开。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "判断顺序也是从小到大：先确认小环本身能成形，再看大环是否愿意接纳它。小环仍然需要自己的中心；大环也仍然只能有一个中心。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "如果大环突然沉默，先检查小环是否完整、是否仍在大环内部，以及大环的中心是否能使用一个小环作为材料。"
+    }
+  ]
+}

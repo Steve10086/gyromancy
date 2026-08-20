@@ -1,0 +1,65 @@
+{
+  "title": "Sync and portability",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Sync and portability",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "Canvas editing uses a client preview, server validation, and affected-canvas synchronization path. The dynamic texture feels immediate while the server remains authoritative over"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "array state."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• SubmitCanvasEditPacket sends changes and the server checks the revision.\n• Glyphs and compile caches are rebuildable; colors and effect layers are the source of truth."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Canvas items, stamps, and wands carry document copies so experiments can be reproduced."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:tools.03)Read wand slots$(/el)"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "$(el:arrays.04)Read server lifecycle$(/el)"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "title": "中心符文：法术要做什么",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "中心符文",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "中心符文决定法术的主要形态。第一次只记住火、水和魔力。"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "火：放出火焰法术。\n水：放出水流法术，并在命中时产生水的作用。\n魔力：放出魔力弹；与“前”放在同一环中即可作为练习。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "土、风、光、暗和空间也是中心符文，但不是每个中心都能单独释放法术。先确认它有可用的组合，再往环里添加参数。"
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "中心只说明“做什么”，不说明“往哪里去”。方向要交给参数符文；中心和参数之间要留出能看清的距离。"
+    }
+  ]
+}

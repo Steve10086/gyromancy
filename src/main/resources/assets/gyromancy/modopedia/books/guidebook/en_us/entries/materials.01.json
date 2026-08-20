@@ -1,0 +1,95 @@
+{
+  "title": "Four essential tools",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "Four essential tools",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "The basic workflow uses a canvas, pen, ink bottle, and compass. They are one system: the pen reads the offhand ink, the canvas stores the glyphs, and the compass helps draw"
+        }
+      ]
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "boundaries."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Canvas: a placeable, editable surface that can be packed into an item or wand.\n• Pen: the main-hand painter; brush size and step come from PenProperties."
+    },
+    {
+      "type": "modopedia:text",
+      "x": 2,
+      "y": 0,
+      "width": 96,
+      "line_height": 9,
+      "text": "• Mana ink: the offhand source of color and the gyromancy:mana effect.\n• Compass: draws a radius-controlled circle or arc and can store a pen."
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 26,
+          "y": 8,
+          "width": 48,
+          "height": 48,
+          "images": [
+            "gyromancy:textures/item/pen.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 61,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "笔 / Pen"
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:image",
+          "x": 26,
+          "y": 8,
+          "width": 48,
+          "height": 48,
+          "images": [
+            "gyromancy:textures/item/ink_bottle.png"
+          ]
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 61,
+          "width": 96,
+          "line_height": 9,
+          "justify": "center",
+          "text": "墨水 / Ink"
+        }
+      ]
+    }
+  ]
+}
