@@ -1,5 +1,5 @@
 {
-  "title": "一座法阵的三个位置",
+  "title": "法阵的基本构成",
   "pages": [
     {
       "components": [
@@ -7,7 +7,7 @@
           "type": "modopedia:header",
           "x": 0,
           "y": 0,
-          "text": "先看位置，不看名字",
+          "text": "符文",
           "centered": true,
           "bold": true
         },
@@ -17,7 +17,15 @@
           "y": 16,
           "width": 96,
           "line_height": 9,
-          "text": "法阵不是一堆图案。图案落在哪里，决定它在法阵中说什么。"
+          "text": "符文组成最基础的语言"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "在无尽的组合中人们摸索出了有意义的组合。"
         }
       ]
     },
@@ -70,15 +78,13 @@
       "y": 0,
       "width": 96,
       "line_height": 9,
-      "text": "外环划出法阵的范围。中心符文说出法术要做什么。参数符文补充方向、数量或动作。一个环里只能有一个中心符文。"
+      "text": "被火符文唤出的火球被赋予了箭头的方向。"
     },
-    {
-      "type": "modopedia:text",
+    { "type": "modopedia:text",
       "x": 2,
       "y": 0,
       "width": 96,
       "line_height": 9,
-      "text": "没有中心，法阵没有主意；有两个中心，法阵不知道听谁的。两种情况都不会成形。"
-    }
+      "text": "相斥的箭头似乎让火球飞的更高了？"}
   ]
 }

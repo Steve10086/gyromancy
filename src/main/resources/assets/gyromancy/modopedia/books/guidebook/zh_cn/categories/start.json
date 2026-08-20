@@ -1,8 +1,7 @@
 {
-  "title": "先做出一个法阵",
+  "title": "开始",
   "entries": [
-    "start.home",
-    "start.pipeline"
+    "start.home"
   ],
   "display_front_page": true,
   "sort_num": 0

@@ -1,5 +1,5 @@
 {
-  "title": "元素是法术要调用的力量",
+  "title": "元素符文",
   "pages": [
     {
       "components": [
@@ -7,7 +7,7 @@
           "type": "modopedia:header",
           "x": 0,
           "y": 0,
-          "text": "法术材料",
+          "text": "元素",
           "centered": true,
           "bold": true
         },
@@ -17,33 +17,279 @@
           "y": 16,
           "width": 96,
           "line_height": 9,
-          "text": "中心符文决定法术要调用哪一种力量。当前能认出的中心力量有：风、火、水、土、光、暗、空间和魔力。"
+          "text": "元素赋予效果形体。世间有：风、火、水、土、光、暗、空间和魔力这九种元素。"
         }
       ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "第一次只试火、水或魔力。它们都有清楚的释放形态：火焰、水流和魔力弹。其他中心先确认它能接受哪些参数，再开始组合。"
+      "components":
+      [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "风",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "风赋予移动的力量"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "使用风符文来控制轨迹"
+        }
+      ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "魔力墨水是笔迹的燃料，不会替你选择元素。把火符文画进环里，法阵才会尝试调用火；只换墨水，不能把火变成水。"
+      "components":
+      [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "火",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "火赋予破坏，燃烧与锻造"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "使用火符文来点燃与破坏"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "似乎被控制的火也能用于熔炼与烹饪？"
+        }
+      ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "若法术释放后很快停下，先检查墨水是否还有余量，再检查法阵是否用了当前中心不接纳的参数。"
+      "components":
+      [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "水",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "水赋予生命与融合"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "使用水符文来炼药和浇灌"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "水似乎能携带物品"
+        }
+      ]
+    },
+    {"components":
+    [
+      {
+        "type": "modopedia:header",
+        "x": 0,
+        "y": 0,
+        "text": "土",
+        "centered": true,
+        "bold": true
+      },
+      {
+        "type": "modopedia:text",
+        "x": 2,
+        "y": 0,
+        "width": 96,
+        "line_height": 9,
+        "text": "土赋予物质"
+      },
+      {
+        "type": "modopedia:text",
+        "x": 2,
+        "y": 0,
+        "width": 96,
+        "line_height": 9,
+        "text": "使用土符文来转换物质"
+      },
+      {
+        "type": "modopedia:text",
+        "x": 2,
+        "y": 0,
+        "width": 96,
+        "line_height": 9,
+        "text": "但是也能用于破坏？"
+      }
+    ]
+    },
+    {
+      "components":
+      [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "光",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "光赋予照明与？？"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "使用光符文来照明"
+        }
+      ]
+    },
+    {"components":
+    [
+      {
+        "type": "modopedia:header",
+        "x": 0,
+        "y": 0,
+        "text": "暗",
+        "centered": true,
+        "bold": true
+      },
+      {
+        "type": "modopedia:text",
+        "x": 2,
+        "y": 0,
+        "width": 96,
+        "line_height": 9,
+        "text": "暗？予？？"
+      },
+      {
+        "type": "modopedia:text",
+        "x": 2,
+        "y": 0,
+        "width": 96,
+        "line_height": 9,
+        "text": "使用暗符文。"
+      },
+      {
+        "type": "modopedia:text",
+        "x": 2,
+        "y": 0,
+        "width": 96,
+        "line_height": 9,
+        "text": "闭上眼睛"
+      }
+    ]
+    },
+    {
+      "components":
+      [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "空间",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "空间构成了这个世界"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "谨慎使用空间符文"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "世界是坚固的，但是我们不是，当一切都开始折叠，剩下的只有空间本身仍然存在"
+        }
+      ]
+    },
+    {
+      "components":
+      [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "时间",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "时间控制一切"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "无法使用时间符文"
+        }
+      ]
     }
   ]
 }
