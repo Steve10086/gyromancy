@@ -4,44 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "准备",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "握紧你的笔与墨"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "将墨水放在副手，使用笔在任意表面画出线条。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "尝试画出以下图案"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/start.home.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

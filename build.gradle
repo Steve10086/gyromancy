@@ -170,6 +170,14 @@ configurations {
 sourceSets { test { compileClasspath += sourceSets.main.compileClasspath; runtimeClasspath += sourceSets.main.runtimeClasspath } }
 
 dependencies {
+    jarJar(implementation("org.commonmark:commonmark:0.30.0")) {
+        version {
+            strictly '[0.30, 1.0)'
+            prefer '0.30.0'
+        }
+    }
+    additionalRuntimeClasspath "org.commonmark:commonmark:0.30.0"
+
     implementation "maven.modrinth:pigmentum:0.6.1beta"
     implementation "curse.maven:modopedia-1132038:8043293"
     implementation "foundry.veil:veil-neoforge-${minecraft_version}:${veil_version}"

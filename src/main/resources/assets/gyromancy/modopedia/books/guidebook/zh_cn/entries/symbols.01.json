@@ -4,58 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "符文",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "符文组成最基础的语言，在无尽的组合中人们摸索出了有意义的组合。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:image",
-          "x": 18,
-          "y": 5,
-          "width": 26,
-          "height": 26,
-          "images": [
-            "gyromancy:textures/guide/example.png"
-          ]
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "被火符文唤出的火球被赋予了箭头的方向。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "相斥的箭头似乎让火球飞的更高了？"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/symbols.01.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

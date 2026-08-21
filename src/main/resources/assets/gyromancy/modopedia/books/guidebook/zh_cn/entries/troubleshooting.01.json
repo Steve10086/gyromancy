@@ -4,32 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "符文",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "符文并非天生存在，经过上千年的探索，人们总结出特定的图案，但是图案的边界并不清晰，微小的错误也能破坏共鸣。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "好在即使纹路不同，相同的符文总是引发着相同的魔力纹理，通过这些纹理，我们获得了知晓结果的能力。"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/troubleshooting.01.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

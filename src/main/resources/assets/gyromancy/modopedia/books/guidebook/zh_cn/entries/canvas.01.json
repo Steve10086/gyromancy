@@ -4,45 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "画布的制造，拼接与复制",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "原则上来说，任意的纸张都能作为画布，但是为了便于携带与耐用性，笔者在此推荐一种使用动物皮革制造画布的方法"
-        }
-        //todo:canvas recipe
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "画布可以通过纸张轻易升级大小，神奇的是，这会让画布的内容一并放大。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "将画布内容抄到一张纸上，你就拿到了第二张画布。"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/canvas.01.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

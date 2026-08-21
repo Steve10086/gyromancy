@@ -4,32 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "嵌套法阵",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "法阵本身也能作为符号被接纳。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "复杂的法阵需要由内到外绘制，以固定的顺序调动魔力才能给出想要的结果。"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/arrays.02.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

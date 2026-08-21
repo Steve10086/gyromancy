@@ -4,20 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "结构决定一切",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "魔力与符文的结构共鸣，成功共鸣后会发出辉光。"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/symbol.03.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

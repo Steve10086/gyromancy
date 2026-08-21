@@ -4,50 +4,11 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "魔杖的制作于使用",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "虽然都说魔法魔法，谁能想到魔法随便拿只笔就能画呢"
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "右键绘画"
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "笔的选材并不会影响你的技术，但没有魔法师会愿意拿着根羽毛画画的。"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/tools.03.md",
+          "padding": 2,
+          "gap": 3
         }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "一只好笔可以接纳更加强力的魔墨，以下是一些笔的制作方式:"
-        }
-
       ]
     }
   ]

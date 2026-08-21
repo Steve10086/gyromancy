@@ -4,28 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "画布中的规律",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "画布似乎阻碍了魔力的流通，导致被完整画出的法阵无法及时触发"
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "这允许我们以任意规律画出复杂的法阵，等待墨迹干透便能自动正确排列。"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/troubleshooting.03.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

@@ -4,47 +4,12 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "印章的制作与使用",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "印章能一次性画出刻于其上的符文。"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/tools.02.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "绘画时: 左键以印下，右键擦除。按 R 旋转，使用 X 并拖动调整大小。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "制作时需准备以下物品，其中铜环需要额外雕刻才能将墨水锁于刻痕之中:"
-        }
-      ],
-      //todo:stampe recipe
     }
   ]
 }

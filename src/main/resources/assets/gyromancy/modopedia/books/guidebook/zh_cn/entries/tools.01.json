@@ -4,45 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "圆规的制造与使用",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "圆规属于辅助类工具，制造简单，帮助所有手抖的人画好最后一笔"
-        }
-        //todo: compass recipe
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "把圆规放在物品栏中，对准一支笔使用副键即可存入；对准空槽使用副键可以取出。对着物体使用圆规时，第一次命中的位置会成为圆心。按住右键并转动视角以画出弧线。Shift + 滚轮调整半径。在画布中选中圆规也能进行绘画。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "圆规都要放在这本书里面吗，这种所有人都会做的工具。。。不知道这本书是写给谁的。"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/tools.01.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

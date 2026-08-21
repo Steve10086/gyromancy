@@ -4,77 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "参数先少后多",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "最常用的参数是“前”。它让火焰、水流或魔力弹沿着箭头指向离开法阵。箭头的朝向和长度也会影响释放方向与力度。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:image",
-          "x": 28,
-          "y": 6,
-          "width": 36,
-          "height": 36,
-          "images": [
-            "gyromancy:textures/symbol/arrow.png"
-          ]
-        },
-        {
-          "type": "modopedia:image",
-          "x": 62,
-          "y": 6,
-          "width": 36,
-          "height": 36,
-          "images": [
-            "gyromancy:textures/symbol/arrow_up.png"
-          ]
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 47,
-          "width": 96,
-          "line_height": 9,
-          "justify": "center",
-          "text": "前：朝法阵外发射       上：交给进阶组合使用"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "其他参数会改变旋转、反向、固定、分裂或重复。它们不能随意叠加：只有中心法术愿意接纳的参数才有意义。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "如果你只是想先看到法术，只放一个中心和一个“前”。多余的参数无法被当前法术接纳时，整个环会保持沉默。"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/symbols.02.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

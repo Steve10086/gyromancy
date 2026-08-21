@@ -4,42 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "法阵的骨架",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 18,
-          "width": 96,
-          "line_height": 9,
-          "text": "使用环定义一个区域, 当环内的符号存在意义，效果会及时触发。在无尽的符号组合中，只有有限的组合能与世界中的魔力产生共鸣。\n\n 存在于空气中的魔力只有在符号正确绘出时才能被调动，任何的重叠或分叉都会打破这脆弱的平衡。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "尝试一下这个组合:"
-        },
-        {
-          "type": "modopedia:image",
-          "x": 18,
-          "y": 5,
-          "width": 26,
-          "height": 26,
-          "images": [
-            "gyromancy:textures/guide/example.png"
-          ]
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/arrays.01.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

@@ -4,42 +4,11 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "笔",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "基础配方"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/materials.01.md",
+          "padding": 2,
+          "gap": 3
         }
-        //todo:pen recipe
-      ]
-    },{
-      "components": [
-        {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "墨水",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "基础配方"
-        }
-        //todo:ink recipe
       ]
     }
   ]

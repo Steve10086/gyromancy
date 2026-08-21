@@ -4,44 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "法阵",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "圆环亮起时，法阵无法再接纳新的事物，务必提前放置内部的符文。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "多层的法阵允许我们对魔力进行更加精确的控制，这也包括了时间维度上的。当符文已经被圆环定义，就无法被新的圆环辨别"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "法阵的触发是实时的，处理危险的内部结构时需要及时打断法阵的成型。这需要一个额外的外环，当然你也可以在纸上作画。"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/troubleshooting.02.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

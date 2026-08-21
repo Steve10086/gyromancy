@@ -4,32 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "魔墨",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "魔墨自银树而来"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "制作墨水分为以下步骤:"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/tools.04.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }

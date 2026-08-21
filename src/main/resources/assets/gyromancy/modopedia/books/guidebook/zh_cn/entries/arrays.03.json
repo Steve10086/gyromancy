@@ -4,32 +4,10 @@
     {
       "components": [
         {
-          "type": "modopedia:header",
-          "x": 0,
-          "y": 0,
-          "text": "当事情变得糟糕。。",
-          "centered": true,
-          "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "大多数法阵都需要持续和空气中的魔力共鸣，当平衡被打破，效果会即刻消散。"
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "当我们在法阵外侧建立起新的结构，原有的效果也会消失。"
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/arrays.03.md",
+          "padding": 2,
+          "gap": 3
         }
       ]
     }
