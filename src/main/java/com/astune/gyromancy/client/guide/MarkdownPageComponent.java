@@ -6,14 +6,8 @@ import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 import net.favouriteless.modopedia.api.Lookup;
 import net.favouriteless.modopedia.api.book.Book;
-import net.favouriteless.modopedia.api.book.BookTexture;
-import net.favouriteless.modopedia.api.book.page_components.BookRenderContext;
-import net.favouriteless.modopedia.api.book.page_components.PageComponent;
-import net.favouriteless.modopedia.api.book.page_components.PageWidgetHolder;
-import net.favouriteless.modopedia.api.registries.client.BookTextureRegistry;
 import net.favouriteless.modopedia.book.variables.JsonVariable;
 import net.favouriteless.modopedia.book.variables.VariableLookup;
-import net.favouriteless.modopedia.client.page_widgets.PageImageButton;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceLocation;
@@ -42,19 +36,17 @@ import org.commonmark.node.ThematicBreak;
 import org.commonmark.parser.Parser;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Loads one CommonMark document and presents it as a pageable collection of
- * native Modopedia components. A line containing {@code <!-- page -->} keeps
- * an intentional page break; long sections are split automatically when the
- * flow layout exceeds the current book page.
+ * Loads one CommonMark document and exposes one of its physical book pages.
+ * The outer Modopedia page supplies page_num, so the normal double-sided book
+ * screen renders consecutive Markdown sections on its left and right pages.
  */
-public final class MarkdownPageComponent extends PageComponent {
+public final class MarkdownPageComponent extends AutoLayoutPageComponent {
 
     private static final Pattern RECIPE_DIRECTIVE = Pattern.compile(
             "(?s)^:::\\s*recipe\\s+([^\\s]+)\\s*\\n\\s*:::$|^\\{\\{recipe\\s+([^}\\s]+)\\s*}}$");
@@ -63,152 +55,22 @@ public final class MarkdownPageComponent extends PageComponent {
     private static final Pattern TEXT_DIRECTIVE = Pattern.compile(
             "(?s)^:::\\s*text(?:\\s+([^\\n]*))?\\s*\\n(.*?)\\n\\s*:::$");
 
-    private final List<AutoLayoutPageComponent> pages = new ArrayList<>();
-    private int selectedPage;
-    private int width;
-    private int height;
-    private PageImageButton previousButton;
-    private PageImageButton nextButton;
-
     @Override
     public void init(Book book, Lookup lookup, Level level) {
-        super.init(book, lookup, level);
-        pages.clear();
-        selectedPage = 0;
-
         String file = lookup.get("file").asString();
-        String markdown = read(ResourceLocation.parse(file));
-        BookTexture texture = BookTextureRegistry.get().getTexture(book.getTexture());
-        BookTexture.Rectangle page = texture.pages().get(Math.floorMod(pageNum, texture.pages().size()));
-        width = intValue(lookup, "width", page.width());
-        height = intValue(lookup, "height", page.height());
+        List<String> pages = splitPages(read(ResourceLocation.parse(file)));
+        int pageIndex = lookup.has("page")
+                ? lookup.get("page").asInt()
+                : (lookup.has("page_num") ? lookup.get("page_num").asInt() : 0);
+        String source = pageIndex >= 0 && pageIndex < pages.size() ? pages.get(pageIndex) : "";
 
         RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, level.registryAccess());
-        for (String source : splitPages(markdown)) {
-            addPaginatedSource(book, lookup, level, ops, parse(source));
-        }
-        if (pages.isEmpty()) {
-            pages.add(createPage(book, lookup, level, ops, new JsonArray()));
-        }
-    }
-
-    @Override
-    public void render(net.minecraft.client.gui.GuiGraphics graphics, BookRenderContext context,
-                       int mouseX, int mouseY, float partialTicks) {
-        pages.get(selectedPage).render(graphics, context, mouseX, mouseY, partialTicks);
-    }
-
-    @Override
-    public void initWidgets(PageWidgetHolder widgetHolder, BookRenderContext context) {
-        for (AutoLayoutPageComponent page : pages) {
-            page.initWidgets(widgetHolder, context);
-        }
-        if (pages.size() < 2 || previousButton != null) {
-            return;
-        }
-
-        BookTexture texture = context.getBookTexture();
-        BookTexture.FixedRectangle left = texture.left();
-        BookTexture.FixedRectangle right = texture.right();
-        previousButton = widgetHolder.addRenderableWidget(new PageImageButton(
-                texture.location(), x, y + height - left.height(), left.width(), left.height(),
-                left.u(), left.v(), texture.texWidth(), texture.texHeight(), button -> changePage(-1)));
-        nextButton = widgetHolder.addRenderableWidget(new PageImageButton(
-                texture.location(), x + width - right.width(), y + height - right.height(),
-                right.width(), right.height(), right.u(), right.v(), texture.texWidth(), texture.texHeight(),
-                button -> changePage(1)));
-        updateButtons();
-    }
-
-    @Override
-    public void tick(BookRenderContext context) {
-        pages.get(selectedPage).tick(context);
-    }
-
-    @Override
-    public boolean mouseClicked(BookRenderContext context, double mouseX, double mouseY, int button) {
-        return pages.get(selectedPage).mouseClicked(context, mouseX, mouseY, button);
-    }
-
-    @Override
-    public boolean mouseReleased(BookRenderContext context, double mouseX, double mouseY, int button) {
-        return pages.get(selectedPage).mouseReleased(context, mouseX, mouseY, button);
-    }
-
-    @Override
-    public boolean mouseDragged(BookRenderContext context, double mouseX, double mouseY, int button,
-                                double dragX, double dragY) {
-        return pages.get(selectedPage).mouseDragged(context, mouseX, mouseY, button, dragX, dragY);
-    }
-
-    @Override
-    public boolean mouseScrolled(BookRenderContext context, double mouseX, double mouseY,
-                                 double scrollX, double scrollY) {
-        return pages.get(selectedPage).mouseScrolled(context, mouseX, mouseY, scrollX, scrollY);
-    }
-
-    @Override
-    public boolean keyPressed(BookRenderContext context, int keyCode, int scanCode, int modifiers) {
-        return pages.get(selectedPage).keyPressed(context, keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public boolean keyReleased(BookRenderContext context, int keyCode, int scanCode, int modifiers) {
-        return pages.get(selectedPage).keyReleased(context, keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public boolean charTyped(BookRenderContext context, char codePoint, int modifiers) {
-        return pages.get(selectedPage).charTyped(context, codePoint, modifiers);
-    }
-
-    @Override
-    public boolean isMouseOver(double mouseX, double mouseY) {
-        return pages.get(selectedPage).isMouseOver(mouseX, mouseY);
-    }
-
-    private void addPaginatedSource(Book book, Lookup lookup, Level level, RegistryOps<JsonElement> ops,
-                                    JsonArray components) {
-        JsonArray current = new JsonArray();
-        for (JsonElement component : components) {
-            current.add(component);
-            AutoLayoutPageComponent candidate = createPage(book, lookup, level, ops, current);
-            if (candidate.getLayoutHeight() > height && current.size() > 1) {
-                current.remove(current.size() - 1);
-                pages.add(createPage(book, lookup, level, ops, current));
-                current = new JsonArray();
-                current.add(component);
-            }
-        }
-        if (current.size() > 0) {
-            pages.add(createPage(book, lookup, level, ops, current));
-        }
-    }
-
-    private AutoLayoutPageComponent createPage(Book book, Lookup lookup, Level level,
-                                                RegistryOps<JsonElement> ops, JsonArray components) {
-        VariableLookup pageLookup = new VariableLookup();
+        VariableLookup expanded = new VariableLookup();
         for (String key : lookup.keys()) {
-            pageLookup.set(key, lookup.get(key));
+            expanded.set(key, lookup.get(key));
         }
-        pageLookup.set("components", JsonVariable.of(components, ops));
-        AutoLayoutPageComponent page = new AutoLayoutPageComponent();
-        page.init(book, pageLookup, level);
-        return page;
-    }
-
-    private void changePage(int amount) {
-        selectedPage = Math.max(0, Math.min(pages.size() - 1, selectedPage + amount));
-        updateButtons();
-    }
-
-    private void updateButtons() {
-        if (previousButton != null) {
-            previousButton.active = selectedPage > 0;
-        }
-        if (nextButton != null) {
-            nextButton.active = selectedPage < pages.size() - 1;
-        }
+        expanded.set("components", JsonVariable.of(parse(source), ops));
+        super.init(book, expanded, level);
     }
 
     private static List<String> splitPages(String markdown) {
@@ -244,7 +106,7 @@ public final class MarkdownPageComponent extends PageComponent {
 
     private static void addBlock(JsonArray components, Node block) {
         if (block instanceof Heading heading) {
-            components.add(header(rawText(heading).trim(), heading.getLevel() == 1));
+            components.add(header(inlineText(heading).trim(), heading.getLevel() == 1));
         } else if (block instanceof Paragraph paragraph) {
             String raw = rawText(paragraph).trim();
             Matcher recipe = RECIPE_DIRECTIVE.matcher(raw);
@@ -257,11 +119,7 @@ public final class MarkdownPageComponent extends PageComponent {
                 addText(components, textDirective.group(2), textDirective.group(1));
             } else if (directive.matches()) {
                 String payload = directive.group(2).trim();
-                if (directive.group(1).equals("image")) {
-                    components.add(image(payload));
-                } else {
-                    components.add(showcase(payload));
-                }
+                components.add(directive.group(1).equals("image") ? image(payload) : showcase(payload));
             } else {
                 addText(components, inlineText(paragraph));
             }
@@ -355,10 +213,11 @@ public final class MarkdownPageComponent extends PageComponent {
 
     private static JsonObject header(String text, boolean centered) {
         JsonObject component = new JsonObject();
-        component.addProperty("type", "modopedia:header");
-        component.addProperty("text", text);
-        component.addProperty("centered", centered);
-        component.addProperty("bold", true);
+        component.addProperty("type", "modopedia:text");
+        component.addProperty("width", 96);
+        component.addProperty("line_height", centered ? 12 : 10);
+        component.addProperty("justify", centered ? "center" : "left");
+        component.addProperty("text", "$(b)" + text + "$(/b)");
         return component;
     }
 
@@ -375,9 +234,7 @@ public final class MarkdownPageComponent extends PageComponent {
         JsonObject component = new JsonObject();
         component.addProperty("type", "modopedia:image");
         JsonArray images = new JsonArray();
-        for (String image : tokens[0].split(",")) {
-            images.add(image);
-        }
+        for (String image : tokens[0].split(",")) images.add(image);
         component.add("images", images);
         component.addProperty("width", optionInt(tokens, "width", 36));
         component.addProperty("height", optionInt(tokens, "height", 36));
@@ -417,9 +274,5 @@ public final class MarkdownPageComponent extends PageComponent {
             if (token.startsWith(prefix)) return token.substring(prefix.length());
         }
         return null;
-    }
-
-    private static int intValue(Lookup lookup, String key, int fallback) {
-        return lookup.has(key) ? lookup.get(key).asInt() : fallback;
     }
 }

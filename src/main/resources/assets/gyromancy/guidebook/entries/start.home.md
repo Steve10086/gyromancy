@@ -1,4 +1,6 @@
-# 准备
+# 一切的开始
+
+## 准备
 
 握紧你的笔与墨
 
@@ -6,5 +8,5 @@
 
 尝试画出以下图案
 
-:::image gyromancy:textures/guide/example.png width=26 height=26
+:::image gyromancy:textures/guide/example.png width=60 height=60
 :::

@@ -6,6 +6,106 @@
         {
           "type": "gyromancy:markdown",
           "file": "gyromancy:guidebook/entries/elements.01.md",
+          "page": 0,
+          "padding": 2,
+          "gap": 3
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/elements.01.md",
+          "page": 1,
+          "padding": 2,
+          "gap": 3
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/elements.01.md",
+          "page": 2,
+          "padding": 2,
+          "gap": 3
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/elements.01.md",
+          "page": 3,
+          "padding": 2,
+          "gap": 3
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/elements.01.md",
+          "page": 4,
+          "padding": 2,
+          "gap": 3
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/elements.01.md",
+          "page": 5,
+          "padding": 2,
+          "gap": 3
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/elements.01.md",
+          "page": 6,
+          "padding": 2,
+          "gap": 3
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/elements.01.md",
+          "page": 7,
+          "padding": 2,
+          "gap": 3
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/elements.01.md",
+          "page": 8,
+          "padding": 2,
+          "gap": 3
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "gyromancy:markdown",
+          "file": "gyromancy:guidebook/entries/elements.01.md",
+          "page": 9,
           "padding": 2,
           "gap": 3
         }

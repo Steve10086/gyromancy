@@ -6,6 +6,7 @@
         {
           "type": "gyromancy:markdown",
           "file": "gyromancy:guidebook/entries/carving.01.md",
+          "page": 0,
           "padding": 2,
           "gap": 3
         }
