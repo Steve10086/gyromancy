@@ -14,6 +14,7 @@ import com.astune.gyromancy.client.effect.FlipbookEffect;
 import com.astune.gyromancy.client.effect.PhotonFxWarmup;
 import com.astune.gyromancy.client.effect.VortexOrbitEffect;
 import com.astune.gyromancy.client.effect.WandProjectionGlowRenderer;
+import com.astune.gyromancy.client.guide.MarkdownGuideRuntime;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.client.Minecraft;
@@ -119,6 +120,8 @@ public class GyromancyClient {
                 PaintCameraController::onClientTick);
         NeoForge.EVENT_BUS.<ClientTickEvent.Post>addListener(
                 event -> PhotonFxWarmup.tick());
+        NeoForge.EVENT_BUS.<ClientTickEvent.Post>addListener(
+                event -> MarkdownGuideRuntime.tick());
         NeoForge.EVENT_BUS.<InputEvent.MouseScrollingEvent>addListener(event -> {
             Minecraft minecraft = Minecraft.getInstance();
             if (minecraft.player != null && minecraft.screen == null

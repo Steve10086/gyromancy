@@ -4,6 +4,9 @@
 
 法杖经过多次迭代，最终定型为当今主流的光线投影型魔具。
 
+
+
+
 :::showcase gyromancy:wand width=80 height=32 scale=0.8
 :::
 

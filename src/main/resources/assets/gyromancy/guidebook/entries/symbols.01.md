@@ -7,6 +7,6 @@
 :::image gyromancy:textures/guide/example.png width=60 height=60
 :::
 
-被火符文唤出的火球被赋予了箭头的方向。
+火符文唤出的火球被赋予了箭头的方向。
 
 相斥的箭头似乎让火球飞的更高了？
