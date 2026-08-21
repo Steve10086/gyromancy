@@ -1,0 +1,73 @@
+{
+  "title": "法杖",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "法杖的制作与使用",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 16,
+          "width": 96,
+          "line_height": 9,
+          "text": "法杖经过多次迭代，最终定型为当今主流的光线投影型魔具。"
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "法杖使用方法",
+          "centered": true,
+          "bold": true
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "Shift + 右键法杖打开配置界面，把画布放入投影槽。普通右键并按住，会在面前展开投影；松开右键，投影就会停止。"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "部分法杖能实现多层画布叠加组合，这或许能让不同大小的画布组成更加复杂的图案。只可惜光学投影阵法的特效决定了无法与魔力共鸣的痕迹是无法被捕获的。"
+        },
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "由于特殊的共鸣规律，法杖似乎能自然的区分有效法阵，只有能被激活的法阵会被投影出来。"
+        }
+      ]
+    },
+    {
+      "components": [
+        {
+          "type": "modopedia:header",
+          "x": 0,
+          "y": 0,
+          "text": "附件:铜环法杖图纸",
+          "centered": true,
+          "bold": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "title": "基础操作",
+  "title": "雕刻工艺与魔具制造",
   "pages": [
     {
       "components": [
@@ -7,17 +7,9 @@
           "type": "modopedia:header",
           "x": 0,
           "y": 0,
-          "text": "画布",
+          "text": "雕刻台",
           "centered": true,
           "bold": true
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 16,
-          "width": 96,
-          "line_height": 9,
-          "text": "放置画布后，右键它打开编辑界面，你还需要一只笔与墨水。"
         }
       ]
     },
@@ -27,7 +19,7 @@
       "y": 0,
       "width": 96,
       "line_height": 9,
-      "text": "从快捷栏选中你想用的工具。"
+      "text": "部分物品可以放置于雕刻台上进行绘制，虽然这叫雕刻台，但是很久以前就没有人再使用刀来雕刻纹路了。"
     },
     {
       "type": "modopedia:text",
@@ -35,7 +27,7 @@
       "y": 0,
       "width": 96,
       "line_height": 9,
-      "text": "Ctrl + 滚轮 和 拖动 来控制显示大型和位置。"
+      "text": "利用放大镜，我们得以在微小的铜环上雕刻出复杂的符文"
     },
     {
       "type": "modopedia:text",
@@ -43,7 +35,7 @@
       "y": 0,
       "width": 96,
       "line_height": 9,
-      "text": "右上角的控制面板可以辅助画出更复杂的法阵"
+      "text": "物品上的结构赋予其特殊的功能，将这些结构组合起来便能做出魔具。"
     }
   ]
 }

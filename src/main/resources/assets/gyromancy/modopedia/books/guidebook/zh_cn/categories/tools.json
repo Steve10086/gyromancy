@@ -1,9 +1,11 @@
 {
-  "title": "画圆、刻印与投影",
+  "title": "工具介绍与制造工艺",
   "entries": [
     "tools.01",
     "tools.02",
-    "tools.03"
+    "tools.03",
+    "tools.04",
+    "tools.05"
   ],
   "display_front_page": true,
   "sort_num": 6
