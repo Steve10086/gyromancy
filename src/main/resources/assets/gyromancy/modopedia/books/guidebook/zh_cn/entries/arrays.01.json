@@ -14,44 +14,34 @@
         {
           "type": "modopedia:text",
           "x": 2,
-          "y": 16,
+          "y": 18,
           "width": 96,
           "line_height": 9,
-          "text": "使用环定义一个区域。"
+          "text": "使用环定义一个区域, 当环内的符号存在意义，效果会及时触发。在无尽的符号组合中，只有有限的组合能与世界中的魔力产生共鸣。\n\n 存在于空气中的魔力只有在符号正确绘出时才能被调动，任何的重叠或分叉都会打破这脆弱的平衡。"
         }
       ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "当环内的符号存在意义，效果会及时触发。"
-    },
-    {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "存在于空气中的魔力只有在符号正确绘出时才能被调动，任何的重叠或分叉都会打破这脆弱的平衡。"
-    },
-    {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 16,
-      "width": 96,
-      "line_height": 9,
-      "text": "在无尽的符号组合中，只有有限的组合能与世界中的魔力产生共鸣，利用它们却可以实现无限的愿望。"
-    },
-    {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "$(el:symbols.01)$(/el)\n$(el:start.pipeline)尝试一下这个组合$(/el)"
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "尝试一下这个组合:"
+        },
+        {
+          "type": "modopedia:image",
+          "x": 18,
+          "y": 5,
+          "width": 26,
+          "height": 26,
+          "images": [
+            "gyromancy:textures/guide/example.png"
+          ]
+        }
+      ]
     }
   ]
 }

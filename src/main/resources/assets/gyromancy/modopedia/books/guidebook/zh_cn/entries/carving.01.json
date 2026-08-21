@@ -14,28 +14,31 @@
       ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "部分物品可以放置于雕刻台上进行绘制，虽然这叫雕刻台，但是很久以前就没有人再使用刀来雕刻纹路了。"
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "部分物品可以放置于雕刻台上进行绘制，虽然这叫雕刻台，但是很久以前就没有人再使用刀来雕刻纹路了。"
+        },
+        {
+          //todo:carving table recipe
+        }
+      ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "利用放大镜，我们得以在微小的铜环上雕刻出复杂的符文"
-    },
-    {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "物品上的结构赋予其特殊的功能，将这些结构组合起来便能做出魔具。"
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "利用放大镜，我们得以在微小的铜环上雕刻出复杂的符文, 物品上的结构赋予其特殊的功能，将这些结构组合起来便能做出魔具。"
+        }
+      ]
     }
   ]
 }

@@ -17,15 +17,7 @@
           "y": 16,
           "width": 96,
           "line_height": 9,
-          "text": "符文组成最基础的语言"
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "在无尽的组合中人们摸索出了有意义的组合。"
+          "text": "符文组成最基础的语言，在无尽的组合中人们摸索出了有意义的组合。"
         }
       ]
     },
@@ -38,53 +30,34 @@
           "width": 26,
           "height": 26,
           "images": [
-            "gyromancy:textures/symbol/circle_outer.png"
+            "gyromancy:textures/guide/example.png"
           ]
-        },
-        {
-          "type": "modopedia:image",
-          "x": 47,
-          "y": 5,
-          "width": 26,
-          "height": 26,
-          "images": [
-            "gyromancy:textures/symbol/fire.png"
-          ]
-        },
-        {
-          "type": "modopedia:image",
-          "x": 76,
-          "y": 5,
-          "width": 18,
-          "height": 18,
-          "images": [
-            "gyromancy:textures/symbol/arrow.png"
-          ]
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 38,
-          "width": 96,
-          "line_height": 9,
-          "justify": "center",
-          "text": "环：边界      火：中心      前：参数"
         }
       ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "被火符文唤出的火球被赋予了箭头的方向。"
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "被火符文唤出的火球被赋予了箭头的方向。"
+        }
+      ]
     },
-    { "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "相斥的箭头似乎让火球飞的更高了？"}
+    {
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "相斥的箭头似乎让火球飞的更高了？"
+        }
+      ]
+    }
   ]
 }

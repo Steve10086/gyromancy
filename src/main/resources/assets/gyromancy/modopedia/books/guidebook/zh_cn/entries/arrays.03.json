@@ -22,12 +22,16 @@
       ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "当我们在法阵外侧建立起新的结构，原有的效果也会消失。"
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "当我们在法阵外侧建立起新的结构，原有的效果也会消失。"
+        }
+      ]
     }
   ]
 }

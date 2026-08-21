@@ -1,5 +1,5 @@
 {
-  "title": "笔",
+  "title": "墨",
   "pages": [
     {
       "components": [
@@ -7,7 +7,7 @@
           "type": "modopedia:header",
           "x": 0,
           "y": 0,
-          "text": "魔杖的制作与使用",
+          "text": "魔墨",
           "centered": true,
           "bold": true
         },
@@ -17,23 +17,7 @@
           "y": 16,
           "width": 96,
           "line_height": 9,
-          "text": "虽然都说魔法魔法，谁能想到魔法随便拿只笔就能画呢"
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "右键绘画"
-        },
-        {
-          "type": "modopedia:text",
-          "x": 2,
-          "y": 0,
-          "width": 96,
-          "line_height": 9,
-          "text": "笔的选材并不会影响你的技术，但没有魔法师会愿意拿着根羽毛画画的。"
+          "text": "魔墨自银树而来"
         }
       ]
     },
@@ -45,9 +29,8 @@
           "y": 0,
           "width": 96,
           "line_height": 9,
-          "text": "一只好笔能接纳更加强力的魔墨，以下是基础钢笔的制作方法:"
+          "text": "制作墨水分为以下步骤:"
         }
-
       ]
     }
   ]

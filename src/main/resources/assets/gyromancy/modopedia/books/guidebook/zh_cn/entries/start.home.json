@@ -22,20 +22,28 @@
       ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "将墨水放在副手，使用笔在任意表面画出线条。"
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "将墨水放在副手，使用笔在任意表面画出线条。"
+        }
+      ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "尝试画出以下图案"
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "尝试画出以下图案"
+        }
+      ]
     }
   ]
 }

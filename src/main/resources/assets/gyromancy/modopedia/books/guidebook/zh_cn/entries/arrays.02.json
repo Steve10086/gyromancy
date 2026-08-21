@@ -22,20 +22,16 @@
       ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "复杂的法阵需要由内到外绘制，以固定的顺序调动魔力才能给出想要的结果。"
-    },
-    {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "顺序是最重要的"
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "复杂的法阵需要由内到外绘制，以固定的顺序调动魔力才能给出想要的结果。"
+        }
+      ]
     }
   ]
 }

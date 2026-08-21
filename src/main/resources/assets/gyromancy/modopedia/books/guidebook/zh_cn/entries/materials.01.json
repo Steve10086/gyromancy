@@ -19,6 +19,7 @@
           "line_height": 9,
           "text": "基础配方"
         }
+        //todo:pen recipe
       ]
     },{
       "components": [
@@ -38,6 +39,7 @@
           "line_height": 9,
           "text": "基础配方"
         }
+        //todo:ink recipe
       ]
     }
   ]

@@ -22,28 +22,40 @@
       ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "从快捷栏选中你想用的工具。"
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "从快捷栏选中你想用的工具。"
+        }
+      ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "Ctrl + 滚轮 和 拖动 来控制显示大型和位置。"
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "Ctrl + 滚轮 和 拖动 来控制显示大型和位置。"
+        }
+      ]
     },
     {
-      "type": "modopedia:text",
-      "x": 2,
-      "y": 0,
-      "width": 96,
-      "line_height": 9,
-      "text": "右上角的控制面板可以辅助画出更复杂的法阵"
+      "components": [
+        {
+          "type": "modopedia:text",
+          "x": 2,
+          "y": 0,
+          "width": 96,
+          "line_height": 9,
+          "text": "右上角的控制面板可以辅助画出更复杂的法阵"
+        }
+      ]
     }
   ]
 }
