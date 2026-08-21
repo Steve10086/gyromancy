@@ -112,6 +112,19 @@ class CarvingStructureMatcherTest {
                 new CarvingRequirement(List.of(ARROW, ARROW), List.of())));
     }
 
+    @Test
+    void displayDocumentPreservesTheRecipeForest() {
+        CarvingRequirement requirement = new CarvingRequirement(
+                List.of(ARROW, ARROW),
+                List.of(new CarvingRequirement(List.of(CURL), List.of())));
+
+        CanvasDocument display = CarvingIngredientDisplay.documentFor(requirement);
+
+        assertEquals(4, display.glyphs().size());
+        assertEquals(1, display.arrays().size());
+        assertTrue(CarvingStructureMatcher.matches(display, requirement));
+    }
+
     private static CanvasArrayRecord array(UUID root, List<UUID> bound) {
         return new CanvasArrayRecord(root, bound, CanvasArrayRecord.fingerprint(root, bound));
     }

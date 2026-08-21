@@ -5,6 +5,8 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.canvas.Carvable;
 import com.astune.gyromancy.canvas.CanvasDocument;
+import com.astune.gyromancy.item.CarvingMaterials;
+import com.astune.gyromancy.registry.ModDataComponents;
 import com.astune.gyromancy.registry.ModIngredients;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -102,7 +104,23 @@ public record CarvingIngredient(
 
     @Override
     public Stream<ItemStack> getItems() {
-        return Arrays.stream(item.getItems());
+        CarvingRequirement required = requirement();
+        return Arrays.stream(item.getItems())
+                .map(stack -> displayStack(stack, required));
+    }
+
+    /**
+     * Creates the representative stack used by recipe viewers. This document
+     * is display-only: crafting still calls {@link #test(ItemStack)} against
+     * the real stack supplied by the player.
+     */
+    private static ItemStack displayStack(ItemStack stack, CarvingRequirement requirement) {
+        if (!(stack.getItem() instanceof CarvingMaterials)) return stack;
+
+        ItemStack display = stack.copy();
+        display.set(ModDataComponents.CARVING_DOCUMENT.get(),
+                CarvingIngredientDisplay.documentFor(requirement));
+        return display;
     }
 
     @Override
