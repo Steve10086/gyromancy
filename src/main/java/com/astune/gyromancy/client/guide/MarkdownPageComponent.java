@@ -14,6 +14,7 @@ import net.favouriteless.modopedia.book.text.TextParser;
 import net.favouriteless.modopedia.book.variables.JsonVariable;
 import net.favouriteless.modopedia.book.variables.VariableLookup;
 import net.minecraft.client.Minecraft;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceLocation;
@@ -67,6 +68,9 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
             "(?s)^:::\\s*(image|showcase)\\s+([^\\n]+?)\\s*\\n\\s*:::$");
     private static final Pattern TEXT_DIRECTIVE = Pattern.compile(
             "(?s)^:::\\s*text(?:\\s+([^\\n]*))?\\s*\\n(.*?)\\n\\s*:::$");
+    private static final Pattern LANGUAGE_TOKEN = Pattern.compile(
+            "\\{\\{\\s*(?:lang|translate)\\s*:\\s*([^}\\s]+)\\s*}}"
+                    + "|\\$\\(\\s*(?:lang|translate)\\s*:\\s*([^\\)\\s]+)\\s*\\)");
 
     @Override
     public void init(Book book, Lookup lookup, Level level) {
@@ -226,21 +230,53 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
     }
 
     private static String inlineText(Node node) {
-        if (node instanceof Text text) return text.getLiteral();
+        if (node instanceof Text text) return localize(text.getLiteral());
         if (node instanceof Code code) return code.getLiteral();
         if (node instanceof HtmlInline html) return html.getLiteral();
-        if (node instanceof Image image) return childText(image, false);
+        if (node instanceof Image image) return childText(image, true);
         if (node instanceof Link link) {
             String target = link.getDestination();
-            String formatter = target.startsWith("http://") || target.startsWith("https://")
-                    ? "l:" + target
-                    : "el:" + target;
+            String formatter = linkFormatter(target);
             return "$(" + formatter + ")" + childText(link, true) + "$(/l)";
         }
         if (node instanceof StrongEmphasis) return "$(b)" + childText(node, true) + "$(/b)";
         if (node instanceof Emphasis) return "$(i)" + childText(node, true) + "$(/i)";
         if (node instanceof SoftLineBreak || node instanceof HardLineBreak) return "\n";
         return childText(node, true);
+    }
+
+    private static String linkFormatter(String target) {
+        if (target == null || target.isBlank()) {
+            return "el:";
+        }
+        if (target.startsWith("http://") || target.startsWith("https://")
+                || target.startsWith("mailto:")) {
+            return "l:" + target;
+        }
+        if (target.startsWith("category:")) {
+            return "cl:" + target.substring("category:".length());
+        }
+        if (target.startsWith("entry:")) {
+            return "el:" + target.substring("entry:".length());
+        }
+        if (target.startsWith("#")) {
+            return "el:" + target.substring(1);
+        }
+        return "el:" + target;
+    }
+
+    private static String localize(String text) {
+        if (text == null || text.isEmpty()) return text;
+
+        Matcher matcher = LANGUAGE_TOKEN.matcher(text);
+        StringBuffer result = new StringBuffer();
+        while (matcher.find()) {
+            String key = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+            String translated = Language.getInstance().getOrDefault(key);
+            matcher.appendReplacement(result, Matcher.quoteReplacement(translated));
+        }
+        matcher.appendTail(result);
+        return result.toString();
     }
 
     private static String childText(Node node, boolean formatted) {

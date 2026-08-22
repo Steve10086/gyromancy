@@ -1,0 +1,11 @@
+{
+  "title": "符文大全",
+  "pages": [
+    {
+      "type": "gyromancy:markdown",
+      "file": "gyromancy:guidebook/entries/symbols.03.md",
+      "padding": 2,
+      "gap": 3
+    }
+  ]
+}

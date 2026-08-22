@@ -1,0 +1,11 @@
+{
+  "title": "简易魔法全解",
+  "pages": [
+    {
+      "type": "gyromancy:markdown",
+      "file": "gyromancy:guidebook/entries/arrays.05.md",
+      "padding": 2,
+      "gap": 3
+    }
+  ]
+}
