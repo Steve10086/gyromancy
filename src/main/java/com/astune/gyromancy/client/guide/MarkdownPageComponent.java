@@ -14,7 +14,6 @@ import net.favouriteless.modopedia.book.text.TextParser;
 import net.favouriteless.modopedia.book.variables.JsonVariable;
 import net.favouriteless.modopedia.book.variables.VariableLookup;
 import net.minecraft.client.Minecraft;
-import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceLocation;
@@ -68,11 +67,6 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
             "(?s)^:::\\s*(image|showcase)\\s+([^\\n]+?)\\s*\\n\\s*:::$");
     private static final Pattern TEXT_DIRECTIVE = Pattern.compile(
             "(?s)^:::\\s*text(?:\\s+([^\\n]*))?\\s*\\n(.*?)\\n\\s*:::$");
-    private static final Pattern LANGUAGE_TOKEN = Pattern.compile(
-            "\\{\\{\\s*(?:(?:lang|translate)\\s*:\\s*)?([A-Za-z0-9_.-]+)\\s*}}"
-                    + "|\\$\\(\\s*(?:(?:lang|translate)\\s*:\\s*)?([A-Za-z0-9_.-]+)\\s*\\)"
-                    + "|\\$\\{\\s*(?:(?:lang|translate)\\s*:\\s*)?([A-Za-z0-9_.-]+)\\s*}");
-
     @Override
     public void init(Book book, Lookup lookup, Level level) {
         String file = lookup.get("file").asString();
@@ -133,7 +127,7 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
     private static List<JsonArray> paginate(String markdown, Book book, String language,
                                             int padding, int gap) {
         int pageHeight = pageHeight(book);
-        TranslationResolver translations = TranslationResolver.current();
+        GuideTextResolver translations = GuideTextResolver.current();
         PageBuilder builder = new PageBuilder(book, language, padding, gap, pageHeight);
         List<String> sections = splitPages(markdown);
 
@@ -163,7 +157,7 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
         return 150;
     }
 
-    private static JsonArray parse(String markdown, TranslationResolver translations) {
+    private static JsonArray parse(String markdown, GuideTextResolver translations) {
         JsonArray components = new JsonArray();
         Node document = Parser.builder().build().parse(markdown);
         for (Node block = document.getFirstChild(); block != null; block = block.getNext()) {
@@ -172,7 +166,7 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
         return components;
     }
 
-    private static void addBlock(JsonArray components, Node block, TranslationResolver translations) {
+    private static void addBlock(JsonArray components, Node block, GuideTextResolver translations) {
         if (block instanceof Heading heading) {
             components.add(header(inlineText(heading, translations).trim(), heading.getLevel() == 1));
         } else if (block instanceof Paragraph paragraph) {
@@ -213,7 +207,7 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
     }
 
     private static void addList(JsonArray components, Node list, boolean ordered,
-                                TranslationResolver translations) {
+                                GuideTextResolver translations) {
         int index = ordered ? 1 : 0;
         for (Node child = list.getFirstChild(); child != null; child = child.getNext()) {
             if (!(child instanceof ListItem)) continue;
@@ -232,7 +226,7 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
         return childText(node, false, null);
     }
 
-    private static String inlineText(Node node, TranslationResolver translations) {
+    private static String inlineText(Node node, GuideTextResolver translations) {
         if (node instanceof Text text) return translations.resolve(text.getLiteral());
         if (node instanceof Code code) return code.getLiteral();
         if (node instanceof HtmlInline html) return html.getLiteral();
@@ -248,7 +242,7 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
         return childText(node, true, translations);
     }
 
-    private static String childText(Node node, boolean formatted, TranslationResolver translations) {
+    private static String childText(Node node, boolean formatted, GuideTextResolver translations) {
         StringBuilder result = new StringBuilder();
         for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
             result.append(formatted ? inlineText(child, translations) : rawText(child));
@@ -556,37 +550,6 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
             return field;
         } catch (ReflectiveOperationException exception) {
             throw new ExceptionInInitializerError(exception);
-        }
-    }
-
-    private static final class TranslationResolver {
-        private final Language language;
-
-        private TranslationResolver(Language language) {
-            this.language = language;
-        }
-
-        private static TranslationResolver current() {
-            return new TranslationResolver(Language.getInstance());
-        }
-
-        private String resolve(String text) {
-            if (text == null || text.isEmpty()) return text;
-
-            Matcher matcher = LANGUAGE_TOKEN.matcher(text);
-            StringBuffer result = new StringBuffer();
-            while (matcher.find()) {
-                String key = matcher.group(1) != null ? matcher.group(1)
-                        : (matcher.group(2) != null ? matcher.group(2) : matcher.group(3));
-                if (!language.has(key)) {
-                    matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group()));
-                    continue;
-                }
-                String translated = language.getOrDefault(key);
-                matcher.appendReplacement(result, Matcher.quoteReplacement(translated));
-            }
-            matcher.appendTail(result);
-            return result.toString();
         }
     }
 

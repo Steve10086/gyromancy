@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
- * A small vertical flow layout for Guide pages.
+ * A small flow/grid layout for Guide pages.
  *
  * Children are still ordinary Modopedia components, so templates keep their
  * native rendering and interaction. The layout only supplies the outer
@@ -49,12 +49,14 @@ public class AutoLayoutPageComponent extends PageComponent {
 
     private final List<LayoutChild> children = new ArrayList<>();
     private int layoutHeight;
+    private GuideTextResolver textResolver;
 
     @Override
     public void init(Book book, Lookup lookup, Level level) {
         super.init(book, lookup, level);
         children.clear();
         layoutHeight = 0;
+        textResolver = GuideTextResolver.current();
 
         JsonArray componentData = jsonArray(lookup.get("components"));
         if (componentData == null) {
@@ -64,6 +66,15 @@ public class AutoLayoutPageComponent extends PageComponent {
         RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, level.registryAccess());
         int padding = Math.max(0, intValue(lookup, "padding", 2));
         int gap = Math.max(0, intValue(lookup, "gap", 3));
+
+        String layout = lookup.getOrDefault("layout", "vertical").asString();
+        if (layout.equalsIgnoreCase("grid")) {
+            initGrid(book, lookup, level, componentData, ops, padding, gap);
+            return;
+        }
+
+        int layoutWidth = Math.max(1, intValue(lookup, "width", book == null ? 96 : book.getLineWidth()));
+        String align = lookup.getOrDefault("align", "left").asString();
         int cursor = padding;
 
         for (JsonElement element : componentData) {
@@ -72,7 +83,9 @@ public class AutoLayoutPageComponent extends PageComponent {
             }
 
             JsonObject raw = element.getAsJsonObject();
-            LayoutChild child = createChild(raw, lookup, ops, false, padding, cursor);
+            int childWidth = Math.max(1, intValue(raw, "width", layoutWidth));
+            int childX = alignedX(align, layoutWidth, padding, childWidth);
+            LayoutChild child = createChild(raw, lookup, ops, false, childX, cursor);
             try {
                 child.component.init(book, child.lookup, level);
                 children.add(child);
@@ -83,6 +96,70 @@ public class AutoLayoutPageComponent extends PageComponent {
             }
         }
         layoutHeight = children.isEmpty() ? padding : cursor - gap;
+    }
+
+    private static int alignedX(String align, int width, int padding, int childWidth) {
+        if (align.equalsIgnoreCase("center")) {
+            return Math.max(padding, padding + (width - padding * 2 - childWidth) / 2);
+        }
+        if (align.equalsIgnoreCase("right")) {
+            return Math.max(padding, width - padding - childWidth);
+        }
+        return padding;
+    }
+
+    private void initGrid(Book book, Lookup lookup, Level level, JsonArray componentData,
+                           RegistryOps<JsonElement> ops, int padding, int gap) {
+        int columns = Math.max(1, intValue(lookup, "columns", 2));
+        int width = Math.max(1, intValue(lookup, "width", book == null ? 96 : book.getLineWidth()));
+        int columnGap = Math.max(0, intValue(lookup, "column_gap", gap));
+        int rowGap = Math.max(0, intValue(lookup, "row_gap", gap));
+        int cellWidth = Math.max(1, (width - padding * 2 - columnGap * (columns - 1)) / columns);
+        List<JsonObject> rawChildren = new ArrayList<>();
+
+        for (JsonElement element : componentData) {
+            if (!element.isJsonObject()) continue;
+
+            JsonObject raw = element.getAsJsonObject();
+            rawChildren.add(raw);
+            LayoutChild child = createChild(raw, lookup, ops, false, 0, 0);
+            try {
+                child.component.init(book, child.lookup, level);
+                children.add(child);
+            } catch (RuntimeException exception) {
+                Gyromancy.LOGGER.error("Failed to initialize Guide grid child", exception);
+                throw exception;
+            }
+        }
+
+        if (children.isEmpty()) {
+            layoutHeight = padding;
+            return;
+        }
+
+        int rows = (children.size() + columns - 1) / columns;
+        int[] rowHeights = new int[rows];
+        for (int index = 0; index < children.size(); index++) {
+            int row = index / columns;
+            rowHeights[row] = Math.max(rowHeights[row],
+                    measureHeight(children.get(index).component, rawChildren.get(index)));
+        }
+
+        int cursor = padding;
+        for (int index = 0; index < children.size(); index++) {
+            int row = index / columns;
+            int column = index % columns;
+            LayoutChild child = children.get(index);
+            int childX = padding + column * (cellWidth + columnGap);
+            int childY = cursor;
+            child.lookup.set("x", ObjectVariable.of(childX));
+            child.lookup.set("y", ObjectVariable.of(childY));
+            child.component.init(book, child.lookup, level);
+            if (column == columns - 1 || index == children.size() - 1) {
+                cursor += rowHeights[row] + rowGap;
+            }
+        }
+        layoutHeight = cursor - rowGap;
     }
 
     public int getLayoutHeight() {
@@ -192,6 +269,7 @@ public class AutoLayoutPageComponent extends PageComponent {
 
     private LayoutChild createChild(JsonObject raw, Lookup parentLookup, RegistryOps<JsonElement> ops,
                                     boolean explicitPosition, int childX, int childY) {
+        raw = resolveText(raw);
         PageComponent component;
         if (raw.has("type")) {
             ResourceLocation id = ResourceLocation.parse(raw.get("type").getAsString());
@@ -228,6 +306,17 @@ public class AutoLayoutPageComponent extends PageComponent {
             childLookup.set("y", ObjectVariable.of(childY));
         }
         return new LayoutChild(component, childLookup);
+    }
+
+    private JsonObject resolveText(JsonObject raw) {
+        if (!raw.has("text") || !raw.get("text").isJsonPrimitive()
+                || !raw.getAsJsonPrimitive("text").isString()) {
+            return raw;
+        }
+
+        JsonObject resolved = raw.deepCopy();
+        resolved.addProperty("text", textResolver.resolve(raw.get("text").getAsString()));
+        return resolved;
     }
 
     private PageComponentHolder buildHolder(JsonObject source, RegistryOps<JsonElement> ops) {
@@ -279,6 +368,9 @@ public class AutoLayoutPageComponent extends PageComponent {
     private static int measureHeight(PageComponent component, JsonObject raw) {
         if (raw.has("layout_height")) {
             return Math.max(1, raw.get("layout_height").getAsInt());
+        }
+        if (component instanceof AutoLayoutPageComponent autoLayout) {
+            return Math.max(1, autoLayout.getLayoutHeight());
         }
         if (component instanceof TextPageComponent) {
             int height = textHeight(component);
@@ -357,5 +449,5 @@ public class AutoLayoutPageComponent extends PageComponent {
         boolean handle(LayoutChild child, double mouseX, double mouseY);
     }
 
-    private record LayoutChild(PageComponent component, Lookup lookup) {}
+    private record LayoutChild(PageComponent component, VariableLookup lookup) {}
 }
