@@ -4,25 +4,9 @@
     {
       "components": [
         {
-          "text": "$(el:vector/add)加"
-        }
-      ]
-    },{
-      "components": [
-        {
-          "text": "$(el:vector/add)加"
-        }
-      ]
-    },{
-      "components": [
-        {
-          "text": "$(el:vector/add)加"
-        }
-      ]
-    },{
-      "components": [
-        {
-          "text": "$(el:vector/add)加"
+          "type": "modopedia:text",
+          "width": 96,
+          "text": "$(b)符文簇$(/b)\n\n$(gyromancy:link:entry:vector/add)加$(/gyromancy:link)\n$(gyromancy:link:entry:vector/normal)源$(/gyromancy:link)\n$(gyromancy:link:entry:vector/rotation)角度$(/gyromancy:link)\n$(gyromancy:link:entry:vector/spining)旋转$(/gyromancy:link)"
         }
       ]
     }

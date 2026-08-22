@@ -19,11 +19,13 @@
 <!-- page -->
 
 
-## ${symbol.gyromancy.light}
+## ${symbol.gyromancy.star}
 
-照明术：唯一符文${symbol.gyromancy.light}，制造出自动跟随的光球。
+照明术：唯一符文${symbol.gyromancy.star}，制造出自动跟随的光球。
 
-投影术：唯一符文${symbol.gyromancy.light} + ${symbol.gyromancy.split}，投影剩余结构，距离与箭头有关，大小和法阵一致，**投影能够和魔力共鸣**。
+投影术：唯一符文${symbol.gyromancy.star} + ${symbol.gyromancy.split}，投影剩余结构，距离与箭头有关，大小和法阵一致，**投影能够和魔力共鸣**。
+
+<!-- page -->
 
 ## ${symbol.gyromancy.mana}
 

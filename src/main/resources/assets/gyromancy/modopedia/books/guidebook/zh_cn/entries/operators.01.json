@@ -12,7 +12,7 @@
         {
           "template": "modopedia:page/headered_text",
           "header": "后续目录",
-          "text": "$(el:vector/menu)向量簇"
+          "text": "$(gyromancy:link:entry:vector/menu)向量簇$(/gyromancy:link)"
         }
       ]
     }

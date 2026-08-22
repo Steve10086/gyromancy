@@ -69,8 +69,9 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
     private static final Pattern TEXT_DIRECTIVE = Pattern.compile(
             "(?s)^:::\\s*text(?:\\s+([^\\n]*))?\\s*\\n(.*?)\\n\\s*:::$");
     private static final Pattern LANGUAGE_TOKEN = Pattern.compile(
-            "\\{\\{\\s*(?:lang|translate)\\s*:\\s*([^}\\s]+)\\s*}}"
-                    + "|\\$\\(\\s*(?:lang|translate)\\s*:\\s*([^\\)\\s]+)\\s*\\)");
+            "\\{\\{\\s*(?:(?:lang|translate)\\s*:\\s*)?([A-Za-z0-9_.-]+)\\s*}}"
+                    + "|\\$\\(\\s*(?:(?:lang|translate)\\s*:\\s*)?([A-Za-z0-9_.-]+)\\s*\\)"
+                    + "|\\$\\{\\s*(?:(?:lang|translate)\\s*:\\s*)?([A-Za-z0-9_.-]+)\\s*}");
 
     @Override
     public void init(Book book, Lookup lookup, Level level) {
@@ -132,6 +133,7 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
     private static List<JsonArray> paginate(String markdown, Book book, String language,
                                             int padding, int gap) {
         int pageHeight = pageHeight(book);
+        TranslationResolver translations = TranslationResolver.current();
         PageBuilder builder = new PageBuilder(book, language, padding, gap, pageHeight);
         List<String> sections = splitPages(markdown);
 
@@ -139,7 +141,7 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
             if (sectionIndex > 0) {
                 builder.flush();
             }
-            JsonArray components = parse(sections.get(sectionIndex));
+            JsonArray components = parse(sections.get(sectionIndex), translations);
             for (JsonElement element : components) {
                 if (element.isJsonObject()) {
                     builder.add(element.getAsJsonObject());
@@ -161,18 +163,18 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
         return 150;
     }
 
-    private static JsonArray parse(String markdown) {
+    private static JsonArray parse(String markdown, TranslationResolver translations) {
         JsonArray components = new JsonArray();
         Node document = Parser.builder().build().parse(markdown);
         for (Node block = document.getFirstChild(); block != null; block = block.getNext()) {
-            addBlock(components, block);
+            addBlock(components, block, translations);
         }
         return components;
     }
 
-    private static void addBlock(JsonArray components, Node block) {
+    private static void addBlock(JsonArray components, Node block, TranslationResolver translations) {
         if (block instanceof Heading heading) {
-            components.add(header(inlineText(heading).trim(), heading.getLevel() == 1));
+            components.add(header(inlineText(heading, translations).trim(), heading.getLevel() == 1));
         } else if (block instanceof Paragraph paragraph) {
             String raw = rawText(paragraph).trim();
             Matcher recipe = RECIPE_DIRECTIVE.matcher(raw);
@@ -187,14 +189,14 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
                 String payload = directive.group(2).trim();
                 components.add(directive.group(1).equals("image") ? image(payload) : showcase(payload));
             } else {
-                addText(components, inlineText(paragraph));
+                addText(components, inlineText(paragraph, translations));
             }
         } else if (block instanceof BulletList bulletList) {
-            addList(components, bulletList, false);
+            addList(components, bulletList, false, translations);
         } else if (block instanceof OrderedList orderedList) {
-            addList(components, orderedList, true);
+            addList(components, orderedList, true, translations);
         } else if (block instanceof BlockQuote) {
-            addText(components, prefixLines(inlineText(block), "┃ "));
+            addText(components, prefixLines(inlineText(block, translations), "┃ "));
         } else if (block instanceof FencedCodeBlock fencedCode) {
             addText(components, fencedCode.getLiteral());
         } else if (block instanceof IndentedCodeBlock indentedCode) {
@@ -206,16 +208,17 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
         } else if (block instanceof HtmlBlock htmlBlock) {
             addText(components, htmlBlock.getLiteral());
         } else {
-            addText(components, inlineText(block));
+            addText(components, inlineText(block, translations));
         }
     }
 
-    private static void addList(JsonArray components, Node list, boolean ordered) {
+    private static void addList(JsonArray components, Node list, boolean ordered,
+                                TranslationResolver translations) {
         int index = ordered ? 1 : 0;
         for (Node child = list.getFirstChild(); child != null; child = child.getNext()) {
             if (!(child instanceof ListItem)) continue;
             String prefix = ordered ? index++ + ". " : "• ";
-            addText(components, prefix + inlineText(child).trim());
+            addText(components, prefix + inlineText(child, translations).trim());
         }
     }
 
@@ -226,63 +229,29 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
         if (node instanceof FencedCodeBlock fencedCode) return fencedCode.getLiteral();
         if (node instanceof IndentedCodeBlock indentedCode) return indentedCode.getLiteral();
         if (node instanceof SoftLineBreak || node instanceof HardLineBreak) return "\n";
-        return childText(node, false);
+        return childText(node, false, null);
     }
 
-    private static String inlineText(Node node) {
-        if (node instanceof Text text) return localize(text.getLiteral());
+    private static String inlineText(Node node, TranslationResolver translations) {
+        if (node instanceof Text text) return translations.resolve(text.getLiteral());
         if (node instanceof Code code) return code.getLiteral();
         if (node instanceof HtmlInline html) return html.getLiteral();
-        if (node instanceof Image image) return childText(image, true);
+        if (node instanceof Image image) return childText(image, true, translations);
         if (node instanceof Link link) {
-            String target = link.getDestination();
-            String formatter = linkFormatter(target);
-            return "$(" + formatter + ")" + childText(link, true) + "$(/l)";
+            String target = GuideLinkFormatter.target(link.getDestination());
+            String label = childText(link, true, translations);
+            return target.isEmpty() ? label : GuideLinkFormatter.wrap(target, label);
         }
-        if (node instanceof StrongEmphasis) return "$(b)" + childText(node, true) + "$(/b)";
-        if (node instanceof Emphasis) return "$(i)" + childText(node, true) + "$(/i)";
+        if (node instanceof StrongEmphasis) return "$(b)" + childText(node, true, translations) + "$(/b)";
+        if (node instanceof Emphasis) return "$(i)" + childText(node, true, translations) + "$(/i)";
         if (node instanceof SoftLineBreak || node instanceof HardLineBreak) return "\n";
-        return childText(node, true);
+        return childText(node, true, translations);
     }
 
-    private static String linkFormatter(String target) {
-        if (target == null || target.isBlank()) {
-            return "el:";
-        }
-        if (target.startsWith("http://") || target.startsWith("https://")
-                || target.startsWith("mailto:")) {
-            return "l:" + target;
-        }
-        if (target.startsWith("category:")) {
-            return "cl:" + target.substring("category:".length());
-        }
-        if (target.startsWith("entry:")) {
-            return "el:" + target.substring("entry:".length());
-        }
-        if (target.startsWith("#")) {
-            return "el:" + target.substring(1);
-        }
-        return "el:" + target;
-    }
-
-    private static String localize(String text) {
-        if (text == null || text.isEmpty()) return text;
-
-        Matcher matcher = LANGUAGE_TOKEN.matcher(text);
-        StringBuffer result = new StringBuffer();
-        while (matcher.find()) {
-            String key = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
-            String translated = Language.getInstance().getOrDefault(key);
-            matcher.appendReplacement(result, Matcher.quoteReplacement(translated));
-        }
-        matcher.appendTail(result);
-        return result.toString();
-    }
-
-    private static String childText(Node node, boolean formatted) {
+    private static String childText(Node node, boolean formatted, TranslationResolver translations) {
         StringBuilder result = new StringBuilder();
         for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
-            result.append(formatted ? inlineText(child) : rawText(child));
+            result.append(formatted ? inlineText(child, translations) : rawText(child));
         }
         return result.toString();
     }
@@ -556,6 +525,9 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
     }
 
     private static String closeFormatter(String token) {
+        if (token.startsWith("$(" + GuideLinkFormatter.TAG + ":")) {
+            return "$(/" + GuideLinkFormatter.TAG + ")";
+        }
         String name = formatterName(token);
         if (name.equals("b") || name.equals("i") || name.equals("l") || name.equals("el")) {
             return "$(/" + (name.equals("el") ? "l" : name) + ")";
@@ -584,6 +556,37 @@ public final class MarkdownPageComponent extends AutoLayoutPageComponent {
             return field;
         } catch (ReflectiveOperationException exception) {
             throw new ExceptionInInitializerError(exception);
+        }
+    }
+
+    private static final class TranslationResolver {
+        private final Language language;
+
+        private TranslationResolver(Language language) {
+            this.language = language;
+        }
+
+        private static TranslationResolver current() {
+            return new TranslationResolver(Language.getInstance());
+        }
+
+        private String resolve(String text) {
+            if (text == null || text.isEmpty()) return text;
+
+            Matcher matcher = LANGUAGE_TOKEN.matcher(text);
+            StringBuffer result = new StringBuffer();
+            while (matcher.find()) {
+                String key = matcher.group(1) != null ? matcher.group(1)
+                        : (matcher.group(2) != null ? matcher.group(2) : matcher.group(3));
+                if (!language.has(key)) {
+                    matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group()));
+                    continue;
+                }
+                String translated = language.getOrDefault(key);
+                matcher.appendReplacement(result, Matcher.quoteReplacement(translated));
+            }
+            matcher.appendTail(result);
+            return result.toString();
         }
     }
 

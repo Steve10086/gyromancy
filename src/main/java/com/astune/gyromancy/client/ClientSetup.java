@@ -11,6 +11,7 @@ import com.astune.gyromancy.client.item.WandClientItemExtensions;
 import com.astune.gyromancy.client.glyph.GlyphImageProvider;
 import com.astune.gyromancy.client.glyph.GlyphRenderer;
 import com.astune.gyromancy.client.guide.AutoLayoutPageComponent;
+import com.astune.gyromancy.client.guide.GuideLinkFormatter;
 import com.astune.gyromancy.client.guide.MarkdownPageComponent;
 import com.astune.gyromancy.item.CompassItem;
 import com.astune.gyromancy.registry.ModEntities;
@@ -30,6 +31,7 @@ import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.resources.ResourceLocation;
 import net.favouriteless.modopedia.api.registries.client.PageComponentRegistry;
+import net.favouriteless.modopedia.api.registries.client.TextFormatterRegistry;
 
 @EventBusSubscriber(modid = Gyromancy.MODID, value = Dist.CLIENT)
 public final class ClientSetup {
@@ -38,6 +40,10 @@ public final class ClientSetup {
 
     @SubscribeEvent
     static void onClientSetup(FMLClientSetupEvent event) {
+        // Text formatters are consumed while Modopedia parses native JSON
+        // pages. Register the guide link formatter before the deferred work
+        // below so static menu pages cannot be initialized without it.
+        TextFormatterRegistry.get().register(new GuideLinkFormatter());
         event.enqueueWork(() -> {
             CanvasImageProviderRegistry.register(GlyphImageProvider.INSTANCE, 2);
             CanvasRendererRegistry.registerPixelRenderer(GlyphRenderer.INSTANCE, 2);
