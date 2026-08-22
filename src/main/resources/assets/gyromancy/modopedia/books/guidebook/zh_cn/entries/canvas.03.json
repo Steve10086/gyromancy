@@ -2,15 +2,10 @@
   "title": "保存与重新施法",
   "pages": [
     {
-      "components": [
-        {
-          "type": "gyromancy:markdown",
-          "file": "gyromancy:guidebook/entries/canvas.03.md",
-          "page": 0,
-          "padding": 2,
-          "gap": 3
-        }
-      ]
+      "type": "gyromancy:markdown",
+      "file": "gyromancy:guidebook/entries/canvas.03.md",
+      "padding": 2,
+      "gap": 3
     }
   ]
 }

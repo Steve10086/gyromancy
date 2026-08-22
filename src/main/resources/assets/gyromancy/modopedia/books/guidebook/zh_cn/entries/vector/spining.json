@@ -1,9 +1,9 @@
 {
-  "title": "环",
+  "title": "旋转",
   "pages": [
     {
       "type": "gyromancy:markdown",
-      "file": "gyromancy:guidebook/entries/arrays.01.md",
+      "file": "gyromancy:guidebook/entries/vector/spin.md",
       "padding": 2,
       "gap": 3
     }

@@ -6,6 +6,7 @@ import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasGlyph;
 import com.astune.gyromancy.registry.ModDataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -30,6 +31,7 @@ public abstract class CarvingMaterials extends Item implements Carvable {
 
         CanvasDocument document = stack.get(ModDataComponents.CARVING_DOCUMENT.get());
         if (document == null) return;
+        if (document.glyphs().isEmpty() && document.arrays().isEmpty()) return;
 
         Map<UUID, CanvasGlyph> runesById = new LinkedHashMap<>();
         for (CanvasGlyph rune : document.glyphs()) {
@@ -60,16 +62,18 @@ public abstract class CarvingMaterials extends Item implements Carvable {
                     || parentByRoot.containsKey(array.rootGlyph())) {
                 continue;
             }
-            appendArrayRunes(tooltip, array, runesById, childrenByRoot, printedRunes, 0);
+            appendArrayRunes(tooltip, array, runesById, childrenByRoot, printedRunes,
+                    0, "◆ ");
         }
 
         // Keep recognized runes which are not part of a successfully compiled
         // AST visible as top-level entries instead of silently dropping them.
         for (CanvasGlyph rune : document.glyphs()) {
             if (printedRunes.add(rune.glyphUuid())) {
-                appendRune(tooltip, rune.symbolId(), 0);
+                appendRune(tooltip, rune, 0, "• ");
             }
         }
+
     }
 
     private static Map<UUID, CanvasArrayRecord> findArrayParents(
@@ -103,10 +107,11 @@ public abstract class CarvingMaterials extends Item implements Carvable {
             Map<UUID, CanvasGlyph> runesById,
             Map<UUID, List<CanvasArrayRecord>> childrenByRoot,
             Set<UUID> printedRunes,
-            int depth) {
+            int depth,
+            String marker) {
         CanvasGlyph root = runesById.get(array.rootGlyph());
         if (root == null || !printedRunes.add(root.glyphUuid())) return;
-        appendRune(tooltip, root.symbolId(), depth);
+        appendRune(tooltip, root, depth, marker);
 
         List<CanvasArrayRecord> children = childrenByRoot.getOrDefault(
                 array.rootGlyph(), List.of());
@@ -115,6 +120,7 @@ public abstract class CarvingMaterials extends Item implements Carvable {
             nestedRunes.addAll(child.boundGlyphs());
         }
 
+        List<UUID> visibleChildren = new java.util.ArrayList<>();
         for (UUID glyphId : array.boundGlyphs()) {
             if (glyphId.equals(array.rootGlyph())) continue;
 
@@ -123,25 +129,51 @@ public abstract class CarvingMaterials extends Item implements Carvable {
                     .findFirst()
                     .orElse(null);
             if (child != null) {
-                appendArrayRunes(tooltip, child, runesById, childrenByRoot,
-                        printedRunes, depth + 1);
+                visibleChildren.add(glyphId);
                 continue;
             }
             if (nestedRunes.contains(glyphId)) continue;
 
             CanvasGlyph rune = runesById.get(glyphId);
+            if (rune != null && !printedRunes.contains(rune.glyphUuid())) {
+                visibleChildren.add(glyphId);
+            }
+        }
+
+        for (int index = 0; index < visibleChildren.size(); index++) {
+            UUID glyphId = visibleChildren.get(index);
+            String childMarker = index == visibleChildren.size() - 1
+                    ? "└─ "
+                    : "├─ ";
+            CanvasArrayRecord child = children.stream()
+                    .filter(candidate -> candidate.rootGlyph().equals(glyphId))
+                    .findFirst()
+                    .orElse(null);
+            if (child != null) {
+                appendArrayRunes(tooltip, child, runesById, childrenByRoot,
+                        printedRunes, depth + 1, childMarker);
+                continue;
+            }
+
+            CanvasGlyph rune = runesById.get(glyphId);
             if (rune != null && printedRunes.add(rune.glyphUuid())) {
-                appendRune(tooltip, rune.symbolId(), depth + 1);
+                appendRune(tooltip, rune, depth + 1, childMarker);
             }
         }
     }
 
     private static void appendRune(List<Component> tooltip,
-                                   ResourceLocation symbolId,
-                                   int depth) {
+                                   CanvasGlyph rune,
+                                   int depth,
+                                   String marker) {
+        ResourceLocation symbolId = rune.symbolId();
         String translationKey = "symbol." + symbolId.getNamespace()
                 + "." + symbolId.getPath();
-        tooltip.add(Component.literal("  ".repeat(depth))
-                .append(Component.translatable(translationKey)));
+        Style runeStyle = rune.role() == null
+                ? CarvingTooltipStyles.UNKNOWN_RUNE
+                : CarvingTooltipStyles.forRole(rune.role());
+        tooltip.add(Component.literal("  ".repeat(depth) + marker)
+                .withStyle(CarvingTooltipStyles.FRAME)
+                .append(Component.translatable(translationKey).withStyle(runeStyle)));
     }
 }

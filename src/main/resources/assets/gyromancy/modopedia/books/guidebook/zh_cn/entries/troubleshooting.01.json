@@ -2,26 +2,10 @@
   "title": "你的法术失效了，怎么回事呢",
   "pages": [
     {
-      "components": [
-        {
-          "type": "gyromancy:markdown",
-          "file": "gyromancy:guidebook/entries/troubleshooting.01.md",
-          "page": 0,
-          "padding": 2,
-          "gap": 3
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "gyromancy:markdown",
-          "file": "gyromancy:guidebook/entries/troubleshooting.01.md",
-          "page": 1,
-          "padding": 2,
-          "gap": 3
-        }
-      ]
+      "type": "gyromancy:markdown",
+      "file": "gyromancy:guidebook/entries/troubleshooting.01.md",
+      "padding": 2,
+      "gap": 3
     }
   ]
 }

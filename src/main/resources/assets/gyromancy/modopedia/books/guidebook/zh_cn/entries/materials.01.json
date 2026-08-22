@@ -2,26 +2,10 @@
   "title": "材料",
   "pages": [
     {
-      "components": [
-        {
-          "type": "gyromancy:markdown",
-          "file": "gyromancy:guidebook/entries/materials.01.md",
-          "page": 0,
-          "padding": 2,
-          "gap": 3
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "gyromancy:markdown",
-          "file": "gyromancy:guidebook/entries/materials.01.md",
-          "page": 1,
-          "padding": 2,
-          "gap": 3
-        }
-      ]
+      "type": "gyromancy:markdown",
+      "file": "gyromancy:guidebook/entries/materials.01.md",
+      "padding": 2,
+      "gap": 3
     }
   ]
 }

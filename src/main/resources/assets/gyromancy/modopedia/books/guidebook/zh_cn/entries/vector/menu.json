@@ -1,0 +1,30 @@
+{
+  "title": "符文簇",
+  "pages": [
+    {
+      "components": [
+        {
+          "text": "$(el:vector/add)加"
+        }
+      ]
+    },{
+      "components": [
+        {
+          "text": "$(el:vector/add)加"
+        }
+      ]
+    },{
+      "components": [
+        {
+          "text": "$(el:vector/add)加"
+        }
+      ]
+    },{
+      "components": [
+        {
+          "text": "$(el:vector/add)加"
+        }
+      ]
+    }
+  ]
+}

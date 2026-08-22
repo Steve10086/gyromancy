@@ -2,15 +2,10 @@
   "title": "正确的符文",
   "pages": [
     {
-      "components": [
-        {
-          "type": "gyromancy:markdown",
-          "file": "gyromancy:guidebook/entries/symbol.03.md",
-          "page": 0,
-          "padding": 2,
-          "gap": 3
-        }
-      ]
+      "type": "gyromancy:markdown",
+      "file": "gyromancy:guidebook/entries/symbol.03.md",
+      "padding": 2,
+      "gap": 3
     }
   ]
 }

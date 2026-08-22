@@ -2,15 +2,10 @@
   "title": "一切的开始",
   "pages": [
     {
-      "components": [
-        {
-          "type": "gyromancy:markdown",
-          "file": "gyromancy:guidebook/entries/start.home.md",
-          "page": 0,
-          "padding": 2,
-          "gap": 3
-        }
-      ]
+      "type": "gyromancy:markdown",
+      "file": "gyromancy:guidebook/entries/start.home.md",
+      "padding": 2,
+      "gap": 3
     }
   ]
 }

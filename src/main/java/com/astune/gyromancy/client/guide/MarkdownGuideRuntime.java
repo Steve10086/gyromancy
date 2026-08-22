@@ -98,8 +98,30 @@ public final class MarkdownGuideRuntime {
                             sourceEntry.getIcon(),
                             sourceEntry.getAssignedItems(),
                             sourceEntry.getAdvancement());
-                    entry.addPages(createPages(
-                            spec, language, entryId, pageCount, book, Minecraft.getInstance().level));
+                    List<Page> markdownPages = createPages(
+                            spec, language, entryId, pageCount, book, Minecraft.getInstance().level);
+                    List<Page> sourcePages = sourceEntry.getPages();
+
+                    // Replace the Markdown placeholder block at its first JSON
+                    // position, while preserving every other native Modopedia
+                    // page in its original JSON order. Native pages can now be
+                    // placed before, between or after Markdown placeholders.
+                    List<Page> pages = new ArrayList<>(markdownPages.size() + sourcePages.size());
+                    boolean markdownInserted = false;
+                    for (int pageIndex = 0; pageIndex < sourcePages.size(); pageIndex++) {
+                        if (pageIndex == spec.firstMarkdownPage()) {
+                            pages.addAll(markdownPages);
+                            markdownInserted = true;
+                        }
+                        if (!spec.markdownPages().contains(pageIndex)) {
+                            pages.add(sourcePages.get(pageIndex));
+                        }
+                    }
+                    if (!markdownInserted) {
+                        pages.addAll(markdownPages);
+                    }
+
+                    entry.addPages(pages);
                     entries.put(entryId, entry);
                     changed = true;
                 } catch (RuntimeException exception) {
@@ -157,19 +179,66 @@ public final class MarkdownGuideRuntime {
 
         try (Reader reader = resource.openAsReader()) {
             JsonObject entry = JsonParser.parseReader(reader).getAsJsonObject();
-            for (JsonElement page : entry.getAsJsonArray("pages")) {
+            String file = null;
+            int padding = 2;
+            int gap = 3;
+            int firstMarkdownPage = -1;
+            List<Integer> markdownPages = new ArrayList<>();
+            JsonElement pagesElement = entry.get("pages");
+            if (pagesElement == null || !pagesElement.isJsonArray()) {
+                return null;
+            }
+
+            int pageIndex = 0;
+            for (JsonElement page : pagesElement.getAsJsonArray()) {
+                if (!page.isJsonObject()) {
+                    pageIndex++;
+                    continue;
+                }
                 JsonObject pageObject = page.getAsJsonObject();
-                for (JsonElement component : pageObject.getAsJsonArray("components")) {
+
+                // gyromancy:markdown is a page declaration, not a native
+                // Modopedia component. The loader creates the final native
+                // pages after reading this declaration at runtime.
+                if (isMarkdownDeclaration(pageObject)) {
+                    if (file == null) {
+                        file = pageObject.get("file").getAsString();
+                        padding = intValue(pageObject, "padding", 2);
+                        gap = intValue(pageObject, "gap", 3);
+                        firstMarkdownPage = pageIndex;
+                    }
+                    markdownPages.add(pageIndex);
+                    pageIndex++;
+                    continue;
+                }
+
+                if (!pageObject.has("components")) {
+                    pageIndex++;
+                    continue;
+                }
+                JsonElement componentsElement = pageObject.get("components");
+                if (componentsElement == null || !componentsElement.isJsonArray()) {
+                    pageIndex++;
+                    continue;
+                }
+                for (JsonElement component : componentsElement.getAsJsonArray()) {
+                    if (!component.isJsonObject()) continue;
                     JsonObject componentObject = component.getAsJsonObject();
-                    if (componentObject.has("type")
-                            && componentObject.has("file")
-                            && "gyromancy:markdown".equals(componentObject.get("type").getAsString())) {
-                        return new MarkdownSpec(
-                                componentObject.get("file").getAsString(),
-                                intValue(componentObject, "padding", 2),
-                                intValue(componentObject, "gap", 3));
+                    if (isMarkdownDeclaration(componentObject)) {
+                        if (file == null) {
+                            file = componentObject.get("file").getAsString();
+                            padding = intValue(componentObject, "padding", 2);
+                            gap = intValue(componentObject, "gap", 3);
+                            firstMarkdownPage = pageIndex;
+                        }
+                        markdownPages.add(pageIndex);
                     }
                 }
+                pageIndex++;
+            }
+            if (file != null) {
+                return new MarkdownSpec(file, padding, gap,
+                        firstMarkdownPage, List.copyOf(markdownPages));
             }
         } catch (IOException | RuntimeException exception) {
             Gyromancy.LOGGER.error(
@@ -178,10 +247,17 @@ public final class MarkdownGuideRuntime {
         return null;
     }
 
+    private static boolean isMarkdownDeclaration(JsonObject object) {
+        return object.has("type")
+                && object.has("file")
+                && "gyromancy:markdown".equals(object.get("type").getAsString());
+    }
+
     private static int intValue(JsonObject object, String key, int fallback) {
         return object.has(key) ? object.get(key).getAsInt() : fallback;
     }
 
-    private record MarkdownSpec(String file, int padding, int gap) {}
+    private record MarkdownSpec(String file, int padding, int gap,
+                                int firstMarkdownPage, List<Integer> markdownPages) {}
 
 }

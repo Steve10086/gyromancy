@@ -1,9 +1,9 @@
 {
-  "title": "环",
+  "title": "角度",
   "pages": [
     {
       "type": "gyromancy:markdown",
-      "file": "gyromancy:guidebook/entries/arrays.01.md",
+      "file": "gyromancy:guidebook/entries/vector/rotate.md",
       "padding": 2,
       "gap": 3
     }

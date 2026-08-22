@@ -2,48 +2,10 @@
   "title": "符文：法术怎样行动",
   "pages": [
     {
-      "components": [
-        {
-          "type": "gyromancy:markdown",
-          "file": "gyromancy:guidebook/entries/symbols.02.md",
-          "page": 0,
-          "padding": 2,
-          "gap": 3
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "gyromancy:markdown",
-          "file": "gyromancy:guidebook/entries/symbols.02.md",
-          "page": 1,
-          "padding": 2,
-          "gap": 3
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "gyromancy:markdown",
-          "file": "gyromancy:guidebook/entries/symbols.02.md",
-          "page": 2,
-          "padding": 2,
-          "gap": 3
-        }
-      ]
-    },
-    {
-      "components": [
-        {
-          "type": "gyromancy:markdown",
-          "file": "gyromancy:guidebook/entries/symbols.02.md",
-          "page": 3,
-          "padding": 2,
-          "gap": 3
-        }
-      ]
+      "type": "gyromancy:markdown",
+      "file": "gyromancy:guidebook/entries/symbols.02.md",
+      "padding": 2,
+      "gap": 3
     }
   ]
 }
