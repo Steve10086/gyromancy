@@ -1,0 +1,20 @@
+{
+  "title": "The Principles Beneath Mana",
+  "pages": [
+    {
+      "type": "gyromancy:markdown",
+      "file": "gyromancy:guidebook/en_us/entries/operators.01.md",
+      "padding": 2,
+      "gap": 3
+    },
+    {
+      "components": [
+        {
+          "template": "modopedia:page/headered_text",
+          "header": "Further Contents",
+          "text": "$(gyromancy:link:entry:vector/menu)Vector Cluster$(/gyromancy:link)"
+        }
+      ]
+    }
+  ]
+}

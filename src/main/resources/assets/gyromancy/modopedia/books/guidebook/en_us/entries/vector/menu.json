@@ -1,0 +1,14 @@
+{
+  "title": "Rune Clusters",
+  "pages": [
+    {
+      "components": [
+        {
+          "type": "modopedia:text",
+          "width": 96,
+          "text": "$(b)Rune Clusters$(/b)\n\n$(gyromancy:link:entry:vector/add)Addition$(/gyromancy:link)\n$(gyromancy:link:entry:vector/normal)Source$(/gyromancy:link)\n$(gyromancy:link:entry:vector/rotation)Angle$(/gyromancy:link)\n$(gyromancy:link:entry:vector/spining)Rotation$(/gyromancy:link)"
+        }
+      ]
+    }
+  ]
+}
