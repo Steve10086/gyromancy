@@ -46,7 +46,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
             ResourceLocation.withDefaultNamespace("hud/hotbar_selection");
 
     private final CanvasEditHistory history = new CanvasEditHistory();
-    private final CanvasViewState viewState = new CanvasViewState();
+    private final CanvasViewport viewportController = new CanvasViewport();
     private final CanvasHotbarScroll hotbarScroll = new CanvasHotbarScroll();
     private final RuneCarvingMenu carvingMenu;
     private CanvasDynamicTexture canvasTexture;
@@ -59,8 +59,6 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
     private boolean runePreviewDirty = true;
     private final BitSet runePreviewDirtyRegion = new BitSet();
     private boolean inventoryExpanded;
-    private boolean viewModifierHeld;
-    private boolean panning;
     private boolean toolActionActive;
     private int toolActionButton = -1;
     private CanvasEditorTool activeEditorTool;
@@ -253,7 +251,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
         panelY = TOP_MARGIN + (availableHeight - panelHeight) / 2;
         toolbarX = viewportX + availableWidth + SIDE_GAP;
         toolbarY = Math.max(TOP_MARGIN, Math.min(panelY, inventoryY - 122));
-        viewState.clamp(fittedCanvasRect(), viewportRect());
+        viewportController.layout(fittedCanvasRect(), viewportRect());
     }
 
     /** Area reserved for JEI's right-side ingredient panel. */
@@ -301,7 +299,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
         graphics.drawString(font, resolution,
                 viewportX - leftPos, viewportY + viewportHeight + 5 - topPos, 0xFFE8E8E8);
         Component zoom = Component.translatable("screen.gyromancy.canvas.view_zoom",
-                Math.round(viewState.zoom() * 100.0));
+                Math.round(viewportController.zoom() * 100.0));
         graphics.drawString(font, zoom,
                 viewportX + viewportWidth - font.width(zoom) - leftPos,
                 viewportY + viewportHeight + 5 - topPos, 0xFFBFBFBF);
@@ -413,24 +411,18 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
 
     @Override
     public boolean isOverCanvas(double mouseX, double mouseY) {
-        return isOverViewport(mouseX, mouseY) && displayRect().contains(mouseX, mouseY);
+        return viewportController.isOverCanvas(mouseX, mouseY);
     }
 
     @Override
     public boolean isOverViewport(double mouseX, double mouseY) {
-        return mouseX >= viewportX && mouseX < viewportX + viewportWidth
-                && mouseY >= viewportY && mouseY < viewportY + viewportHeight;
+        return viewportController.isOverViewport(mouseX, mouseY);
     }
 
     @Override
     public int[] canvasPixelAt(double mouseX, double mouseY) {
-        CanvasViewState.DisplayRect display = displayRect();
-        int width = rasterWidth();
-        int x = Math.min(width - 1, Math.max(0,
-                (int) ((mouseX - display.x()) * width / display.width())));
-        int y = Math.min(rasterHeight() - 1, Math.max(0,
-                (int) ((mouseY - display.y()) * rasterHeight() / display.height())));
-        return new int[]{x, y};
+        return viewportController.canvasPixelAt(
+                mouseX, mouseY, rasterWidth(), rasterHeight());
     }
 
     private CanvasRunePreview.RuneMatch hoveredRune(double mouseX, double mouseY) {
@@ -449,11 +441,14 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
             return withInputSlotCoordinates(
                     () -> super.mouseClicked(mouseX, mouseY, button), mouseX, mouseY);
         }
+        if (viewportController.mouseClicked(mouseX, mouseY, button, hasControlDown())) {
+            finishStroke();
+            return true;
+        }
         CanvasEditorTool tool = selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null) {
             ItemStack stack = minecraft.player.getMainHandItem();
-            if (tool.editorViewMouseClicked(this, mouseX, mouseY, button)
-                    || tool.editorMouseClicked(this, stack, minecraft.player,
+            if (tool.editorMouseClicked(this, stack, minecraft.player,
                     mouseX, mouseY, button)) {
                 activeEditorTool = tool;
                 return true;
@@ -465,6 +460,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button,
                                 double dragX, double dragY) {
+        if (viewportController.mouseDragged(button, dragX, dragY)) return true;
         if (isOverInputSlot(mouseX, mouseY)) {
             return withInputSlotCoordinates(
                     () -> super.mouseDragged(mouseX, mouseY, button, dragX, dragY),
@@ -473,8 +469,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
         CanvasEditorTool tool = activeEditorTool != null ? activeEditorTool : selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null) {
             ItemStack stack = minecraft.player.getMainHandItem();
-            if (tool.editorViewMouseDragged(this, mouseX, mouseY, button, dragX, dragY)
-                    || tool.editorMouseDragged(this, stack, minecraft.player,
+            if (tool.editorMouseDragged(this, stack, minecraft.player,
                     mouseX, mouseY, button, dragX, dragY)) return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
@@ -482,6 +477,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (viewportController.mouseReleased(button)) return true;
         if (isOverInputSlot(mouseX, mouseY)) {
             return withInputSlotCoordinates(
                     () -> super.mouseReleased(mouseX, mouseY, button), mouseX, mouseY);
@@ -489,8 +485,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
         CanvasEditorTool tool = activeEditorTool != null ? activeEditorTool : selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null) {
             ItemStack stack = minecraft.player.getMainHandItem();
-            boolean handled = tool.editorViewMouseReleased(this, mouseX, mouseY, button)
-                    || tool.editorMouseReleased(this, stack, minecraft.player,
+            boolean handled = tool.editorMouseReleased(this, stack, minecraft.player,
                     mouseX, mouseY, button);
             if (handled) {
                 activeEditorTool = null;
@@ -507,15 +502,26 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY,
                                  double scrollX, double scrollY) {
+        if (viewportController.mouseScrolled(
+                mouseX, mouseY, scrollX, scrollY, hasControlDown())) {
+            hotbarScroll.reset();
+            return true;
+        }
         CanvasEditorTool tool = selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null) {
             ItemStack stack = minecraft.player.getMainHandItem();
             if (tool.editorMouseScrolled(this, stack, minecraft.player,
-                    mouseX, mouseY, scrollX, scrollY)
-                    || tool.editorViewMouseScrolled(this, mouseX, mouseY, scrollX, scrollY)) {
+                    mouseX, mouseY, scrollX, scrollY)) {
                 hotbarScroll.reset();
                 return true;
             }
+        }
+        // Modified wheel gestures belong to the canvas/tool controls. Never
+        // let an unhandled Shift/Ctrl wheel event fall through to hotbar swap.
+        if ((hasShiftDown() || hasControlDown())
+                && (scrollX != 0.0 || scrollY != 0.0)) {
+            hotbarScroll.reset();
+            return true;
         }
         if (minecraft != null && minecraft.player != null) {
             int direction = hotbarScroll.add(scrollX, scrollY);
@@ -530,7 +536,6 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (CanvasEditorKeyMappings.matchesViewModifier(keyCode, scanCode)) viewModifierHeld = true;
         CanvasEditorTool tool = selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null
                 && tool.editorKeyPressed(this, minecraft.player.getMainHandItem(),
@@ -544,7 +549,6 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
         if (tool != null && minecraft != null && minecraft.player != null
                 && tool.editorKeyReleased(this, minecraft.player.getMainHandItem(),
                 minecraft.player, keyCode, scanCode, modifiers)) return true;
-        if (CanvasEditorKeyMappings.matchesViewModifier(keyCode, scanCode)) viewModifierHeld = false;
         return super.keyReleased(keyCode, scanCode, modifiers);
     }
 
@@ -840,7 +844,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
     }
 
     private CanvasViewState.DisplayRect displayRect() {
-        return viewState.displayRect(fittedCanvasRect());
+        return viewportController.displayRect();
     }
 
     @Override
@@ -968,47 +972,12 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
 
     @Override
     public boolean isViewModifierActive() {
-        return viewModifierHeld || CanvasEditorKeyMappings.isViewModifierDown()
-                || (CanvasEditorKeyMappings.usesDefaultViewModifier() && hasShiftDown());
+        return hasControlDown();
     }
 
     @Override
-    public boolean isViewPanning() {
-        return panning;
-    }
-
-    @Override
-    public void beginViewPan() {
-        finishStroke();
-        panning = true;
-    }
-
-    @Override
-    public void endViewPan() {
-        panning = false;
-    }
-
-    @Override
-    public void panView(double deltaX, double deltaY) {
-        viewState.panBy(deltaX, deltaY, fittedCanvasRect(), viewportRect());
-        viewChanged();
-    }
-
-    @Override
-    public void zoomView(double scroll, double mouseX, double mouseY) {
-        viewState.zoomAt(scroll,
-                Math.max(viewportX, Math.min(viewportX + viewportWidth, mouseX)),
-                Math.max(viewportY, Math.min(viewportY + viewportHeight, mouseY)),
-                fittedCanvasRect(), viewportRect());
-        viewChanged();
-    }
-
-    @Override
-    public void viewChanged() {
-        CanvasEditorTool tool = activeEditorTool != null ? activeEditorTool : selectedEditorTool();
-        if (tool != null && minecraft != null && minecraft.player != null) {
-            tool.editorViewChanged(this, minecraft.player.getMainHandItem(), minecraft.player);
-        }
+    public boolean isShiftDown() {
+        return hasShiftDown();
     }
 
     @Override

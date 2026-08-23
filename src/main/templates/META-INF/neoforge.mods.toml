@@ -103,11 +103,28 @@ config="${mod_id}.mixins.json"
     side="BOTH"
 
 [[dependencies.${mod_id}]]
-    modId="modopedia"
+    # Pigmentum's NeoForge mod id is "painter". The dependency is satisfied by
+    # the nested Jar-in-Jar artifact, so players do not need a separate install.
+    modId="painter"
     type="required"
-    versionRange="[1.1.11,)"
+    versionRange="${pigmentum_version_range}"
     ordering="AFTER"
     side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="modopedia"
+    type="required"
+    versionRange="${modopedia_version_range}"
+    ordering="AFTER"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    # Veil is embedded together with its own nested rendering libraries.
+    modId="veil"
+    type="required"
+    versionRange="${veil_version_range}"
+    ordering="AFTER"
+    side="CLIENT"
 
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares
 # that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't

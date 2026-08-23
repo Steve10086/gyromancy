@@ -375,7 +375,7 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasEdi
                                        double scrollX,
                                        double scrollY) {
         if (!context.isOverViewport(mouseX, mouseY)
-                || !context.isViewModifierActive()) {
+                || !context.isShiftDown()) {
             return false;
         }
         double scroll = scrollY != 0.0 ? scrollY : -scrollX;
@@ -389,13 +389,6 @@ public final class CompassItem extends Item implements IPaintProvider, CanvasEdi
                 getRadius(stack)));
         updateEditorPointForRadius(context, stack);
         return true;
-    }
-
-    @Override
-    public void editorViewChanged(EditorContext context,
-                                  ItemStack stack,
-                                  Player player) {
-        updateEditorPointForRadius(context, stack);
     }
 
     @Override

@@ -446,7 +446,7 @@ public final class StampCarvingScreen extends Screen {
     private boolean isViewModifierActive() {
         return viewModifierHeld
                 || CanvasEditorKeyMappings.isViewModifierDown()
-                || (CanvasEditorKeyMappings.usesDefaultViewModifier() && hasShiftDown());
+                || (CanvasEditorKeyMappings.usesDefaultViewModifier() && hasControlDown());
     }
 
     private boolean isOverCanvas(double mouseX, double mouseY) {

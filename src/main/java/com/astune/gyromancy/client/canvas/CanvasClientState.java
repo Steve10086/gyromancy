@@ -2,6 +2,7 @@ package com.astune.gyromancy.client.canvas;
 
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasEntity;
+import com.astune.gyromancy.canvas.CanvasToolSettings;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.astune.gyromancy.network.CanvasSnapshotPacket;
 import net.minecraft.client.Minecraft;
@@ -54,6 +55,7 @@ public final class CanvasClientState {
 
     public static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         clear();
+        CanvasToolSettings.clear();
     }
 
     private static void remove(int entityId) {

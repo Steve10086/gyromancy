@@ -14,7 +14,7 @@ public final class CanvasEditorKeyMappings {
             "key.gyromancy.canvas_view_modifier",
             KeyConflictContext.GUI,
             InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_LEFT_SHIFT,
+            GLFW.GLFW_KEY_LEFT_CONTROL,
             KEY_CATEGORY
     );
 

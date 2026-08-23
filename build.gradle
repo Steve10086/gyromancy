@@ -52,10 +52,10 @@ repositories {
 
     // ── Modopedia ──
     maven {
-        name = "CurseMaven"
-        url = "https://www.cursemaven.com"
+        name = "Favouriteless"
+        url = "https://maven.favouriteless.dev/releases"
         content {
-            includeGroup "curse.maven"
+            includeGroup "net.favouriteless.modopedia"
         }
     }
 
@@ -178,9 +178,33 @@ dependencies {
     }
     additionalRuntimeClasspath "org.commonmark:commonmark:0.30.0"
 
-    implementation "maven.modrinth:pigmentum:0.6.1beta"
-    implementation "curse.maven:modopedia-1132038:8043293"
-    implementation "foundry.veil:veil-neoforge-${minecraft_version}:${veil_version}"
+    // Pigmentum is a NeoForge mod whose public API is used directly by Gyromancy.
+    // Jar-in-Jar keeps it available in a clean instance while preserving its own
+    // mod metadata. The supported range lets NeoForge select one compatible copy
+    // when another mod embeds the same maven.modrinth:pigmentum artifact.
+    jarJar(implementation("maven.modrinth:pigmentum:${pigmentum_version}")) {
+        version {
+            strictly pigmentum_version_range
+            prefer pigmentum_version
+        }
+    }
+    // Modopedia is embedded using its semantic Maven version so different mods
+    // can negotiate one compatible copy instead of comparing CurseForge file IDs.
+    jarJar(implementation("net.favouriteless.modopedia:modopedia-neoforge-${minecraft_version}:${modopedia_version}")) {
+        version {
+            strictly modopedia_version_range
+            prefer modopedia_version
+        }
+    }
+
+    // Veil already carries its own glsl-processor and molang-compiler Jar-in-Jar
+    // dependencies. Embedding the Veil mod preserves that nested dependency tree.
+    jarJar(implementation("foundry.veil:veil-neoforge-${minecraft_version}:${veil_version}")) {
+        version {
+            strictly veil_version_range
+            prefer veil_version
+        }
+    }
 
     // ── Photon + LDLib2 — VFX library ──
     // :all classifier bundles Yoga inside, remove transitive to avoid classpath conflicts
@@ -236,6 +260,9 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             mod_name               : mod_name,
             mod_license            : mod_license,
             mod_version            : mod_version,
+            pigmentum_version_range: pigmentum_version_range,
+            modopedia_version_range: modopedia_version_range,
+            veil_version_range     : veil_version_range,
     ]
     inputs.properties replaceProperties
     expand replaceProperties
@@ -343,6 +370,10 @@ tasks.register('autoInstallLocalDeps') {
 
 // Wire into compilation so dropping a JAR is enough — no manual Gradle task needed.
 tasks.named('compileJava') { dependsOn autoInstallLocalDeps }
+
+// Jar-in-Jar may resolve a dependency from the local repository populated above
+// (Veil is currently supplied through ./libs), so make that task ordering explicit.
+tasks.named('jarJar') { dependsOn autoInstallLocalDeps }
 
 // The IDE's forgeclientdev configuration scans run/mods directly and does not
 // always include remote mod artifacts from Gradle's runtime classpath. Keep the

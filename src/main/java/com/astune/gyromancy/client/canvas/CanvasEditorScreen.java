@@ -57,7 +57,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private final int[] initialEffects;
     private final ItemStack[] initialInventory;
     private final CanvasEditHistory history = new CanvasEditHistory();
-    private final CanvasViewState viewState = new CanvasViewState();
+    private final CanvasViewport viewportController = new CanvasViewport();
     private final CanvasHotbarScroll hotbarScroll = new CanvasHotbarScroll();
     private CanvasDynamicTexture canvasTexture;
     private CanvasDynamicTexture previewTexture;
@@ -74,8 +74,6 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private CanvasEditorTool activeEditorTool;
     private boolean toolActionActive;
     private int toolActionButton = -1;
-    private boolean viewModifierHeld;
-    private boolean panning;
     private boolean inventoryExpanded;
     private boolean sessionSubmitted;
     private int panelX;
@@ -197,7 +195,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         toolbarX = viewportX + availableWidth + SIDE_GAP;
         int latestToolbarY = inventoryY - 112;
         toolbarY = Math.max(TOP_MARGIN, Math.min(panelY, latestToolbarY));
-        viewState.clamp(fittedCanvasRect(), viewportRect());
+        viewportController.layout(fittedCanvasRect(), viewportRect());
     }
 
     /** Area reserved for JEI's right-side ingredient panel. */
@@ -276,7 +274,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 0xFFE8E8E8);
         Component zoomLabel = Component.translatable(
                 "screen.gyromancy.canvas.view_zoom",
-                Math.round(viewState.zoom() * 100.0));
+                Math.round(viewportController.zoom() * 100.0));
         graphics.drawString(font,
                 zoomLabel,
                 viewportX + viewportWidth - font.width(zoomLabel) - leftPos,
@@ -386,13 +384,12 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
 
     @Override
     public boolean isOverCanvas(double mouseX, double mouseY) {
-        return isOverViewport(mouseX, mouseY) && displayRect().contains(mouseX, mouseY);
+        return viewportController.isOverCanvas(mouseX, mouseY);
     }
 
     @Override
     public boolean isOverViewport(double mouseX, double mouseY) {
-        return mouseX >= viewportX && mouseX < viewportX + viewportWidth
-                && mouseY >= viewportY && mouseY < viewportY + viewportHeight;
+        return viewportController.isOverViewport(mouseX, mouseY);
     }
 
     @Override
@@ -401,13 +398,16 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
             toggleInventory();
             return true;
         }
+        if (viewportController.mouseClicked(mouseX, mouseY, button, hasControlDown())) {
+            finishStroke();
+            return true;
+        }
         CanvasEditorTool tool = selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null) {
             ItemStack stack = minecraft.player.getMainHandItem();
-            if (tool.editorViewMouseClicked(this, mouseX, mouseY, button)
-                    || tool.editorMouseClicked(
-                            this, stack, minecraft.player,
-                            mouseX, mouseY, button)) {
+            if (tool.editorMouseClicked(
+                        this, stack, minecraft.player,
+                        mouseX, mouseY, button)) {
                 activeEditorTool = tool;
                 return true;
             }
@@ -421,13 +421,12 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                                 int button,
                                 double dragX,
                                 double dragY) {
+        if (viewportController.mouseDragged(button, dragX, dragY)) return true;
         CanvasEditorTool tool = activeEditorTool != null
                 ? activeEditorTool : selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null) {
             ItemStack stack = minecraft.player.getMainHandItem();
-            if (tool.editorViewMouseDragged(
-                    this, mouseX, mouseY, button, dragX, dragY)
-                    || tool.editorMouseDragged(
+            if (tool.editorMouseDragged(
                             this, stack, minecraft.player,
                             mouseX, mouseY, button, dragX, dragY)) {
                 return true;
@@ -438,13 +437,12 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (viewportController.mouseReleased(button)) return true;
         CanvasEditorTool tool = activeEditorTool != null
                 ? activeEditorTool : selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null) {
             ItemStack stack = minecraft.player.getMainHandItem();
-            boolean handled = tool.editorViewMouseReleased(
-                    this, mouseX, mouseY, button)
-                    || tool.editorMouseReleased(
+            boolean handled = tool.editorMouseReleased(
                             this, stack, minecraft.player,
                             mouseX, mouseY, button);
             if (handled) {
@@ -481,6 +479,11 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                                  double mouseY,
                                  double scrollX,
                                  double scrollY) {
+        if (viewportController.mouseScrolled(
+                mouseX, mouseY, scrollX, scrollY, hasControlDown())) {
+            hotbarScroll.reset();
+            return true;
+        }
         CanvasEditorTool tool = selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null) {
             ItemStack stack = minecraft.player.getMainHandItem();
@@ -490,11 +493,13 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 hotbarScroll.reset();
                 return true;
             }
-            if (tool.editorViewMouseScrolled(
-                    this, mouseX, mouseY, scrollX, scrollY)) {
-                hotbarScroll.reset();
-                return true;
-            }
+        }
+        // Modified wheel gestures belong to the canvas/tool controls. Never
+        // let an unhandled Shift/Ctrl wheel event fall through to hotbar swap.
+        if ((hasShiftDown() || hasControlDown())
+                && (scrollX != 0.0 || scrollY != 0.0)) {
+            hotbarScroll.reset();
+            return true;
         }
         if (minecraft != null && minecraft.player != null) {
             int direction = hotbarScroll.add(scrollX, scrollY);
@@ -509,9 +514,6 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (CanvasEditorKeyMappings.matchesViewModifier(keyCode, scanCode)) {
-            viewModifierHeld = true;
-        }
         CanvasEditorTool tool = selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null
                 && tool.editorKeyPressed(
@@ -539,9 +541,6 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                         modifiers)) {
             return true;
         }
-        if (CanvasEditorKeyMappings.matchesViewModifier(keyCode, scanCode)) {
-            viewModifierHeld = false;
-        }
         return super.keyReleased(keyCode, scanCode, modifiers);
     }
 
@@ -561,9 +560,12 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
 
     @Override
     public boolean isViewModifierActive() {
-        return viewModifierHeld
-                || CanvasEditorKeyMappings.isViewModifierDown()
-                || (CanvasEditorKeyMappings.usesDefaultViewModifier() && hasShiftDown());
+        return hasControlDown();
+    }
+
+    @Override
+    public boolean isShiftDown() {
+        return hasShiftDown();
     }
 
     private void finishStroke() {
@@ -839,7 +841,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     }
 
     private CanvasViewState.DisplayRect displayRect() {
-        return viewState.displayRect(fittedCanvasRect());
+        return viewportController.displayRect();
     }
 
     @Override
@@ -964,55 +966,6 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 rasterHeight(),
                 rasterWidth(),
                 rasterHeight());
-    }
-
-    @Override
-    public boolean isViewPanning() {
-        return panning;
-    }
-
-    @Override
-    public void beginViewPan() {
-        finishStroke();
-        panning = true;
-    }
-
-    @Override
-    public void endViewPan() {
-        panning = false;
-    }
-
-    @Override
-    public void panView(double deltaX, double deltaY) {
-        viewState.panBy(deltaX, deltaY, fittedCanvasRect(), viewportRect());
-        viewChanged();
-    }
-
-    @Override
-    public void zoomView(double scroll, double mouseX, double mouseY) {
-        double anchorX = Math.max(viewportX,
-                Math.min(viewportX + viewportWidth, mouseX));
-        double anchorY = Math.max(viewportY,
-                Math.min(viewportY + viewportHeight, mouseY));
-        viewState.zoomAt(
-                scroll,
-                anchorX,
-                anchorY,
-                fittedCanvasRect(),
-                viewportRect());
-        viewChanged();
-    }
-
-    @Override
-    public void viewChanged() {
-        CanvasEditorTool tool = activeEditorTool != null
-                ? activeEditorTool : selectedEditorTool();
-        if (tool != null && minecraft != null && minecraft.player != null) {
-            tool.editorViewChanged(
-                    this,
-                    minecraft.player.getMainHandItem(),
-                    minecraft.player);
-        }
     }
 
     private CanvasEditorTool selectedEditorTool() {

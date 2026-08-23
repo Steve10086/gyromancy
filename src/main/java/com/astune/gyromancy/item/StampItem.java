@@ -7,6 +7,7 @@ import com.astune.gyromancy.api.canvas.StampCanvasMaterial;
 import com.astune.gyromancy.array.compile.GroupNode;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasGlyph;
+import com.astune.gyromancy.canvas.CanvasToolSettings;
 import com.astune.gyromancy.client.canvas.CanvasStampRaster;
 import com.astune.gyromancy.network.StampEditorSnapshotPacket;
 import com.astune.gyromancy.registry.ModDataComponents;
@@ -36,18 +37,9 @@ import java.util.Optional;
 public class StampItem extends Item implements IPaintProvider, CanvasStampTool, Carvable {
     private static final String MANA_KEY = "gyromancy:mana";
     private static final int MANA_VALUE = 10;
-    private static final double MIN_EDITOR_SIZE = 0.125;
-    private static final double MAX_EDITOR_SIZE = 8.0;
-    private static final double EDITOR_RESIZE_PIXELS_PER_DOUBLING = 96.0;
-
     private boolean editorRotateKeyHeld;
-    private boolean editorResizeModifierHeld;
-    private boolean editorResizing;
     private boolean editorErasePreview;
     private double editorRotationDegrees;
-    private double editorSizeMultiplier = 1.0;
-    private double editorResizeAnchorMouseX;
-    private double editorResizeAnchorSize;
 
     public StampItem() {
         super(new Properties()
@@ -161,7 +153,7 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool, 
                 center[0],
                 center[1],
                 editorRotationDegrees,
-                editorSizeMultiplier,
+                CanvasToolSettings.stampScale(player),
                 (x, y, color, effect) -> preview[y * rasterWidth + x] =
                         editorPreviewColor(color, effect, editorErasePreview));
         context.renderPreview(
@@ -171,6 +163,23 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool, 
                 canvasTop,
                 canvasWidth,
                 canvasHeight);
+    }
+
+    @Override
+    public boolean editorMouseScrolled(EditorContext context,
+                                       ItemStack stack,
+                                       Player player,
+                                       double mouseX,
+                                       double mouseY,
+                                       double scrollX,
+                                       double scrollY) {
+        if (!context.isShiftDown() || !context.isOverViewport(mouseX, mouseY)) {
+            return false;
+        }
+        double scroll = scrollY != 0.0 ? scrollY : -scrollX;
+        if (scroll == 0.0) return false;
+        CanvasToolSettings.adjustStampScale(player, scroll);
+        return true;
     }
 
     @Override
@@ -186,31 +195,10 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool, 
             return false;
         }
         CanvasDocument stamp = canvasStamp(stack, player).orElse(null);
-        if (button == 0 && editorResizeModifierHeld && stamp != null) {
-            context.beginToolAction(0);
-            editorResizing = true;
-            editorResizeAnchorMouseX = mouseX;
-            editorResizeAnchorSize = editorSizeMultiplier;
-            return true;
-        }
         if (stamp == null) return true;
 
         editorErasePreview = button == 1;
-        applyEditorStamp(context, mouseX, mouseY, button, stamp);
-        return true;
-    }
-
-    @Override
-    public boolean editorMouseDragged(EditorContext context,
-                                      ItemStack stack,
-                                      Player player,
-                                      double mouseX,
-                                      double mouseY,
-                                      int button,
-                                      double dragX,
-                                      double dragY) {
-        if (!editorResizing || button != 0) return false;
-        updateEditorSize(mouseX);
+        applyEditorStamp(context, player, mouseX, mouseY, button, stamp);
         return true;
     }
 
@@ -221,12 +209,6 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool, 
                                        double mouseX,
                                        double mouseY,
                                        int button) {
-        if (editorResizing && button == 0) {
-            updateEditorSize(mouseX);
-            editorResizing = false;
-            context.finishToolAction();
-            return true;
-        }
         if (button == 1) editorErasePreview = false;
         return false;
     }
@@ -248,10 +230,6 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool, 
             }
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_X) {
-            editorResizeModifierHeld = true;
-            return true;
-        }
         return false;
     }
 
@@ -266,10 +244,6 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool, 
             editorRotateKeyHeld = false;
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_X && editorResizeModifierHeld) {
-            editorResizeModifierHeld = false;
-            return true;
-        }
         return false;
     }
 
@@ -277,11 +251,11 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool, 
     public void finishEditorAction(EditorContext context,
                                    ItemStack stack,
                                    Player player) {
-        editorResizing = false;
         if (context.isToolActionActive()) context.finishToolAction();
     }
 
     private void applyEditorStamp(EditorContext context,
+                                  Player player,
                                   double mouseX,
                                   double mouseY,
                                   int button,
@@ -297,7 +271,7 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool, 
                 center[0],
                 center[1],
                 editorRotationDegrees,
-                editorSizeMultiplier,
+                CanvasToolSettings.stampScale(player),
                 (x, y, color, effect) -> context.writePixel(
                         x,
                         y,
@@ -306,16 +280,6 @@ public class StampItem extends Item implements IPaintProvider, CanvasStampTool, 
         context.finishToolAction();
         context.updateChanged();
         context.updateActionButtons();
-    }
-
-    private void updateEditorSize(double mouseX) {
-        double exponent = (mouseX - editorResizeAnchorMouseX)
-                / EDITOR_RESIZE_PIXELS_PER_DOUBLING;
-        editorSizeMultiplier = Math.max(
-                MIN_EDITOR_SIZE,
-                Math.min(
-                        MAX_EDITOR_SIZE,
-                        editorResizeAnchorSize * Math.pow(2.0, exponent)));
     }
 
     private static int editorPreviewColor(int color,
