@@ -2,7 +2,7 @@ package com.astune.gyromancy.client.effect;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
-import com.astune.gyromancy.client.compat.iris.PhotonIrisRenderBridge;
+import com.astune.gyromancy.client.compat.iris.IrisRenderBridge;
 import com.lowdragmc.lowdraglib2.client.shader.HDRTarget;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.astune.gyromancy.client.canvas.ProjectionCanvasRenderPose;
@@ -378,16 +378,16 @@ public final class ClientRayEffects {
 
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) return;
+        IrisRenderBridge.beginRenderStage();
         if (effects.isEmpty()) return;
 
+        IrisRenderBridge.Target irisTarget = IrisRenderBridge.currentTarget();
         AdvancedFbo compositeFbo = ensureRayCompositeFbo();
-        PhotonIrisRenderBridge.Target irisTarget =
-                PhotonIrisRenderBridge.currentTarget();
         if (compositeFbo != null) {
             compositeFbo.clear(0f, 0f, 0f, 0f, GL11.GL_COLOR_BUFFER_BIT);
             if (irisTarget != null) {
-                if (!PhotonIrisRenderBridge.shareDepthTo(irisTarget, compositeFbo)) {
-                    PhotonIrisRenderBridge.copyDepthTo(irisTarget, compositeFbo);
+                if (!IrisRenderBridge.shareDepthTo(irisTarget, compositeFbo)) {
+                    IrisRenderBridge.copyDepthTo(irisTarget, compositeFbo);
                 }
             } else {
                 AdvancedFbo.getMainFramebuffer().resolveToAdvancedFbo(
@@ -539,7 +539,7 @@ public final class ClientRayEffects {
     }
 
     private static void compositeRayBuffer(AdvancedFbo compositeFbo,
-                                           PhotonIrisRenderBridge.Target irisTarget) {
+                                           IrisRenderBridge.Target irisTarget) {
         ShaderProgram shader = VeilRenderSystem.renderer().getShaderManager().getShader(RAY_COMPOSITE_SHADER);
         if (shader == null || !shader.isValid()) {
             if (!warnedMissingCompositeShader) {
@@ -551,7 +551,7 @@ public final class ClientRayEffects {
 
         HDRTarget outputFbo = irisTarget == null ? null : ensureRayOutputFbo();
         if (irisTarget != null) {
-            if (!PhotonIrisRenderBridge.copyColorAndDepthTo(irisTarget, outputFbo)) {
+            if (!IrisRenderBridge.copyColorAndDepthTo(irisTarget, outputFbo)) {
                 return;
             }
             outputFbo.bindWrite(false);
@@ -581,12 +581,12 @@ public final class ClientRayEffects {
             RenderSystem.depthMask(true);
             RenderSystem.enableDepthTest();
             if (irisTarget != null) {
-                PhotonIrisRenderBridge.restoreMainFramebuffer();
+                IrisRenderBridge.restoreMainFramebuffer();
             }
         }
 
         if (irisTarget != null && rendered && outputFbo != null) {
-            PhotonIrisRenderBridge.blitTextureTo(
+            IrisRenderBridge.blitTextureTo(
                     irisTarget, outputFbo.getColorTextureId());
         }
     }

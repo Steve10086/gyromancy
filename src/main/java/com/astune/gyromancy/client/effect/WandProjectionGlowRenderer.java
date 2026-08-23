@@ -4,7 +4,7 @@ import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.client.canvas.CanvasClientState;
 import com.astune.gyromancy.client.canvas.ProjectionCanvasRenderPose;
-import com.astune.gyromancy.client.compat.iris.PhotonIrisRenderBridge;
+import com.astune.gyromancy.client.compat.iris.IrisRenderBridge;
 import com.lowdragmc.lowdraglib2.client.shader.HDRTarget;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -89,12 +89,12 @@ public final class WandProjectionGlowRenderer {
         MeshData mesh = builder.buildOrThrow();
         if (vertexArray == null) vertexArray = VertexArray.create();
         vertexArray.upload(mesh, VertexArray.DrawUsage.STREAM);
-        PhotonIrisRenderBridge.Target irisTarget = PhotonIrisRenderBridge.currentTarget();
+        IrisRenderBridge.Target irisTarget = IrisRenderBridge.currentTarget();
         HDRTarget outputFbo = null;
         if (irisTarget != null) {
             outputFbo = ensureIrisOutputFbo();
             if (outputFbo == null
-                    || !PhotonIrisRenderBridge.copyColorAndDepthTo(irisTarget, outputFbo)) {
+                    || !IrisRenderBridge.copyColorAndDepthTo(irisTarget, outputFbo)) {
                 return;
             }
             outputFbo.bindWrite(false);
@@ -126,12 +126,12 @@ public final class WandProjectionGlowRenderer {
             RenderSystem.depthMask(true);
             VertexArray.unbind();
             if (irisTarget != null) {
-                PhotonIrisRenderBridge.restoreMainFramebuffer();
+                IrisRenderBridge.restoreMainFramebuffer();
             }
         }
 
         if (irisTarget != null && rendered && outputFbo != null) {
-            PhotonIrisRenderBridge.blitTextureTo(
+            IrisRenderBridge.blitTextureTo(
                     irisTarget, outputFbo.getColorTextureId());
         }
     }

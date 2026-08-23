@@ -3,7 +3,6 @@ package com.astune.gyromancy.client.compat.iris;
 import com.astune.gyromancy.Gyromancy;
 import com.lowdragmc.lowdraglib2.client.shader.HDRTarget;
 import com.lowdragmc.lowdraglib2.client.shader.LDLibShaders;
-import com.lowdragmc.photon.Photon;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -18,100 +17,146 @@ import net.minecraft.client.renderer.ShaderInstance;
 import org.lwjgl.opengl.GL30;
 
 import javax.annotation.Nullable;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 
 /**
- * Keeps Gyromancy's Veil passes on the framebuffer currently used by Photon/Iris.
+ * Keeps Gyromancy's Veil passes on the framebuffer currently used by Iris.
  *
- * <p>Photon already has the required Iris mixin. This class deliberately reaches
- * that accessor through reflection so Iris remains an optional runtime mod: the
- * accessor class is never loaded when Photon reports that Iris/Oculus is absent.</p>
+ * <p>Iris owns its shader-pipeline framebuffer and may replace the vanilla target
+ * during a world render. Instead of calling a private API from another rendering
+ * mod, this bridge snapshots the framebuffer that is actually bound at the
+ * NeoForge render stage. The Iris depth/color unlock remains reflective so Iris
+ * stays an optional runtime mod.</p>
  */
-public final class PhotonIrisRenderBridge {
-    private static final String PHOTON_IRIS_ACCESSOR =
-            "com.lowdragmc.photon.core.mixins.iris.ExtendedShaderAccessor";
+public final class IrisRenderBridge {
+    private static final String IRIS_CLASS = "net.irisshaders.iris.Iris";
+    private static final String IRIS_EXTENDED_SHADER_CLASS =
+            "net.irisshaders.iris.pipeline.programs.ExtendedShader";
     private static final String IRIS_DEPTH_COLOR_STORAGE =
             "net.irisshaders.iris.gl.blending.DepthColorStorage";
 
-    private static boolean warnedAccessorFailure;
+    private static boolean warnedMissingTarget;
+    private static boolean warnedIrisReflectionFailure;
     private static boolean warnedDepthUnlockFailure;
     private static boolean warnedMissingBlitShader;
-    private static boolean warnedMissingParticleShader;
-    private static boolean warnedWrongParticleShader;
     private static boolean loggedTarget;
+    private static Boolean irisLoaded;
+    private static Target stageTarget;
 
-    private PhotonIrisRenderBridge() {}
+    private IrisRenderBridge() {}
+
+    /** Starts a new AFTER_PARTICLES render stage and forgets the previous Iris target. */
+    public static void beginRenderStage() {
+        stageTarget = null;
+    }
 
     /**
-     * Finds the same before/after-translucent target selected by Photon.
+     * Finds the framebuffer currently bound by Iris for this render stage.
      * Returns {@code null} for a normal Minecraft/Veil render path.
      */
     @Nullable
     public static Target currentTarget() {
-        if (!Photon.isShaderModInstalled()) return null;
+        if (!isIrisLoaded()) return null;
 
-        ShaderInstance particleShader = GameRenderer.getParticleShader();
-        if (particleShader == null) {
-            if (!warnedMissingParticleShader) {
-                warnedMissingParticleShader = true;
-                Gyromancy.LOGGER.warn(
-                        "[Gyromancy] Iris is installed but GameRenderer has no particle shader yet");
-            }
-            return null;
+        RenderSystem.assertOnRenderThread();
+        if (stageTarget != null) return stageTarget;
+
+        Target shaderTarget = targetFromIrisShader();
+        if (shaderTarget != null) {
+            stageTarget = shaderTarget;
+            return shaderTarget;
         }
 
+        Target boundTarget = targetFromBoundFramebuffer();
+        if (boundTarget != null) stageTarget = boundTarget;
+        return boundTarget;
+    }
+
+    /** Reads Iris' own current particle target without loading Photon classes. */
+    @Nullable
+    private static Target targetFromIrisShader() {
+        ShaderInstance particleShader = GameRenderer.getParticleShader();
+        if (particleShader == null) return null;
+
         try {
-            Class<?> accessor = Class.forName(
-                    PHOTON_IRIS_ACCESSOR, false,
-                    PhotonIrisRenderBridge.class.getClassLoader());
-            if (!accessor.isInstance(particleShader)) {
-                if (!warnedWrongParticleShader) {
-                    warnedWrongParticleShader = true;
-                    Gyromancy.LOGGER.warn(
-                            "[Gyromancy] Photon Iris accessor is present, but the active particle shader is {}",
-                            particleShader.getClass().getName());
-                }
+            Class<?> extendedShader = Class.forName(
+                    IRIS_EXTENDED_SHADER_CLASS, false,
+                    IrisRenderBridge.class.getClassLoader());
+            if (!extendedShader.isInstance(particleShader)) return null;
+
+            Object pipeline = readField(extendedShader, particleShader, "parent");
+            boolean beforeTranslucent = readBooleanField(pipeline, "isBeforeTranslucent");
+            String targetField = beforeTranslucent
+                    ? "writingToBeforeTranslucent"
+                    : "writingToAfterTranslucent";
+            Object framebuffer = readField(extendedShader, particleShader, targetField);
+            if (framebuffer == null) return null;
+
+            int framebufferId = invokeInt(framebuffer, "getId");
+            if (framebufferId <= 0
+                    || framebufferId == AdvancedFbo.getMainFramebuffer().getId()) {
                 return null;
             }
 
-            Object pipeline = invoke(accessor, particleShader, "getParent");
-            boolean beforeTranslucent = pipelineFlag(pipeline, "isBeforeTranslucent");
-            String targetMethod = beforeTranslucent
-                    ? "getWritingToBeforeTranslucent"
-                    : "getWritingToAfterTranslucent";
-            Object framebuffer = invoke(accessor, particleShader, targetMethod);
-            if (framebuffer == null) return null;
-            int framebufferId = ((Number) invoke(framebuffer, "getId")).intValue();
-            boolean hasDepth = (Boolean) invoke(framebuffer, "hasDepthAttachment");
-            if (framebufferId <= 0) return null;
-
             Minecraft minecraft = Minecraft.getInstance();
-            Target target = new Target(framebufferId, minecraft.getMainRenderTarget().width,
-                    minecraft.getMainRenderTarget().height, hasDepth);
+            Target target = new Target(framebufferId,
+                    minecraft.getMainRenderTarget().width,
+                    minecraft.getMainRenderTarget().height,
+                    invokeBoolean(framebuffer, "hasDepthAttachment"));
             if (!loggedTarget) {
                 loggedTarget = true;
                 Gyromancy.LOGGER.info(
-                        "[Gyromancy] Photon/Iris target active: shader={}, fbo={}, depth={}, beforeTranslucent={}",
-                        particleShader.getClass().getName(), framebufferId, hasDepth,
-                        beforeTranslucent);
+                        "[Gyromancy] Iris target active: fbo={}, depth={}, source=ExtendedShader",
+                        target.framebufferId(), target.hasDepthAttachment());
             }
             return target;
-        } catch (ReflectiveOperationException | LinkageError exception) {
-            if (!warnedAccessorFailure) {
-                warnedAccessorFailure = true;
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException exception) {
+            if (!warnedIrisReflectionFailure) {
+                warnedIrisReflectionFailure = true;
                 Gyromancy.LOGGER.warn(
-                        "[Gyromancy] Photon Iris framebuffer accessor is unavailable; "
-                                + "custom Veil passes will use their normal target", exception);
+                        "[Gyromancy] Iris framebuffer fields are unavailable; "
+                                + "falling back to the currently bound OpenGL framebuffer", exception);
             }
             return null;
         }
     }
 
+    /** Fallback for Iris versions that do not expose ExtendedShader fields in the same shape. */
+    @Nullable
+    private static Target targetFromBoundFramebuffer() {
+        int framebufferId = GL30.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int mainFramebufferId = AdvancedFbo.getMainFramebuffer().getId();
+        if (framebufferId <= 0) return null;
+        if (framebufferId == mainFramebufferId) return stageTarget;
+
+        Minecraft minecraft = Minecraft.getInstance();
+        int width = minecraft.getMainRenderTarget().width;
+        int height = minecraft.getMainRenderTarget().height;
+        boolean hasDepth = hasDepthAttachment(framebufferId);
+        if (!isComplete(framebufferId)) {
+            if (!warnedMissingTarget) {
+                warnedMissingTarget = true;
+                Gyromancy.LOGGER.warn(
+                        "[Gyromancy] Iris has a non-vanilla framebuffer bound, but it is incomplete; "
+                                + "custom Veil passes will use their normal target");
+            }
+            return null;
+        }
+
+        Target target = new Target(framebufferId, width, height, hasDepth);
+        stageTarget = target;
+        if (!loggedTarget) {
+            loggedTarget = true;
+            Gyromancy.LOGGER.info(
+                    "[Gyromancy] Iris target active: fbo={}, depth={}, source=GL_DRAW_FRAMEBUFFER_BINDING",
+                    framebufferId, hasDepth);
+        }
+        return target;
+    }
+
     /**
      * Copies the selected Iris color/depth attachments into an effect FBO.
      *
-     * <p>Photon renders into its own HDR target for the same reason: Iris owns
+     * <p>The pass renders into its own HDR target for the same reason: Iris owns
      * its pipeline FBO and may replace or re-lock state written directly to it.
      * Keeping the effect pass on an ordinary FBO also leaves the existing Veil
      * shader and blend path unchanged.</p>
@@ -155,7 +200,7 @@ public final class PhotonIrisRenderBridge {
     /**
      * Shares the selected Iris depth texture with a Veil effect FBO.
      *
-     * <p>This is the important part of Photon's Iris path. Iris owns the depth
+     * <p>This is the important part of the Iris path. Iris owns the depth
      * attachment and a framebuffer blit is not reliable while its pipeline is
      * active; attaching the same texture keeps the effect depth test identical
      * to the scene depth test without changing the effect geometry or quality.</p>
@@ -210,8 +255,8 @@ public final class PhotonIrisRenderBridge {
     }
 
     /**
-     * Blits an effect color texture back to Iris using the same LDLib2 blit
-     * shader used by Photon. The Iris target is only touched for this final
+     * Blits an effect color texture back to Iris using the existing LDLib2 blit
+     * shader. The Iris target is only touched for this final
      * copy, after all Veil rendering has completed on our own FBO.
      */
     public static boolean blitTextureTo(Target target, int textureId) {
@@ -227,8 +272,6 @@ public final class PhotonIrisRenderBridge {
             return false;
         }
 
-        // Photon relies on the main target being bound before touching the
-        // extended Iris shader target.
         AdvancedFbo.getMainFramebuffer().bind(true);
         GlStateManager._disableDepthTest();
         GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, target.framebufferId());
@@ -265,7 +308,7 @@ public final class PhotonIrisRenderBridge {
         try {
             Class<?> storage = Class.forName(
                     IRIS_DEPTH_COLOR_STORAGE, false,
-                    PhotonIrisRenderBridge.class.getClassLoader());
+                    IrisRenderBridge.class.getClassLoader());
             storage.getMethod("unlockDepthColor").invoke(null);
         } catch (ReflectiveOperationException | LinkageError exception) {
             if (!warnedDepthUnlockFailure) {
@@ -277,20 +320,65 @@ public final class PhotonIrisRenderBridge {
         }
     }
 
-    private static Object invoke(Class<?> owner, Object instance, String method)
-            throws ReflectiveOperationException {
-        return owner.getMethod(method).invoke(instance);
+    private static boolean isIrisLoaded() {
+        if (irisLoaded != null) return irisLoaded;
+        try {
+            Class.forName(IRIS_CLASS, false, IrisRenderBridge.class.getClassLoader());
+            irisLoaded = true;
+        } catch (ClassNotFoundException exception) {
+            irisLoaded = false;
+        }
+        return irisLoaded;
     }
 
-    private static Object invoke(Object instance, String method)
+    private static Object readField(Class<?> owner, Object instance, String name)
             throws ReflectiveOperationException {
-        return instance.getClass().getMethod(method).invoke(instance);
+        var field = owner.getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(instance);
     }
 
-    private static boolean pipelineFlag(Object pipeline, String fieldName)
+    private static boolean readBooleanField(Object instance, String name)
             throws ReflectiveOperationException {
-        Field field = pipeline.getClass().getField(fieldName);
-        return field.getBoolean(pipeline);
+        var field = instance.getClass().getField(name);
+        return field.getBoolean(instance);
+    }
+
+    private static int invokeInt(Object instance, String method)
+            throws ReflectiveOperationException {
+        return ((Number) instance.getClass().getMethod(method).invoke(instance)).intValue();
+    }
+
+    private static boolean invokeBoolean(Object instance, String method)
+            throws ReflectiveOperationException {
+        return (Boolean) instance.getClass().getMethod(method).invoke(instance);
+    }
+
+    private static boolean hasDepthAttachment(int framebufferId) {
+        int previousFramebuffer = GL30.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        try {
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, framebufferId);
+            int depthType = GL30.glGetFramebufferAttachmentParameteri(
+                    GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                    GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE);
+            if (depthType != GL30.GL_NONE) return true;
+            return GL30.glGetFramebufferAttachmentParameteri(
+                    GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_DEPTH_STENCIL_ATTACHMENT,
+                    GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE) != GL30.GL_NONE;
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousFramebuffer);
+        }
+    }
+
+    private static boolean isComplete(int framebufferId) {
+        int previousFramebuffer = GL30.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        try {
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, framebufferId);
+            return GL30.glCheckFramebufferStatus(GL30.GL_DRAW_FRAMEBUFFER)
+                    == GL30.GL_FRAMEBUFFER_COMPLETE;
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousFramebuffer);
+        }
     }
 
     public record Target(int framebufferId, int width, int height,
