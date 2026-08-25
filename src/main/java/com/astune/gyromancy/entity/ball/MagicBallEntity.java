@@ -38,6 +38,7 @@ public abstract class MagicBallEntity extends MagicEntity {
     private static final int GROWTH_RATE = 2;
     private UUID boundArrayId;
     private ArrayRelativePosition arrayRelativePosition;
+    private Vec3 parentRelativePosition;
     private SurfaceFrame creationArraySurface;
     private final ElementType targetElement;
     private double averageElementLevel;
@@ -181,6 +182,11 @@ public abstract class MagicBallEntity extends MagicEntity {
 
     public void bindToArray(UUID arrayId) {
         this.boundArrayId = arrayId;
+        if (level() instanceof ServerLevel serverLevel) {
+            ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
+                    .getArrayObj(arrayId);
+            if (array != null) setParentIfAbsent(array);
+        }
         captureArrayRelativePosition();
         bindPayloadToArray(arrayId);
     }
@@ -192,18 +198,23 @@ public abstract class MagicBallEntity extends MagicEntity {
     }
 
     private void updateArrayRelativePosition() {
-        if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return;
+        if (parent() instanceof Entity parentEntity) {
+            updateEntityRelativePosition(parentEntity);
+            return;
+        }
+        if (!(parent() instanceof ArrayObject)
+                || !(level() instanceof ServerLevel serverLevel)
+                || boundArrayId == null) {
+            arrayRelativePosition = null;
+            return;
+        }
         ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
                 .getArrayObj(boundArrayId);
         if (array == null) {
             arrayRelativePosition = null;
             return;
         }
-        // Pending launch values intentionally do not participate in this policy.
-        // MagicBallEntity alone decides whether it follows; the array only
-        // supplies its persisted creation window and current geometry.
-        if (launched || !MagicBallFollowPolicy.shouldFollow(serverLevel.getGameTime(),array.compilationEffectEndTick(), getDeltaMovement(), payloadAcceleration())
-        ) {
+        if (launched) {
             arrayRelativePosition = null;
             return;
         }
@@ -214,6 +225,17 @@ public abstract class MagicBallEntity extends MagicEntity {
         }
         setPos(arrayRelativePosition.resolve(
                 array.rootCircleGlyph().center(), array.rootCircleGlyph().surface()));
+    }
+
+    private void updateEntityRelativePosition(Entity parentEntity) {
+        if (launched || !parentEntity.isAlive() || parentEntity.level() != level()) {
+            parentRelativePosition = null;
+            return;
+        }
+        if (parentRelativePosition == null) {
+            parentRelativePosition = position().subtract(parentEntity.position());
+        }
+        setPos(parentEntity.position().add(parentRelativePosition));
     }
 
     private void captureArrayRelativePosition() {
@@ -364,7 +386,10 @@ public abstract class MagicBallEntity extends MagicEntity {
             pendingAcceleration = new Vec3(tag.getDouble("PendingAccelX"), tag.getDouble("PendingAccelY"), tag.getDouble("PendingAccelZ"));
         }
         launched = tag.getBoolean("Launched");
-        if (boundArrayId != null) bindPayloadToArray(boundArrayId);
+        if (boundArrayId != null) {
+            setArrayParentIfAbsent(boundArrayId);
+            bindPayloadToArray(boundArrayId);
+        }
 
     }
 

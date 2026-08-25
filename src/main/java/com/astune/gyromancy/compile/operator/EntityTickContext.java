@@ -16,6 +16,7 @@ import java.util.function.DoubleConsumer;
 
 public final class EntityTickContext {
     private final Entity owner;
+    private final Object parent;
     private final Level level;
     private final int tickCount;
     private final Vec3 position;
@@ -57,7 +58,21 @@ public final class EntityTickContext {
                              BiConsumer<MagicBallEntity, String> bindGeneratedEntity,
                              DoubleConsumer setTargetVolume, DoubleConsumer setAverageElementLevel,
                              SurfaceFrame arrayFrame) {
+        this(owner, level, tickCount, position, velocity, facing, acceleration, bounds, clientSide, alive,
+                fullyGrown, impact, size, targetSize, averageElementLevel, data, discard, addFreshEntity,
+                bindGeneratedEntity, setTargetVolume, setAverageElementLevel, arrayFrame, null);
+    }
+
+    public EntityTickContext(Entity owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
+                             Vec3 facing, Vec3 acceleration, AABB bounds, boolean clientSide, boolean alive,
+                             boolean fullyGrown, boolean impact, float size, float targetSize,
+                             double averageElementLevel, Map<String, Object> data,
+                             Runnable discard, Consumer<Entity> addFreshEntity,
+                             BiConsumer<MagicBallEntity, String> bindGeneratedEntity,
+                             DoubleConsumer setTargetVolume, DoubleConsumer setAverageElementLevel,
+                             SurfaceFrame arrayFrame, Object parent) {
         this.owner = owner;
+        this.parent = parent;
         this.level = level;
         this.tickCount = tickCount;
         this.position = position;
@@ -88,7 +103,8 @@ public final class EntityTickContext {
                 entity.isAlive(), entity.isFullyGrown(), entity.hasImpactThisTick(), entity.getBallSize(),
                 entity.getTargetSize(), entity.getAverageElementLevel(), data,
                 entity::discard, entity.level()::addFreshEntity, entity::bindGeneratedEntity,
-                entity::setTargetVolume, entity::setAverageElementLevel, entity.currentArrayFrame());
+                entity::setTargetVolume, entity::setAverageElementLevel, entity.currentArrayFrame(),
+                entity.parent());
     }
 
     public static EntityTickContext from(MagicFieldEntity entity, Map<String, Object> data, Vec3 acceleration) {
@@ -98,10 +114,13 @@ public final class EntityTickContext {
                 entity.isAlive(), entity.isFullyGrown(), entity.hasImpactThisTick(), entity.getFieldSize(),
                 entity.getTargetSize(), entity.getAverageElementLevel(), data,
                 entity::discard, entity.level()::addFreshEntity, entity::bindGeneratedEntity,
-                entity::setTargetVolume, entity::setAverageElementLevel, entity.currentArrayFrame());
+                entity::setTargetVolume, entity::setAverageElementLevel, entity.currentArrayFrame(),
+                entity.parent());
     }
 
     public Entity owner() { return owner; }
+
+    public Object parent() { return parent; }
 
     public Level level() { return level; }
 

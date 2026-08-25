@@ -16,26 +16,30 @@ public record OpRuntimeContext(
         Vec3 normal,
         ArrayObject array,
         PositionedGlyph arrayRootGlyph,
-        SurfaceFrame activationFrame
+        SurfaceFrame activationFrame,
+        Object parent,
+        boolean assignParent
 ) {
     public static OpRuntimeContext empty() {
         return new OpRuntimeContext(null, null);
     }
 
     public OpRuntimeContext(ServerLevel level, CompiledOp op, Vec3 origin, Vec3 normal) {
-        this(level, op, origin, normal, null, null, null);
+        this(level, op, origin, normal, null, null, null, null, true);
     }
 
     public OpRuntimeContext(ServerLevel level, CompiledOp op) {
-        this(level, op, null, null, null, null, null);
+        this(level, op, null, null, null, null, null, null, true);
     }
 
     public OpRuntimeContext at(Vec3 origin, Vec3 normal) {
-        return new OpRuntimeContext(level, op, origin, normal, array, arrayRootGlyph, activationFrame);
+        return new OpRuntimeContext(level, op, origin, normal, array, arrayRootGlyph,
+                activationFrame, parent, assignParent);
     }
 
     public OpRuntimeContext forOp(CompiledOp nestedOp) {
-        return new OpRuntimeContext(level, nestedOp, origin, normal, array, arrayRootGlyph, activationFrame);
+        return new OpRuntimeContext(level, nestedOp, origin, normal, array, arrayRootGlyph,
+                activationFrame, parent, assignParent);
     }
 
     /** Adds the live array plus the root frame captured when the runtime was compiled. */
@@ -43,7 +47,21 @@ public record OpRuntimeContext(
         SurfaceFrame captured = activationFrame != null
                 ? activationFrame
                 : array == null ? null : array.rootCircleGlyph().surface();
-        return new OpRuntimeContext(level, op, origin, normal, array, arrayRootGlyph, captured);
+        Object resolvedParent = assignParent && parent == null ? array : parent;
+        return new OpRuntimeContext(level, op, origin, normal, array, arrayRootGlyph,
+                captured, resolvedParent, assignParent);
+    }
+
+    /** Overrides the object whose activation owns this runtime. */
+    public OpRuntimeContext withParent(Object parent) {
+        return new OpRuntimeContext(level, op, origin, normal, array, arrayRootGlyph,
+                activationFrame, parent, true);
+    }
+
+    /** Prevents newly spawned entities from receiving an activation parent. */
+    public OpRuntimeContext withoutParent() {
+        return new OpRuntimeContext(level, op, origin, normal, array, arrayRootGlyph,
+                activationFrame, null, false);
     }
 
     public SurfaceFrame compileFrame() {

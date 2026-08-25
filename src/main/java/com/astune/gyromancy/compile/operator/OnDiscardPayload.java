@@ -53,7 +53,8 @@ public final class OnDiscardPayload extends EntityPayload {
 
         EmitResult result = new EmitResult();
         for (EntityEffectOp effect : content.effects()) {
-            RuntimeHandle handle = effect.activateAt(new OpRuntimeContext(server, effect), owner.position());
+            RuntimeHandle handle = effect.activateAt(
+                    new OpRuntimeContext(server, effect).withoutParent(), owner.position());
             for (EmittedObject emitted : EmitResult.emissions(handle.scratchData())) {
                 result.add(emitted);
             }

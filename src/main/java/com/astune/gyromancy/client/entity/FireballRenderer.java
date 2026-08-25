@@ -22,14 +22,14 @@ import static java.lang.Math.max;
 
 public class FireballRenderer extends EntityRenderer<FireballEntity> {
     private static final ResourceLocation FIRE_BALL_FX =
-            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fire_ball");
+            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fire_ball_old");
     private static final ResourceLocation SURROUNDING_FIRE_FX =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "surrounding_fire");
     private static final float MODEL_Y_OFFSET = 0.5F;
     private static final double PARTICLE_PLANE_SIZE = 0.3;
     private static final double MIN_PARTICLE_SCALE = 0.1;
     private static final double PARTICLE_SCALE_RANGE = 1;
-
+    private static final double MIN_SPARK_SIZE = 1;
     protected static final double RENDER_SCALE = 0.6;
     private static final Vec3 UP_AXIS = new Vec3(0, 1, 0);
 
@@ -75,7 +75,7 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
         // ── spawn vortex: VortexOrbitEffect during growth ──
         VortexOrbitEffect vortex = vortexEffects.get(entity);
         float vortexSize = 1f;
-        if (vortex == null && growing) {
+        if (vortex == null && growing && entity.getTargetBallSize() > MIN_SPARK_SIZE) {
             float targetSize = Math.max(0.1F, entity.getTargetBallSize());
             vortex = new VortexOrbitEffect(SURROUNDING_FIRE_FX, entity.level(),
                     entity::position, 30, 3f, 4f, 60, UP_AXIS, targetSize, 20)

@@ -182,12 +182,10 @@ dependencies {
     // Jar-in-Jar keeps it available in a clean instance while preserving its own
     // mod metadata. The supported range lets NeoForge select one compatible copy
     // when another mod embeds the same maven.modrinth:pigmentum artifact.
-    jarJar(implementation("maven.modrinth:pigmentum:${pigmentum_version}")) {
-        version {
-            strictly pigmentum_version_range
-            prefer pigmentum_version
-        }
-    }
+    // Keep the Gradle side on an exact local artifact: a strict range would
+    // require maven-metadata.xml, which the checked-in local Maven repository
+    // intentionally does not need to provide.
+    jarJar(implementation("maven.modrinth:pigmentum:${pigmentum_version}"))
     // Modopedia is embedded using its semantic Maven version so different mods
     // can negotiate one compatible copy instead of comparing CurseForge file IDs.
     jarJar(implementation("net.favouriteless.modopedia:modopedia-neoforge-${minecraft_version}:${modopedia_version}")) {

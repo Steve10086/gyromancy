@@ -86,6 +86,8 @@ public final class ManaProjectileOp extends EntityEffectOp {
             Vec3 acceleration = Vec3.ZERO;
             ManaballEntity manaball = new ManaballEntity(level, pos, emission.velocity(),
                     emission.motionSum(), liftDirection, acceleration, size);
+            manaball.setParentBindingAllowed(ctx.assignParent());
+            if (ctx.assignParent()) manaball.setParent(ctx.parent());
             manaball.setPayload(payload(defaultPayload(), ctx));
             EntityEmitter.INSTANCE.emit(level, ID, manaball, result);
         }

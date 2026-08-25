@@ -236,6 +236,11 @@ public abstract class MagicFieldEntity extends MagicEntity {
 
     public void bindToArray(UUID arrayId) {
         this.boundArrayId = arrayId;
+        if (level() instanceof ServerLevel serverLevel) {
+            ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
+                    .getArrayObj(arrayId);
+            if (array != null) setParentIfAbsent(array);
+        }
         captureArrayRelativePosition();
         bindPayloadToArray(arrayId);
     }
@@ -355,7 +360,10 @@ public abstract class MagicFieldEntity extends MagicEntity {
         }
         velocityThisTick = cappedSpeed(getDeltaMovement());
         setDeltaMovement(velocityThisTick);
-        if (boundArrayId != null) bindPayloadToArray(boundArrayId);
+        if (boundArrayId != null) {
+            setArrayParentIfAbsent(boundArrayId);
+            bindPayloadToArray(boundArrayId);
+        }
     }
 
     @Override

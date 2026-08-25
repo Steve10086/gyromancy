@@ -66,7 +66,7 @@ public final class IlluminationOp extends ProjectileEntityOp {
 
     @Override
     protected List<EntityPayload> payloadFor() {
-        return List.of(ElementVolumeOp.stability(ElementType.LIGHT));
+        return List.of(ElementVolumeOp.stability(ElementType.LIGHT), new FollowingOp());
     }
 
     @Override

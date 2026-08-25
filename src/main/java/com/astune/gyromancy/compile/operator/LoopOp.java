@@ -18,6 +18,7 @@ import com.astune.gyromancy.symbol.SymbolCatalog;
 import com.mojang.serialization.Codec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.util.HashMap;
@@ -27,10 +28,14 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
 
-/** Re-activates a persistent child effect when its bound effect disappears. */
+/**
+ * Re-activates a persistent child effect either on lifecycle loss or, when
+ * attached as an entity payload, on a distance-adjusted fixed interval.
+ */
 @RegisteredOp
 public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     private static final int CHECK_INTERVAL = 10;
+    private static final int MIN_PAYLOAD_INTERVAL = 5;
     private static final Map<ServerLevel, Set<LoopOp>> ACTIVE = new WeakHashMap<>();
 
     public static final ResourceLocation ID =
@@ -88,6 +93,7 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     private final PersistentOp child;
     private UUID boundArrayId;
     private Set<String> childScratchKeys = Set.of();
+    private boolean assignedAsEntityPayload;
 
     /** Payload-only instance created when an entity is loaded from NBT. */
     private LoopOp() {
@@ -138,6 +144,7 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
 
     @Override
     public void contributeEntityPayloads(List<EntityPayload> payloads, OpRuntimeContext context) {
+        assignedAsEntityPayload = true;
         payloads.add(this);
     }
 
@@ -149,15 +156,21 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     @Override
     public void onEntityTick(EntityTickContext ctx) {
         if (ctx.isClientSide() || boundArrayId == null
-                || ctx.tickCount() % CHECK_INTERVAL != 0
                 || child == null) return;
-        if (ctx.level() instanceof ServerLevel level) checkAndRestart(level);
+        if (!(ctx.level() instanceof ServerLevel level)) return;
+
+        ArrayObject array = level.getData(ModAttachments.ARRAY_MANAGER).getArrayObj(boundArrayId);
+        if (array == null) return;
+
+        int interval = payloadInterval(ctx, array);
+        if (ctx.tickCount() % interval != 0) return;
+        triggerFromEntity(level, ctx, array);
     }
 
     @Override
     public RuntimeHandle activate(OpRuntimeContext context) {
         RuntimeHandle handle = activateChild(context);
-        register(context.level(), this);
+        if (!assignedAsEntityPayload) register(context.level(), this);
         return handle;
     }
 
@@ -173,8 +186,55 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
             if (level.getGameTime() % CHECK_INTERVAL != 0) continue;
             Set<LoopOp> loops = ACTIVE.get(level);
             if (loops == null || loops.isEmpty()) continue;
-            for (LoopOp loop : List.copyOf(loops)) loop.checkAndRestart(level);
+            for (LoopOp loop : List.copyOf(loops)) {
+                if (!loop.assignedAsEntityPayload) loop.checkAndRestart(level);
+            }
         }
+    }
+
+    /** Re-activates the child directly for the entity that owns this payload. */
+    private void triggerFromEntity(ServerLevel level, EntityTickContext ctx, ArrayObject array) {
+        if (child == null) return;
+
+        Vec3 emissionNormal = ctx.arrayFrame() == null
+                ? array.rootCircleGlyph().surface().normal()
+                : ctx.arrayFrame().normal();
+        OpRuntimeContext context = new OpRuntimeContext(
+                level, child, ctx.position(), emissionNormal)
+                .withArray(array, array.rootCircleGlyph())
+                .withParent(ctx.owner());
+        RuntimeHandle handle = activateChild(context);
+        if (boundArrayId != null) {
+            ArrayEffectLifecycle.bindEmittedEntities(level, boundArrayId, handle.scratchData());
+        }
+    }
+
+    private int payloadInterval(EntityTickContext ctx, ArrayObject array) {
+        PositionedGlyph liveBoundary = liveBoundary(array);
+        if (liveBoundary == null) return CHECK_INTERVAL;
+
+        double referenceDistance = Math.max(liveBoundary.length(), liveBoundary.width());
+        if (!Double.isFinite(referenceDistance) || referenceDistance <= 1.0E-6) {
+            return CHECK_INTERVAL;
+        }
+
+        double distance = liveBoundary.center().distanceTo(ctx.position());
+        double ratio = Math.max(0.0, Math.min(1.0, distance / referenceDistance));
+        return Math.max(MIN_PAYLOAD_INTERVAL,
+                (int) Math.round(CHECK_INTERVAL
+                        - ratio * (CHECK_INTERVAL - MIN_PAYLOAD_INTERVAL)));
+    }
+
+    private PositionedGlyph liveBoundary(ArrayObject array) {
+        if (boundary == null) return null;
+        if (array == null) return boundary;
+        if (array.rootCircleGlyph().glyphUuid().equals(boundary.glyphUuid())) {
+            return array.rootCircleGlyph();
+        }
+        return array.boundGlyphs().stream()
+                .filter(glyph -> glyph.glyphUuid().equals(boundary.glyphUuid()))
+                .findFirst()
+                .orElse(boundary);
     }
 
     private RuntimeHandle activateChild(OpRuntimeContext context) {
@@ -186,8 +246,11 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     private OpRuntimeContext childContext(OpRuntimeContext context) {
         ArrayObject array = null;
         if (context.level() != null) {
-            array = context.level().getData(ModAttachments.ARRAY_MANAGER)
-                    .getArrayForGlyph(boundary.glyphUuid());
+            MagicArrayManager manager = context.level().getData(ModAttachments.ARRAY_MANAGER);
+            if (boundArrayId != null) array = manager.getArrayObj(boundArrayId);
+            if (array == null && boundary != null) {
+                array = manager.getArrayForGlyph(boundary.glyphUuid());
+            }
         }
         if (array == null) array = context.array();
 
@@ -195,7 +258,7 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
         if (array == null) return childContext;
 
         PositionedGlyph rootGlyph = context.arrayRootGlyph() != null
-                ? context.arrayRootGlyph() : boundary;
+                ? context.arrayRootGlyph() : array.rootCircleGlyph();
         return childContext.withArray(array, rootGlyph);
     }
 
