@@ -7,6 +7,7 @@ import com.astune.gyromancy.client.entity.OldFireballRenderer;
 import com.astune.gyromancy.client.entity.ElementBallRenderer;
 import com.astune.gyromancy.client.entity.WaterBallRenderer;
 import com.astune.gyromancy.client.canvas.CanvasEntityRenderer;
+import com.astune.gyromancy.client.canvas.CanvasTooltipComponent;
 import com.astune.gyromancy.client.item.WandClientItemExtensions;
 import com.astune.gyromancy.client.glyph.GlyphImageProvider;
 import com.astune.gyromancy.client.glyph.GlyphRenderer;
@@ -14,6 +15,7 @@ import com.astune.gyromancy.client.guide.AutoLayoutPageComponent;
 import com.astune.gyromancy.client.guide.GuideLinkFormatter;
 import com.astune.gyromancy.client.guide.MarkdownPageComponent;
 import com.astune.gyromancy.item.CompassItem;
+import com.astune.gyromancy.canvas.CanvasTooltipImage;
 import com.astune.gyromancy.registry.ModEntities;
 import com.astune.gyromancy.registry.ModItems;
 import com.astune.gyromancy.registry.ModMenus;
@@ -28,6 +30,7 @@ import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsE
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent;
 import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.resources.ResourceLocation;
 import net.favouriteless.modopedia.api.registries.client.PageComponentRegistry;
@@ -64,6 +67,12 @@ public final class ClientSetup {
     @SubscribeEvent
     static void registerClientExtensions(RegisterClientExtensionsEvent event) {
         event.registerItem(WandClientItemExtensions.INSTANCE, ModItems.WAND.get());
+    }
+
+    @SubscribeEvent
+    static void registerClientTooltipComponents(
+            RegisterClientTooltipComponentFactoriesEvent event) {
+        event.register(CanvasTooltipImage.class, CanvasTooltipComponent::new);
     }
 
     @SubscribeEvent

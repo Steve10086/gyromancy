@@ -27,6 +27,20 @@ class CanvasDocumentTest {
     }
 
     @Test
+    void emptyStateTracksRasterColorsAndEffects() {
+        CanvasDocument blank = CanvasDocument.blank(1, 1);
+        assertTrue(blank.isEmpty());
+
+        int[] colors = blank.colors();
+        colors[0] = 0xFF112233;
+        assertFalse(blank.withRaster(colors, blank.strokeEffects()).isEmpty());
+
+        int[] effects = blank.strokeEffects();
+        effects[0] = 1;
+        assertFalse(blank.withRaster(blank.colors(), effects).isEmpty());
+    }
+
+    @Test
     void exportsColorsForBottomOriginPatternCoordinates() {
         CanvasDocument blank = CanvasDocument.blank(1, 1);
         int[] colors = blank.colors();

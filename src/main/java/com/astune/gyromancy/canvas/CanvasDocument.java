@@ -130,6 +130,17 @@ public record CanvasDocument(
         return strokeEffects[y * resolutionWidth() + x];
     }
 
+    /** Returns whether this document has no visible raster content. */
+    public boolean isEmpty() {
+        for (int color : colors) {
+            if (color != 0) return false;
+        }
+        for (int effect : strokeEffects) {
+            if (effect != 0) return false;
+        }
+        return true;
+    }
+
     public CanvasDocument withRaster(int[] newColors, int[] newStrokeEffects) {
         return new CanvasDocument(physicalWidth, physicalHeight, resolutionScale,
                 newColors, newStrokeEffects, glyphs, arrays);

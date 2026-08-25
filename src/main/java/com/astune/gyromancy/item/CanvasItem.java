@@ -1,6 +1,7 @@
 package com.astune.gyromancy.item;
 
 import com.astune.gyromancy.canvas.CanvasDocument;
+import com.astune.gyromancy.canvas.CanvasTooltipImage;
 import com.astune.gyromancy.canvas.CanvasEntity;
 import com.astune.gyromancy.registry.ModDataComponents;
 import net.minecraft.core.BlockPos;
@@ -16,6 +17,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.gameevent.GameEvent;
 
 import java.util.List;
+import java.util.Optional;
 
 /** Places the complete portable canvas document as a hanging entity. */
 public final class CanvasItem extends Item {
@@ -59,5 +61,14 @@ public final class CanvasItem extends Item {
                 document.physicalWidth(), document.physicalHeight()));
         tooltip.add(Component.translatable("item.gyromancy.canvas.resolution",
                 document.resolutionWidth(), document.resolutionHeight()));
+    }
+
+    @Override
+    public Optional<net.minecraft.world.inventory.tooltip.TooltipComponent> getTooltipImage(
+            ItemStack stack) {
+        CanvasDocument document = stack.get(ModDataComponents.CANVAS_DOCUMENT.get());
+        return document == null || document.isEmpty()
+                ? Optional.empty()
+                : Optional.of(new CanvasTooltipImage(document));
     }
 }

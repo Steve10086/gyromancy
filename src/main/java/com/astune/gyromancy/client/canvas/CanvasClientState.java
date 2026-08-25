@@ -55,6 +55,7 @@ public final class CanvasClientState {
 
     public static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         clear();
+        CanvasTooltipTextureCache.clear();
         CanvasToolSettings.clear();
     }
 
