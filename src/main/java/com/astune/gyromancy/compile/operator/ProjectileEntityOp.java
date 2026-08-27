@@ -18,6 +18,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
 public abstract class ProjectileEntityOp  extends EntityEffectOp {
+
     protected ProjectileEntityOp(ResourceLocation id, ElementType element, PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
         super(id, element, boundary, matchedInputs, inputs);
     }

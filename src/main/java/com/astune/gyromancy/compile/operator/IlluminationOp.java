@@ -65,11 +65,6 @@ public final class IlluminationOp extends ProjectileEntityOp {
     }
 
     @Override
-    protected List<EntityPayload> payloadFor() {
-        return List.of(ElementVolumeOp.stability(ElementType.LIGHT), new FollowingOp());
-    }
-
-    @Override
     public List<EntityPayload> conditionalPayload() {
         Set<EntityPayload> payload = new HashSet<>();
         for (OpInput o : inputs){
@@ -78,22 +73,15 @@ public final class IlluminationOp extends ProjectileEntityOp {
                     case "engaging" -> {
                         payload.add(new ElementConversionOp(ElementType.LIGHT, ELEMENT_EXCHANGE_INTERVAL));
                     }
-                    case "fix" -> {
-                        payload.add(new FollowingOp());
-                    }
                 }
             }
-        }
-        if (payload.isEmpty()) {
-            payload.add(new ExplosionOp());
-            //payload.add(new RemoveOnHitOp());
         }
         return payload.stream().toList();
     }
 
     @Override
     Collection<? extends EntityPayload> defaultPayload() {
-        return null;
+        return List.of(new FollowingOp());
     }
 
     @Override

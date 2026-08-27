@@ -23,6 +23,8 @@ import static java.lang.Math.max;
 public class FireballRenderer extends EntityRenderer<FireballEntity> {
     private static final ResourceLocation FIRE_BALL_FX =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fire_ball");
+    private static final ResourceLocation SMALL_FIRE_BALL_FX =
+            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fire_ball_small");
     private static final ResourceLocation SURROUNDING_FIRE_FX =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "surrounding_fire");
     private static final float MODEL_Y_OFFSET = 0.5F;
@@ -30,6 +32,7 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
     private static final double MIN_PARTICLE_SCALE = 0.1;
     private static final double PARTICLE_SCALE_RANGE = 1;
     private static final double MIN_SPARK_SIZE = 1;
+    private static final double SMALL_SIZE = 0.5;
     protected static final double RENDER_SCALE = 0.6;
     private static final Vec3 UP_AXIS = new Vec3(0, 1, 0);
 
@@ -56,8 +59,8 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
         // ── body: EntityEffect with fire_ball.fx ──
         EntityEffect body = bodyEffects.get(entity);
         if (body == null) {
-            body = new EntityEffect(entity, FIRE_BALL_FX)
-                    .setSize((float) (size * RENDER_SCALE))
+            body = entity.getTargetBallSize() > SMALL_SIZE ? new EntityEffect(entity, FIRE_BALL_FX) : new EntityEffect(entity, SMALL_FIRE_BALL_FX);
+            body.setSize((float) (size * RENDER_SCALE))
                     .setOffset(0, size * MODEL_Y_OFFSET, 0);
             body.setColor(FireballRenderColors.elementColor(entity, partialTick, elementColors));
             body.start();

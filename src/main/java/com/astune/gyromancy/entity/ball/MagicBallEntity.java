@@ -36,6 +36,8 @@ public abstract class MagicBallEntity extends MagicEntity {
             SynchedEntityData.defineId(MagicBallEntity.class, EntityDataSerializers.FLOAT);
     protected static final float SPAWN_SIZE = 0.1F;
     private static final int GROWTH_RATE = 2;
+    public static final double MIN_LAUNCH_SIZE = 0.5f;
+
     private UUID boundArrayId;
     private ArrayRelativePosition arrayRelativePosition;
     private Vec3 parentRelativePosition;
@@ -67,6 +69,10 @@ public abstract class MagicBallEntity extends MagicEntity {
     protected boolean tickBeforePayload() {
         updateArrayRelativePosition();
         growIntoTargetSize();
+
+        if (!launched && getTargetBallSize() < MIN_LAUNCH_SIZE){
+            launchIfReady();
+        }
 
         if (!launched && !isFullyGrown()) {
             setDeltaMovement(Vec3.ZERO);
