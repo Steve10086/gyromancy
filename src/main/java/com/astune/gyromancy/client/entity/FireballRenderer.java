@@ -22,7 +22,7 @@ import static java.lang.Math.max;
 
 public class FireballRenderer extends EntityRenderer<FireballEntity> {
     private static final ResourceLocation FIRE_BALL_FX =
-            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fire_ball_old");
+            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fire_ball");
     private static final ResourceLocation SURROUNDING_FIRE_FX =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "surrounding_fire");
     private static final float MODEL_Y_OFFSET = 0.5F;

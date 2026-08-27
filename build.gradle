@@ -76,6 +76,7 @@ repositories {
         content {
             includeGroup "com.lowdragmc.ldlib2"
             includeGroup "com.lowdragmc.photon"
+            includeGroup "com.lowdragmc.kilagraph"
         }
     }
 }
@@ -186,6 +187,11 @@ dependencies {
     // require maven-metadata.xml, which the checked-in local Maven repository
     // intentionally does not need to provide.
     jarJar(implementation("maven.modrinth:pigmentum:${pigmentum_version}"))
+
+    // Photon 2.2.4 requires KilaGraph at runtime. Embed the exact artifact so
+    // the updated Photon stack does not add another manual client dependency.
+    jarJar(implementation("com.lowdragmc.kilagraph:kilagraph-neoforge-${minecraft_version}:${kilagraph_version}"))
+
     // Modopedia is embedded using its semantic Maven version so different mods
     // can negotiate one compatible copy instead of comparing CurseForge file IDs.
     jarJar(implementation("net.favouriteless.modopedia:modopedia-neoforge-${minecraft_version}:${modopedia_version}")) {
@@ -259,6 +265,9 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             mod_license            : mod_license,
             mod_version            : mod_version,
             pigmentum_version_range: pigmentum_version_range,
+            photon_version_range  : photon_version_range,
+            ldlib2_version_range  : ldlib2_version_range,
+            kilagraph_version_range: kilagraph_version_range,
             modopedia_version_range: modopedia_version_range,
             veil_version_range     : veil_version_range,
     ]

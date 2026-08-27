@@ -14,6 +14,8 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class ExplosionOp extends TriggerOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "explosion");
     public static final Codec<ExplosionOp> CODEC = Codec.unit(ExplosionOp::new);
+
+    private static final double MIN_EXPLOSION_SIZE = 1;
     public static final String EXPLOSION_POWER_KEY = "explosionPower";
     public static final String MAX_SIZE_KEY = "maxSize";
 
@@ -37,7 +39,7 @@ public final class ExplosionOp extends TriggerOp {
     public void trigger(EntityTickContext ctx) {
         if (!ctx.isClientSide()) {
             float power = ctx.floatValue(EXPLOSION_POWER_KEY, 1.5f);
-            ctx.level().explode(ctx.owner(), ctx.owner().getX(), ctx.owner().getY(), ctx.owner().getZ(),
+            if (ctx.size() > MIN_EXPLOSION_SIZE) ctx.level().explode(ctx.owner(), ctx.owner().getX(), ctx.owner().getY(), ctx.owner().getZ(),
                     power, true, Level.ExplosionInteraction.MOB);
             igniteNearbyBlocks(ctx, power);
         }

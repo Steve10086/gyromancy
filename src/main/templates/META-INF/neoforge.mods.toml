@@ -91,15 +91,23 @@ config="${mod_id}.mixins.json"
 [[dependencies.${mod_id}]]
     modId="photon"
     type="required"
-    versionRange="[1.0,)"
+    versionRange="${photon_version_range}"
     ordering="NONE"
     side="BOTH"
 
 [[dependencies.${mod_id}]]
     modId="ldlib2"
     type="required"
-    versionRange="[1.0,)"
+    versionRange="${ldlib2_version_range}"
     ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    # Photon 2.2.x uses KilaGraph for its render graph/runtime support.
+    modId="kilagraph"
+    type="required"
+    versionRange="${kilagraph_version_range}"
+    ordering="AFTER"
     side="BOTH"
 
 [[dependencies.${mod_id}]]

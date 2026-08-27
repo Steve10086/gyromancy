@@ -1,0 +1,38 @@
+{
+    "vertex": "ldlib2:water_ball",
+    "fragment": "ldlib2:water_ball",
+    "samplers": [
+        { "name": "IceTexture" },
+        { "name": "SamplerSceneColor" },
+        { "name": "SamplerCurve" }
+    ],
+    "uniforms": [
+        { "name": "ModelViewMat", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
+        { "name": "ProjMat", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
+        { "name": "ColorModulator", "type": "float", "count": 4, "values": [ 1.0, 1.0, 1.0, 1.0 ] },
+        { "name": "FogStart", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "FogEnd", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "FogColor", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
+        { "name": "FogShape", "type": "int", "count": 1, "values": [ 0 ] },
+        { "name": "ScreenSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+        { "name": "ColorHDR", "type": "float", "count": 4, "values": [ 0.3, 0.6, 1.0, 1.0 ] },
+        { "name": "Refraction", "type": "float", "count": 1, "values": [ 0.03 ] },
+        { "name": "Reflection", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "NoiseScale", "type": "float", "count": 1, "values": [ 12.0 ] },
+        { "name": "NoiseSpeed", "type": "float", "count": 2, "values": [ 0.01, 0.02 ] },
+        { "name": "NoisePower", "type": "float", "count": 1, "values": [ 1.4 ] },
+        { "name": "NoiseThreshold", "type": "float", "count": 1, "values": [ 0.35 ] },
+        { "name": "WaveScale", "type": "float", "count": 1, "values": [ 18.0 ] },
+        { "name": "WaveSpeed", "type": "float", "count": 2, "values": [ 0.012, -0.018 ] },
+        { "name": "WaveAmount", "type": "float", "count": 1, "values": [ 0.035 ] },
+        { "name": "CurveWaveAmount", "type": "float", "count": 1, "values": [ 0.035 ] },
+        { "name": "HighlightNoiseScale", "type": "float", "count": 1, "values": [ 28.0 ] },
+        { "name": "HighlightNoiseSpeed", "type": "float", "count": 2, "values": [ -0.015, 0.02 ] },
+        { "name": "HighlightNoisePower", "type": "float", "count": 1, "values": [ 3.0 ] },
+        { "name": "GameTime", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "WobbleSpeed", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "WobbleIntensity", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "WobbleFrequency", "type": "float", "count": 1, "values": [ 0.01 ] },
+        { "name": "WobbleAmount", "type": "float", "count": 1, "values": [ 0.7 ] }
+    ]
+}

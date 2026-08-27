@@ -48,6 +48,7 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
             return List.of(
                     OpInputMatcher.rune("arrow"),
                     OpInputMatcher.rune("engaging"),
+                    OpInputMatcher.rune("fix"),
                     OpInputMatcher.op(CompiledOp.class));
         }
 

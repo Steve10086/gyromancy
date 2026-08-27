@@ -49,7 +49,6 @@ public final class FireProjectileOp extends ProjectileEntityOp {
                     OpInputMatcher.rune("arrow"),
                     OpInputMatcher.rune("engaging"),
                     OpInputMatcher.rune("fix"),
-                    OpInputMatcher.rune("revert"),
                     OpInputMatcher.op(CompiledOp.class));
         }
 

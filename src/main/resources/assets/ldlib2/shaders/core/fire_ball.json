@@ -1,0 +1,33 @@
+{
+    "vertex": "ldlib2:fire_ball",
+    "fragment": "ldlib2:fire_ball",
+    "samplers": [
+        { "name": "Sampler2" },
+        { "name": "SamplerCurve"}
+    ],
+    "uniforms": [
+        { "name": "ModelViewMat", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
+        { "name": "ProjMat", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
+        { "name": "ColorModulator", "type": "float", "count": 4, "values": [ 1.0, 1.0, 1.0, 1.0 ] },
+        { "name": "FogStart", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "FogEnd", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "FogColor", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
+        { "name": "FogShape", "type": "int", "count": 1, "values": [ 0 ] },
+        { "name": "FrontHDR", "type": "float", "count": 4, "values": [ 1, 1, 1, 1 ] },
+        { "name": "GameTime", "type": "float", "count": 1, "values": [ 0 ] },
+        { "name": "ColorHDR", "type": "float", "count": 4, "values": [ 1, 1, 1, 1 ] },
+        { "name": "Dissolve", "type": "float", "count": 1, "values": [ 1 ] },
+        { "name": "NoiseScale", "type": "float", "count": 1, "values": [ 1 ] },
+        { "name": "NoiseSpeed", "type": "float", "count": 2, "values": [ 0, 0 ] },
+        { "name": "NoisePower", "type": "float", "count": 1, "values": [ 1 ] },
+        { "name": "GlobalAlpha", "type": "float", "count": 1, "values": [ 1 ] },
+        { "name": "GameTime", "type": "float", "count": 1, "values": [ 0 ] },
+        { "name": "TwirlAmount", "type": "float", "count": 1, "values": [ 0 ] },
+        { "name": "TwirlCenter", "type": "float", "count": 2, "values": [ 0, 0 ] },
+        { "name": "TwirlSpeed", "type": "float", "count": 2, "values": [ 0, 0 ] },
+        { "name": "WobbleSpeed", "type": "float", "count": 1, "values": [ 1 ] },
+        { "name": "WobbleIntensity", "type": "float", "count": 1, "values": [ 1 ] },
+        { "name": "WobbleFrequency", "type": "float", "count": 1, "values": [ 1 ] },
+        { "name": "WobbleAmount", "type": "float", "count": 1, "values": [ 0.5 ] }
+    ]
+}

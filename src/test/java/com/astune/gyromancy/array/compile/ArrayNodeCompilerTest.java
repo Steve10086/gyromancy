@@ -60,8 +60,7 @@ class ArrayNodeCompilerTest {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2);
         PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
-        PositionedGlyph revert = glyph("revert", SymbolRole.PARAMETER_RUNE, 4);
-        GroupNode ast = group(circle, new SymbolNode(fire), new SymbolNode(arrow), new SymbolNode(revert));
+        GroupNode ast = group(circle, new SymbolNode(fire), new SymbolNode(arrow));
 
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
@@ -69,9 +68,9 @@ class ArrayNodeCompilerTest {
         EntityEffectOp root = assertInstanceOf(FireProjectileOp.class, success.value().root());
 
         assertEquals(ElementType.FIRE, root.primaryElement());
-        assertEquals(List.of("fire", "arrow", "revert"), runeNames(root.inputs()));
+        assertEquals(List.of("fire", "arrow"), runeNames(root.inputs()));
         assertEquals(List.of("fire"), runeNames(root.matchedInputs()));
-        assertEquals(List.of(circle, fire, arrow, revert), success.value().boundGlyphs());
+        assertEquals(List.of(circle, fire, arrow), success.value().boundGlyphs());
     }
 
     @Test
