@@ -48,3 +48,5 @@ venv
 *.log
 *.jar
 
+### Training artifacts ###
+train/
