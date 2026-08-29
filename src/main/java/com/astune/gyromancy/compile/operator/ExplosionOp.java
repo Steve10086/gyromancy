@@ -16,6 +16,7 @@ public final class ExplosionOp extends TriggerOp {
     public static final Codec<ExplosionOp> CODEC = Codec.unit(ExplosionOp::new);
 
     private static final double MIN_EXPLOSION_SIZE = 1;
+    private static final double DAMAGE_FACTOR = 2;
     public static final String EXPLOSION_POWER_KEY = "explosionPower";
     public static final String MAX_SIZE_KEY = "maxSize";
 
@@ -38,10 +39,13 @@ public final class ExplosionOp extends TriggerOp {
     @Override
     public void trigger(EntityTickContext ctx) {
         if (!ctx.isClientSide()) {
-            float power = ctx.floatValue(EXPLOSION_POWER_KEY, 1.5f);
-            if (ctx.size() > MIN_EXPLOSION_SIZE) ctx.level().explode(ctx.owner(), ctx.owner().getX(), ctx.owner().getY(), ctx.owner().getZ(),
-                    power, true, Level.ExplosionInteraction.MOB);
-            igniteNearbyBlocks(ctx, power);
+            float power = (float) (ctx.floatValue(EXPLOSION_POWER_KEY, 1.5f) * DAMAGE_FACTOR);
+            boolean canDestroyBlocks = ctx.size() > MIN_EXPLOSION_SIZE;
+            ctx.level().explode(ctx.owner(), ctx.owner().getX(), ctx.owner().getY(), ctx.owner().getZ(),
+                    power, true, canDestroyBlocks
+                            ? Level.ExplosionInteraction.MOB
+                            : Level.ExplosionInteraction.NONE);
+            if (canDestroyBlocks) igniteNearbyBlocks(ctx, power);
         }
         ctx.owner().discard();
     }
