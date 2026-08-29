@@ -16,11 +16,16 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Map;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 import java.util.WeakHashMap;
 
 import static java.lang.Math.max;
 
 public class FireballRenderer extends EntityRenderer<FireballEntity> {
+    private static final Set<FireballRenderer> INSTANCES =
+            Collections.newSetFromMap(new IdentityHashMap<>());
     private static final ResourceLocation FIRE_BALL_FX =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fire_ball");
     private static final ResourceLocation SMALL_FIRE_BALL_FX =
@@ -43,6 +48,20 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
 
     public FireballRenderer(EntityRendererProvider.Context context) {
         super(context);
+        INSTANCES.add(this);
+    }
+
+    public static void clearClientState() {
+        for (FireballRenderer renderer : Set.copyOf(INSTANCES)) renderer.clearEffects();
+    }
+
+    private void clearEffects() {
+        bodyEffects.values().forEach(EntityEffect::stop);
+        vortexEffects.values().forEach(VortexOrbitEffect::kill);
+        bodyEffects.clear();
+        vortexEffects.clear();
+        lastParticleTick.clear();
+        elementColors.clear();
     }
 
     @Override

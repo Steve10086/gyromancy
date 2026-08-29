@@ -20,6 +20,9 @@ import java.util.function.Supplier;
  */
 @OnlyIn(Dist.CLIENT)
 public class VortexOrbitEffect {
+    private static final Set<VortexOrbitEffect> ACTIVE =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+
     private final ResourceLocation fxId;
     private final List<ParticleRunner> particles = new ArrayList<>();
     private final Level level;
@@ -101,12 +104,22 @@ public class VortexOrbitEffect {
         }
         emitAccumulator = 0;
         for (int i = 0; i < initialParticles && i < maxParticles; i++) emitOne();
+        ACTIVE.add(this);
     }
 
     /** Call every game tick to drive emission. Safe to call at any frequency. */
     public void tick() {
         if (!started || fx == null) return;
+        boolean engineWiped = particles.stream().anyMatch(ParticleRunner::isRuntimeInvalid);
         particles.removeIf(particle -> !particle.isAlive());
+        if (engineWiped) {
+            // Photon deliberately drops all vanilla-hosted particles on a
+            // level change. Restore the initial population immediately so a
+            // vortex does not visibly fade in again after returning to a world.
+            int desired = Math.min(initialParticles, maxParticles);
+            while (particles.size() < desired) emitOne();
+            emitAccumulator = 0;
+        }
         for (var particle : particles) particle.applyProperties();
         long now = level.getGameTime();
         if (now == lastGameTick) return;
@@ -139,10 +152,17 @@ public class VortexOrbitEffect {
     }
 
     public void kill() {
+        ACTIVE.remove(this);
         for (var p : particles) p.kill();
         particles.clear();
         started = false;
         emitAccumulator = 0;
+    }
+
+    /** Stops all custom Photon particle executors before a client level swap. */
+    public static void clearAll() {
+        for (VortexOrbitEffect effect : new ArrayList<>(ACTIVE)) effect.kill();
+        ACTIVE.clear();
     }
 
     public VortexOrbitEffect setSize(float size) { properties.setSize(size); return this; }
@@ -512,9 +532,14 @@ public class VortexOrbitEffect {
         }
 
         boolean isAlive() {
-            if (runtime != null && runtime.isAlive()) return true;
+            if (runtime != null && runtime.isValid() && runtime.isAlive()) return true;
+            if (runtime != null) runtime.destroy(true);
             runtime = null;
             return false;
+        }
+
+        boolean isRuntimeInvalid() {
+            return runtime != null && !runtime.isValid();
         }
 
         void applyProperties() {

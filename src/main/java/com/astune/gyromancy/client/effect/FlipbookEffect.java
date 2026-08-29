@@ -51,6 +51,11 @@ public class FlipbookEffect {
                 Math.max(0.001F, ticksPerFrame), width, height, lifetime, actions));
     }
 
+    /** Clears effects owned by the client level being unloaded. */
+    public static void clearAll() {
+        effects.clear();
+    }
+
     public void render(PoseStack poseStack, MultiBufferSource bufferSource, Vec3 center, Vec3 normal, Vec3 up,
                        float ageTicks, float width, float height) {
         if (texture == null || width <= 0.0F || height <= 0.0F) return;

@@ -25,6 +25,12 @@ public class WaterBallRenderer extends ElementBallRenderer<WaterBallEntity> {
     }
 
     @Override
+    protected void clearEffects() {
+        super.clearEffects();
+        lastParticleTicks.clear();
+    }
+
+    @Override
     public void render(WaterBallEntity entity, float entityYaw, float partialTick, PoseStack poseStack,
                        MultiBufferSource bufferSource, int packedLight) {
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);

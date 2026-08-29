@@ -9,6 +9,7 @@ import com.astune.gyromancy.network.CompassRadiusPacket;
 import com.astune.gyromancy.client.array.ArrayClientState;
 import com.astune.gyromancy.client.canvas.CanvasClientState;
 import com.astune.gyromancy.client.canvas.CanvasEditorKeyMappings;
+import com.astune.gyromancy.client.effect.ClientEffectLifecycle;
 import com.astune.gyromancy.client.effect.ClientRayEffects;
 import com.astune.gyromancy.client.effect.FlipbookEffect;
 import com.astune.gyromancy.client.effect.PhotonFxWarmup;
@@ -141,6 +142,7 @@ public class GyromancyClient {
         NeoForge.EVENT_BUS.addListener(CanvasClientState::onEntityLeave);
         NeoForge.EVENT_BUS.addListener(CanvasClientState::onLogout);
         NeoForge.EVENT_BUS.addListener(ArrayClientState::onLogout);
+        NeoForge.EVENT_BUS.addListener(ClientEffectLifecycle::onLevelUnload);
         NeoForge.EVENT_BUS.<ViewportEvent.ComputeCameraAngles>addListener(
                 PaintCameraController::onComputeCameraAngles);
         NeoForge.EVENT_BUS.<ViewportEvent.ComputeFov>addListener(

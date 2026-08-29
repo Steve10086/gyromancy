@@ -54,11 +54,54 @@ public final class ClientRayEffects {
     private static HDRTarget rayOutputFbo;
     private static int rayCompositeWidth = -1;
     private static int rayCompositeHeight = -1;
+    private static IrisRenderBridge.Target lastIrisTarget;
     private static boolean warnedMissingMeshShader;
     private static boolean warnedMissingCompositeShader;
 
     public static void clearAll() {
         effects.clear();
+        invalidateRenderResources();
+        lastIrisTarget = null;
+    }
+
+    /**
+     * Releases resources that are tied to the current world render pipeline.
+     * Iris replaces that pipeline (and its framebuffer attachments) when a
+     * client level changes, so keeping the old Veil FBO registered makes the
+     * ray pass render into stale attachments.
+     */
+    public static void invalidateRenderResources() {
+        MeshBeamRenderer oldMeshRenderer = meshRenderer;
+        meshRenderer = null;
+        if (oldMeshRenderer != null) oldMeshRenderer.free();
+
+        AdvancedFbo oldCompositeFbo = rayCompositeFbo;
+        rayCompositeFbo = null;
+        if (oldCompositeFbo != null) {
+            try {
+                AdvancedFbo registered = VeilRenderSystem.renderer()
+                        .getFramebufferManager().removeFramebuffer(RAY_COMPOSITE_FRAMEBUFFER);
+                if (registered != null) {
+                    registered.free();
+                } else {
+                    oldCompositeFbo.free();
+                }
+            } catch (RuntimeException exception) {
+                // During client shutdown Veil may already have torn down its
+                // framebuffer manager. The local object still needs best-effort
+                // cleanup, but shutdown must not turn into a second crash.
+                try {
+                    oldCompositeFbo.free();
+                } catch (RuntimeException ignored) {
+                    // Veil may have freed this object as part of its own teardown.
+                }
+            }
+        }
+
+        if (rayOutputFbo != null) rayOutputFbo.destroyBuffers();
+        rayOutputFbo = null;
+        rayCompositeWidth = -1;
+        rayCompositeHeight = -1;
     }
 
     public static void spawnOrRefresh(Vec3 center, Direction face, Vec3 worldRayDir,
@@ -382,6 +425,10 @@ public final class ClientRayEffects {
         if (effects.isEmpty()) return;
 
         IrisRenderBridge.Target irisTarget = IrisRenderBridge.currentTarget();
+        if (!Objects.equals(lastIrisTarget, irisTarget)) {
+            invalidateRenderResources();
+            lastIrisTarget = irisTarget;
+        }
         AdvancedFbo compositeFbo = ensureRayCompositeFbo();
         if (compositeFbo != null) {
             compositeFbo.clear(0f, 0f, 0f, 0f, GL11.GL_COLOR_BUFFER_BIT);
@@ -516,8 +563,7 @@ public final class ClientRayEffects {
             return rayCompositeFbo;
         }
 
-        if (rayCompositeFbo != null) rayCompositeFbo.free();
-        if (rayOutputFbo != null) rayOutputFbo.destroyBuffers();
+        invalidateRenderResources();
         rayCompositeFbo = AdvancedFbo.withSize(main.width, main.height)
                 .setFormat(FramebufferAttachmentDefinition.Format.RGBA16F)
                 .addColorTextureBuffer()
@@ -688,6 +734,10 @@ public final class ClientRayEffects {
 
     private static final class MeshBeamRenderer {
         private final VertexArray vertexArray = VertexArray.create();
+
+        void free() {
+            vertexArray.free();
+        }
 
         boolean draw(RenderType renderType, MeshVertex[] vertices, Runnable uploadUniforms) {
             if (renderType == null || vertices.length == 0) return false;

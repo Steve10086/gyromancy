@@ -105,6 +105,11 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
 
     @Override
     protected void init() {
+        // JEI may temporarily replace this screen and then reuse the same
+        // instance when its recipe view closes. removed() marks the screen as
+        // closing during that replacement, so re-align the guard with the
+        // screen becoming visible again.
+        closing = false;
         super.init();
         refreshInput(!initialized);
         layoutPanel();

@@ -87,11 +87,11 @@ public record SyncArrayPacket(List<ArrayData> arrays, boolean fullSnapshot) impl
 
     public static void handleClient(SyncArrayPacket packet, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
+            Set<UUID> previous = new HashSet<>(knownArrays);
             Set<UUID> next = packet.fullSnapshot()
                     ? new HashSet<>() : new HashSet<>(knownArrays);
             for (ArrayData array : packet.arrays()) {
                 next.add(array.id());
-                knownArrays.add(array.id());
                 if (array.compilationEffectTicks() <= 0) continue;
                 for (int partIndex = 0; partIndex < array.parts().size(); partIndex++) {
                     BlockData part = array.parts().get(partIndex);
@@ -112,11 +112,12 @@ public record SyncArrayPacket(List<ArrayData> arrays, boolean fullSnapshot) impl
                 }
             }
             if (packet.fullSnapshot()) {
-                Set<UUID> removed = new HashSet<>(knownArrays);
+                Set<UUID> removed = new HashSet<>(previous);
                 removed.removeAll(next);
                 removed.forEach(ClientRayEffects::stopLifecycle);
             }
-            knownArrays.retainAll(next);
+            knownArrays.clear();
+            knownArrays.addAll(next);
         });
     }
 

@@ -36,15 +36,40 @@ public final class WandProjectionGlowRenderer {
     private static HDRTarget irisOutputFbo;
     private static int irisOutputWidth = -1;
     private static int irisOutputHeight = -1;
+    private static IrisRenderBridge.Target lastIrisTarget;
     private static boolean warnedMissingShader;
 
     private WandProjectionGlowRenderer() {}
+
+    /** Releases the copy target and mesh VAO owned by the current world pass. */
+    public static void clearRenderResources() {
+        if (vertexArray != null) {
+            vertexArray.free();
+            vertexArray = null;
+        }
+        if (irisOutputFbo != null) irisOutputFbo.destroyBuffers();
+        irisOutputFbo = null;
+        irisOutputWidth = -1;
+        irisOutputHeight = -1;
+    }
+
+    /** Called when Minecraft unloads a client level (including a dimension change). */
+    public static void onClientLevelUnload() {
+        clearRenderResources();
+        lastIrisTarget = null;
+    }
 
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) return;
 
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null) return;
+
+        IrisRenderBridge.Target irisTarget = IrisRenderBridge.currentTarget();
+        if (!java.util.Objects.equals(lastIrisTarget, irisTarget)) {
+            clearRenderResources();
+            lastIrisTarget = irisTarget;
+        }
 
         float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
         for (Entity entity : minecraft.level.entitiesForRendering()) {
@@ -53,7 +78,7 @@ public final class WandProjectionGlowRenderer {
             CanvasDocument document = CanvasClientState.document(projection.getId());
             ResourceLocation texture = CanvasClientState.textureLocation(projection);
             if (document != null && texture != null) {
-                render(projection, document, texture, partialTick);
+                render(projection, document, texture, partialTick, irisTarget);
             }
         }
     }
@@ -61,7 +86,8 @@ public final class WandProjectionGlowRenderer {
     private static void render(ProjectionCanvasEntity projection,
                                CanvasDocument document,
                                ResourceLocation texture,
-                               float partialTick) {
+                               float partialTick,
+                               IrisRenderBridge.Target irisTarget) {
         ShaderProgram shader = VeilRenderSystem.renderer().getShaderManager().getShader(SHADER);
         RenderType renderType = VeilRenderType.get(RENDER_TYPE);
         if (shader == null || !shader.isValid() || renderType == null) {
@@ -89,7 +115,6 @@ public final class WandProjectionGlowRenderer {
         MeshData mesh = builder.buildOrThrow();
         if (vertexArray == null) vertexArray = VertexArray.create();
         vertexArray.upload(mesh, VertexArray.DrawUsage.STREAM);
-        IrisRenderBridge.Target irisTarget = IrisRenderBridge.currentTarget();
         HDRTarget outputFbo = null;
         if (irisTarget != null) {
             outputFbo = ensureIrisOutputFbo();

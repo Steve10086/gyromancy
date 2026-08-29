@@ -50,6 +50,16 @@ public final class IrisRenderBridge {
     }
 
     /**
+     * Clears render-stage state after Minecraft unloads a client level. Iris
+     * recreates its pipeline during the same transition, so a target captured
+     * from the previous level must never be reused by the next one.
+     */
+    public static void onClientLevelUnload() {
+        stageTarget = null;
+        loggedTarget = false;
+    }
+
+    /**
      * Finds the framebuffer currently bound by Iris for this render stage.
      * Returns {@code null} for a normal Minecraft/Veil render path.
      */

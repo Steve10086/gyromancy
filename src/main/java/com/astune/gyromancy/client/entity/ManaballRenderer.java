@@ -12,12 +12,17 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Map;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 import java.util.WeakHashMap;
 
 import static com.astune.gyromancy.client.entity.FireballRenderer.RENDER_SCALE;
 import static java.lang.Math.max;
 
 public class ManaballRenderer extends EntityRenderer<ManaballEntity> {
+    private static final Set<ManaballRenderer> INSTANCES =
+            Collections.newSetFromMap(new IdentityHashMap<>());
     private static final ResourceLocation MANA_BALL_FX =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "mana_ball");
     private static final ResourceLocation SURROUNDING_MANA_FX =
@@ -29,6 +34,18 @@ public class ManaballRenderer extends EntityRenderer<ManaballEntity> {
 
     public ManaballRenderer(EntityRendererProvider.Context context) {
         super(context);
+        INSTANCES.add(this);
+    }
+
+    public static void clearClientState() {
+        for (ManaballRenderer renderer : Set.copyOf(INSTANCES)) renderer.clearEffects();
+    }
+
+    private void clearEffects() {
+        bodyEffects.values().forEach(EntityEffect::stop);
+        vortexEffects.values().forEach(VortexOrbitEffect::kill);
+        bodyEffects.clear();
+        vortexEffects.clear();
     }
 
     @Override

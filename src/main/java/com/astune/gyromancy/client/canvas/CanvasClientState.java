@@ -9,6 +9,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -54,6 +55,14 @@ public final class CanvasClientState {
     }
 
     public static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+        clear();
+        CanvasTooltipTextureCache.clear();
+        CanvasToolSettings.clear();
+    }
+
+    /** Releases dimension-local snapshots before Minecraft swaps client levels. */
+    public static void onLevelUnload(LevelEvent.Unload event) {
+        if (!event.getLevel().isClientSide()) return;
         clear();
         CanvasTooltipTextureCache.clear();
         CanvasToolSettings.clear();

@@ -11,6 +11,10 @@ import net.neoforged.api.distmarker.OnlyIn;
 import org.joml.Vector3f;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 
 /**
  * Attaches a Photon FX to an entity with dynamic size, opacity, and position offset.
@@ -27,6 +31,9 @@ import javax.annotation.Nullable;
  */
 @OnlyIn(Dist.CLIENT)
 public class EntityEffect {
+    private static final Set<EntityEffect> ACTIVE =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+
     private final Entity entity;
     private final Level level;
     private final ResourceLocation fxLocation;
@@ -42,7 +49,10 @@ public class EntityEffect {
     }
 
     public void start() {
-        if (started) return;
+        if (started) {
+            if (runner != null && runner.isRuntimeValid()) return;
+            stop();
+        }
         started = true;
         fx = FXHelper.getFX(fxLocation);
         if (fx == null) {
@@ -51,22 +61,41 @@ public class EntityEffect {
         }
         runner = new EffectRunner(fx, level, entity, properties);
         runner.emit();
+        ACTIVE.add(this);
     }
 
     /** Call each tick to keep size/alpha/position in sync. */
     public void tick() {
         if (!started || runner == null) return;
+        if (!entity.isAlive()) {
+            stop();
+            return;
+        }
         var rt = runner.getRuntime();
-        if (rt == null) return;
+        if (rt == null || !runner.isRuntimeValid()) {
+            // ParticleEngine.setLevel() invalidates Photon runtimes without
+            // notifying custom executors. Re-emit the same FX on the new
+            // client level instead of keeping a dead runtime reference.
+            stop();
+            start();
+            return;
+        }
         properties.apply(rt);
     }
 
     public void stop() {
+        ACTIVE.remove(this);
         if (runner != null) {
             runner.kill();
             runner = null;
         }
         started = false;
+    }
+
+    /** Stops all custom entity executors before Photon changes level. */
+    public static void clearAll() {
+        for (EntityEffect effect : new ArrayList<>(ACTIVE)) effect.stop();
+        ACTIVE.clear();
     }
 
     // ── setters ──
@@ -120,6 +149,10 @@ public class EntityEffect {
             this.runtime.getRoot().updatePos(new Vector3f((float) pos.x, (float) pos.y, (float) pos.z));
             properties.apply(this.runtime);
             this.runtime.emmit(this, 0);
+        }
+
+        boolean isRuntimeValid() {
+            return runtime != null && runtime.isValid();
         }
 
         void kill() {
