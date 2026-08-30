@@ -3,6 +3,7 @@ package com.astune.gyromancy.symbol;
 import com.astune.gyromancy.Config;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.SymbolMatch;
+import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.api.symbol.SymbolTemplate;
 import com.astune.gyromancy.registry.GyromancyRegistries;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
@@ -16,7 +17,6 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,9 +28,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>Orchestrates the full pipeline for a single extracted glyph:
  * <ol>
  *   <li>Rasterize the extracted glyph to its raw binary matrix</li>
- *   <li>Match against all registered templates via {@link SkeletonMatcher}</li>
+ *   <li>Try the strict clipped-秘文 {@link SecretTextMatcher} path</li>
+ *   <li>Fall back to all registered templates via {@link SkeletonMatcher}</li>
  *   <li>Keep matches returned by {@link SkeletonMatcher}'s hard/soft threshold pipeline</li>
- *   <li>Return the resulting {@link SymbolMatch}(es)</li>
+ *   <li>Return ordinary {@link SymbolMatch}(es), including 秘文 as parameter-role matches</li>
  * </ol>
  */
 public final class SymbolRecognizer {
@@ -57,16 +58,54 @@ public final class SymbolRecognizer {
     }
 
     /**
+     * Complete result of one recognition pass. Secret-text matches use an
+     * independent {@link SecretTextSymbol} object backed by the shared
+     * {@link SecretText} enum and are exposed as parameter-role symbol
+     * matches. Their detailed match records also provide a {@code
+     * ParameterRune} representation.
+     */
+    public record RecognitionResult(
+            List<SymbolMatch> symbolMatches,
+            List<SecretTextMatcher.Match> secretTextMatches
+    ) {
+        public RecognitionResult {
+            symbolMatches = List.copyOf(symbolMatches);
+            secretTextMatches = List.copyOf(secretTextMatches);
+        }
+
+        public boolean hasSecretText() {
+            return !secretTextMatches.isEmpty();
+        }
+    }
+
+    /**
      * Recognizes an extracted glyph by rasterizing and matching against all templates.
      */
     public static List<SymbolMatch> recognize(
             ExtractedGlyph glyph,
             Registry<SymbolTemplate> symbolRegistry,
             RecognizerConfig config) {
+        return recognizeDetailed(glyph, symbolRegistry, config).symbolMatches();
+    }
+
+    /**
+     * Recognizes an extracted glyph and preserves either the exact 秘文
+     * result or the ordinary symbol result.
+     *
+     * <p>The ordinary {@link #recognize(ExtractedGlyph, Registry, RecognizerConfig)}
+     * method remains source-compatible for existing callers and returns the
+     * same {@link SymbolMatch} view. Callers that need the concrete 秘文
+     * object or its {@code ParameterRune} view can inspect
+     * {@link RecognitionResult#secretTextMatches()}.
+     */
+    public static RecognitionResult recognizeDetailed(
+            ExtractedGlyph glyph,
+            Registry<SymbolTemplate> symbolRegistry,
+            RecognizerConfig config) {
 
         if (glyph.pixels().isEmpty()) {
             LOGGER.debug("[SymbolRecognizer] Empty glyph - no pixels to recognize");
-            return Collections.emptyList();
+            return new RecognitionResult(List.of(), List.of());
         }
 
         int[][] rawMatrix = FloodFillExtractor.rawGlyphMatrix(glyph);
@@ -82,29 +121,34 @@ public final class SymbolRecognizer {
             saveDebugMatrixPng(rawMatrix);
         }
 
-        SkeletonMatcher matcher = SkeletonMatcher.getInstance();
-        List<SkeletonMatcher.Match> results = matcher.recognize(rawMatrix);
+        List<SecretTextMatcher.Match> secretTextResults =
+                SecretTextMatcher.INSTANCE.recognize(rawMatrix);
+        if (!secretTextResults.isEmpty()) {
+            LOGGER.debug("[SymbolRecognizer] Exact secret-text match: {}", secretTextResults);
+            List<SymbolMatch> exactMatches = new ArrayList<>();
+            for (SecretTextMatcher.Match result : secretTextResults) {
+                exactMatches.add(toSymbolMatch(result.symbol(), 1.0f,
+                        result.rotationDegrees(), glyph));
+            }
+            return new RecognitionResult(exactMatches, secretTextResults);
+        }
 
+        // Secret-text matching is deliberately a strict fast path. If it has
+        // no usable result, preserve the original skeleton matching path and
+        // pass the untouched raw matrix into it.
         Map<String, SymbolTemplate> tplIndex = new HashMap<>();
         for (SymbolTemplate t : symbolRegistry) tplIndex.put(t.id().toString(), t);
+
+        SkeletonMatcher matcher = SkeletonMatcher.getInstance();
+        List<SkeletonMatcher.Match> results = matcher.recognize(rawMatrix);
 
         List<SymbolMatch> matches = new ArrayList<>();
         for (SkeletonMatcher.Match result : results) {
             SymbolTemplate template = tplIndex.get(result.templateId().toString());
             if (template == null) continue;
 
-            float centerX = (float) ((glyph.minWorldX() + glyph.maxWorldX()) / 2.0);
-            float centerY = (float) ((glyph.minWorldY() + glyph.maxWorldY()) / 2.0);
-            Pose pose = computePose(glyph, result.rotationDegrees());
-
-            matches.add(new SymbolMatch(
-                    template.id(),
-                    result.confidence(),
-                    result.rotationDegrees(), false, 1f,
-                    pose.front(), pose.length(), pose.width(),
-                    centerX, centerY,
-                    template.defaultRole()
-            ));
+            matches.add(toSymbolMatch(template, result.confidence(),
+                    result.rotationDegrees(), glyph));
         }
 
         if (!matches.isEmpty()) {
@@ -115,7 +159,32 @@ public final class SymbolRecognizer {
             LOGGER.debug("[SymbolRecognizer] >> NO MATCH - no template passed skeleton matcher thresholds");
         }
 
-        return matches;
+        return new RecognitionResult(matches, List.of());
+    }
+
+    private static SymbolMatch toSymbolMatch(SymbolTemplate template, float confidence,
+                                             float rotationDegrees, ExtractedGlyph glyph) {
+        return toSymbolMatch(template.id(), template.defaultRole(), confidence,
+                rotationDegrees, glyph);
+    }
+
+    private static SymbolMatch toSymbolMatch(SecretTextSymbol symbol, float confidence,
+                                             float rotationDegrees, ExtractedGlyph glyph) {
+        return toSymbolMatch(symbol.id(), symbol.role(), confidence,
+                rotationDegrees, glyph);
+    }
+
+    private static SymbolMatch toSymbolMatch(net.minecraft.resources.ResourceLocation symbolId,
+                                             SymbolRole role,
+                                             float confidence, float rotationDegrees,
+                                             ExtractedGlyph glyph) {
+        float centerX = (float) ((glyph.minWorldX() + glyph.maxWorldX()) / 2.0);
+        float centerY = (float) ((glyph.minWorldY() + glyph.maxWorldY()) / 2.0);
+        Pose pose = computePose(glyph, rotationDegrees);
+        return new SymbolMatch(
+                symbolId, confidence, rotationDegrees, false, 1f,
+                pose.front(), pose.length(), pose.width(),
+                centerX, centerY, role);
     }
 
     private record Pose(Vec3 front, double length, double width) {}
@@ -170,6 +239,10 @@ public final class SymbolRecognizer {
 
     public static List<SymbolMatch> recognize(ExtractedGlyph glyph) {
         return recognize(glyph, GyromancyRegistries.SYMBOL, RecognizerConfig.DEFAULT);
+    }
+
+    public static RecognitionResult recognizeDetailed(ExtractedGlyph glyph) {
+        return recognizeDetailed(glyph, GyromancyRegistries.SYMBOL, RecognizerConfig.DEFAULT);
     }
 
     public static List<SymbolMatch> recognize(ExtractedGlyph glyph, float confidenceThreshold) {

@@ -15,6 +15,7 @@ import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.runtime.emit.EntityEmitter;
 import com.astune.gyromancy.entity.ball.ManaballEntity;
 import com.astune.gyromancy.symbol.CenterSymbol;
+import com.astune.gyromancy.symbol.SecretTextSymbol;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -137,7 +138,10 @@ public final class ManaProjectileOp extends EntityEffectOp {
         List<ParameterRune> params = new ArrayList<>();
         for (OpInput input : inputs) {
             if (input instanceof OpInput.Rune rune) {
-                params.add(new ParameterRune(rune.glyph().symbolId(), rune.glyph().confidence(), ""));
+                SecretTextSymbol secretText = SecretTextSymbol.fromId(rune.glyph().symbolId());
+                params.add(secretText == null
+                        ? new ParameterRune(rune.glyph().symbolId(), rune.glyph().confidence(), "")
+                        : secretText.toParameterRune(rune.glyph().confidence()));
             }
         }
         return List.copyOf(params);

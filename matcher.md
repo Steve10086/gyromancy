@@ -44,6 +44,20 @@ SkeletonMatcher.getInstance().recognize(rawMatrix);
 If the matcher is not initialized, or the target matrix cannot produce
 `SkeletonStats`, recognition returns an empty list.
 
+Before the regular skeleton path, `SymbolRecognizer` gives the raw matrix to
+the shared `SecretTextMatcher`. Each source PNG is required to be 3×3,
+converted to a binary matrix, and clipped to its non-white bounding box on
+load. The matcher therefore accepts any non-empty input rectangle no larger
+than 3×3 and compares it pixel-for-pixel with each clipped pattern, checking
+0°, 90°, 180°, and 270° clockwise orientations. A successful result is
+identified by the shared `SecretText` enum through its independent
+`SecretTextSymbol` object in `RecognitionResult.secretTextMatches()`. The
+object has `PARAMETER_RUNE` role and can produce the runtime `ParameterRune`
+representation. It is registered alongside ordinary symbols for persistent
+glyph identity, but is not added to the skeleton matcher. If there is no
+usable exact match, the original skeleton path receives the same, unchanged
+raw matrix.
+
 ## Skeleton Stats
 
 `computeStats(raw)` turns a binary image into the graph data used by every

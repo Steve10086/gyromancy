@@ -38,6 +38,9 @@ public final class ModSymbols {
         registerSymbol(WaterSymbol.INSTANCE);
         registerSymbol(WindSymbol.INSTANCE);
         registerSymbol(LoopSymbol.INSTANCE);
+        for (SecretText secretText : SecretText.values()) {
+            registerSymbol(secretText.symbol());
+        }
     }
 
     private ModSymbols() {}
@@ -52,7 +55,10 @@ public final class ModSymbols {
 
     private static void registerSymbol(Symbol symbol) {
         SYMBOLS.add(symbol);
-        SkeletonMatcher.getInstance().registerTemplate(symbol.id(), symbol.resourcePath(), symbol.thresholds());
+        if (!(symbol instanceof SecretTextSymbol)) {
+            SkeletonMatcher.getInstance().registerTemplate(
+                    symbol.id(), symbol.resourcePath(), symbol.thresholds());
+        }
     }
 
     public static int symbolLayerValueFor(ResourceLocation id) {
@@ -66,7 +72,9 @@ public final class ModSymbols {
         event.register(GyromancyRegistries.SYMBOL_KEY, registry -> {
             int loaded = 0;
             for (Symbol sym : SYMBOLS) {
-                int[][] pattern = TemplateLoader.load(sym.resourcePath());
+                int[][] pattern = sym instanceof SecretTextSymbol secretText
+                        ? SecretTextMatcher.INSTANCE.patternFor(secretText.type())
+                        : TemplateLoader.load(sym.resourcePath());
                 if (isEmptyPattern(pattern)) {
                     Gyromancy.LOGGER.warn("[ModSymbols] Skipping {} - empty or missing PNG", sym.name());
                     continue;
@@ -83,7 +91,7 @@ public final class ModSymbols {
     }
 
     private static boolean isEmptyPattern(int[][] p) {
-        if (p.length == 0 || p[0].length == 0) return true;
+        if (p == null || p.length == 0 || p[0].length == 0) return true;
         for (int[] row : p)
             for (int v : row) if (v != 0) return false;
         return true;
