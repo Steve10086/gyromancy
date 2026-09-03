@@ -49,17 +49,23 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
         List<EmitOp.Emission> emissions = new ArrayList<>();
         boolean hasEmitOp = false;
         for (OpInput input : inputs) {
-            if (input instanceof OpInput.Op op && op.operator() instanceof EmitOp emitOp) {
+            if (!(input instanceof OpInput.Op)) continue;
+            OpResolution resolved = resolveChild(input, OpResolveContext.UseSite.ENTITY_EMISSION,
+                    context);
+            if (resolved.operator() instanceof EmitOp emitOp) {
                 hasEmitOp = true;
-                emissions.addAll(emitOp.emissions(context));
+                emissions.addAll(emitOp.emissions(resolved.runtimeContextOr(context)));
             }
         }
         List<EmitOp.Emission> resolved = hasEmitOp
                 ? List.copyOf(emissions) : List.of(defaultEmission(context));
         for (OpInput input : inputs) {
             if (!(input instanceof OpInput.Op op)) continue;
+            OpResolution forwarded = resolveChild(input, OpResolveContext.UseSite.ENTITY_EMISSION,
+                    context);
+            OpRuntimeContext childContext = forwarded.runtimeContextOr(context);
             resolved = resolved.stream()
-                    .map(emission -> op.operator().modifyEntityEmission(emission, context))
+                    .map(emission -> forwarded.operator().modifyEntityEmission(emission, childContext))
                     .toList();
         }
         return resolved;
@@ -74,10 +80,20 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
         List<EntityPayload> payload = new ArrayList<>(defaults);
         for (OpInput input : inputs) {
             if (input instanceof OpInput.Op op) {
-                op.operator().contributeEntityPayloads(payload, context);
+                OpResolution forwarded = resolveChild(input, OpResolveContext.UseSite.ENTITY_PAYLOAD,
+                        context);
+                forwarded.operator().contributeEntityPayloads(
+                        payload, forwarded.runtimeContextOr(context));
             }
         }
         return List.copyOf(payload);
+    }
+
+    private OpResolution resolveChild(OpInput input, OpResolveContext.UseSite useSite,
+                                      OpRuntimeContext context) {
+        OpRuntimeContext runtime = context == null ? OpRuntimeContext.empty() : context;
+        return OpResolver.resolve(input,
+                OpResolveContext.forRuntime(this, useSite, runtime, boundary));
     }
 
     private EmitOp.Emission defaultEmission(OpRuntimeContext context) {

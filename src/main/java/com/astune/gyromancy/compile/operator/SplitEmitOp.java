@@ -7,6 +7,7 @@ import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.RegisteredOp;
+import com.astune.gyromancy.array.runtime.OpRuntimeFailure;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.symbol.CenterSymbol;
 import com.astune.gyromancy.symbol.SymbolCatalog;
@@ -22,6 +23,8 @@ public final class SplitEmitOp extends EmitOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "split_emit");
     private static final ResourceLocation SPLIT_SYMBOL =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "split");
+    private static final List<OpInputMatcher> MOMENTUM_MATCHERS =
+            List.of(OpInputMatcher.op(MomentumOp.class));
     public static final OpDefinition DEFINITION = new OpDefinition() {
         @Override
         public ResourceLocation id() {
@@ -68,9 +71,22 @@ public final class SplitEmitOp extends EmitOp {
                 decodeEmissionSource(rune.symbolName(), glyph, arrayNormal)
                         .map(SplitEmitOp::emission)
                         .ifPresent(emissions::add);
-            } else if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp momentum) {
+            } else if (input instanceof OpInput.Op) {
+                OpRuntimeContext runtime = context == null ? OpRuntimeContext.empty() : context;
+                OpResolution resolved = OpResolver.resolve(input,
+                        OpResolveContext.forRuntime(this,
+                                OpResolveContext.UseSite.ENTITY_EMISSION,
+                                runtime, boundary()));
+                if (!OpInputMatcher.anyMatches(MOMENTUM_MATCHERS, resolved)
+                        || !(resolved.operator() instanceof MomentumOp momentum)) {
+                    OpRuntimeFailure.terminate(resolved.runtimeContextOr(runtime), this,
+                            OpRuntimeFailure.Kind.RUNTIME_ERROR,
+                            "Split requires a MomentumOp after dynamic resolution");
+                    return List.of();
+                }
                 emissions.add(momentum.modifyEntityEmission(
-                        new Emission(Vec3.ZERO, 0.0, 1.0F, false), context));
+                        new Emission(Vec3.ZERO, 0.0, 1.0F, false),
+                        resolved.runtimeContextOr(runtime)));
             }
         }
         if (emissions.isEmpty()) return List.of();

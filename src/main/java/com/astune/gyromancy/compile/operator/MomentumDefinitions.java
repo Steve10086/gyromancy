@@ -56,8 +56,15 @@ public final class MomentumDefinitions {
             @Override
             public CompileResult<com.astune.gyromancy.compile.operator.CompiledOp> compile(
                     PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
+                return compile(OpResolveContext.forVector(boundary), boundary, matchedInputs, inputs);
+            }
+
+            @Override
+            public CompileResult<com.astune.gyromancy.compile.operator.CompiledOp> compile(
+                    OpResolveContext context, PositionedGlyph boundary,
+                    List<OpInput> matchedInputs, List<OpInput> inputs) {
                 return new CompileResult.Success<>(MomentumOp.compiled(
-                        boundary, matchedInputs, inputs, INPUT_RESOLVER));
+                        boundary, matchedInputs, inputs, INPUT_RESOLVER, context));
             }
         };
     }

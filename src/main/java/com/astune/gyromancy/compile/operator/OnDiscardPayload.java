@@ -1,10 +1,15 @@
 package com.astune.gyromancy.compile.operator;
 
+import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.array.runtime.ArrayEffectLifecycle;
+import com.astune.gyromancy.array.runtime.OpRuntimeFailure;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.runtime.emit.EmittedObject;
+import com.astune.gyromancy.array.compile.OpInput;
+import com.astune.gyromancy.array.compile.OpInputMatcher;
+import com.astune.gyromancy.registry.ModAttachments;
 import com.mojang.serialization.Codec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -12,19 +17,28 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 
 import java.util.UUID;
+import java.util.List;
 
 /** Entity payload which runs compiled entity effects when its owner is removed. */
 public final class OnDiscardPayload extends EntityPayload {
     public static final ResourceLocation ID =
             OnDiscardOp.ID;
     public static final Codec<OnDiscardPayload> CODEC =
-            Codec.unit(() -> new OnDiscardPayload(new OnDiscardContent(java.util.List.of(), null)));
+            Codec.unit(() -> new OnDiscardPayload(new OnDiscardContent(List.of(), null), null));
+    private static final List<OpInputMatcher> EFFECT_MATCHERS =
+            List.of(OpInputMatcher.op(EntityEffectOp.class));
 
     private OnDiscardContent content;
+    private final OnDiscardOp parentOp;
     private boolean triggered;
 
     public OnDiscardPayload(OnDiscardContent content) {
+        this(content, null);
+    }
+
+    public OnDiscardPayload(OnDiscardContent content, OnDiscardOp parentOp) {
         this.content = content;
+        this.parentOp = parentOp;
     }
 
     public OnDiscardContent content() {
@@ -52,9 +66,19 @@ public final class OnDiscardPayload extends EntityPayload {
         triggered = true;
 
         EmitResult result = new EmitResult();
-        for (EntityEffectOp effect : content.effects()) {
+        OpRuntimeContext runtime = runtimeContext(server, owner);
+        for (OpInput input : content.inputs()) {
+            OpResolution resolution = OpResolver.resolve(input, OpResolveContext.forRuntime(
+                    parentOp, OpResolveContext.UseSite.DISCARD, runtime,
+                    parentOp == null ? null : parentOp.boundary()));
+            if (!OpInputMatcher.anyMatches(EFFECT_MATCHERS, resolution)
+                    || !(resolution.operator() instanceof EntityEffectOp effect)) {
+                OpRuntimeFailure.terminate(runtime, parentOp, OpRuntimeFailure.Kind.RUNTIME_ERROR,
+                        "OnDiscard requires an EntityEffectOp after dynamic resolution");
+                return;
+            }
             RuntimeHandle handle = effect.activateAt(
-                    new OpRuntimeContext(server, effect).withoutParent(), owner.position());
+                    resolution.runtimeContextOr(runtime).forOp(effect).withoutParent(), owner.position());
             for (EmittedObject emitted : EmitResult.emissions(handle.scratchData())) {
                 result.add(emitted);
             }
@@ -62,5 +86,14 @@ public final class OnDiscardPayload extends EntityPayload {
         if (content.arrayId() != null) {
             ArrayEffectLifecycle.bindEmittedEntities(server, content.arrayId(), result.toRuntimeHandle().scratchData());
         }
+    }
+
+    private OpRuntimeContext runtimeContext(ServerLevel level, Entity owner) {
+        OpRuntimeContext runtime = new OpRuntimeContext(level, parentOp, owner.position(), null)
+                .withoutParent();
+        if (content.arrayId() == null) return runtime;
+
+        ArrayObject array = level.getData(ModAttachments.ARRAY_MANAGER).getArrayObj(content.arrayId());
+        return array == null ? runtime : runtime.withArray(array, array.rootCircleGlyph());
     }
 }

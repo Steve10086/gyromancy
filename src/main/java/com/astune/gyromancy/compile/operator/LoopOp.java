@@ -9,6 +9,7 @@ import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.RegisteredOp;
 import com.astune.gyromancy.array.runtime.ArrayEffectLifecycle;
+import com.astune.gyromancy.array.runtime.OpRuntimeFailure;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
@@ -37,6 +38,8 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     private static final int CHECK_INTERVAL = 10;
     private static final int MIN_PAYLOAD_INTERVAL = 5;
     private static final Map<ServerLevel, Set<LoopOp>> ACTIVE = new WeakHashMap<>();
+    private static final List<OpInputMatcher> CHILD_MATCHERS =
+            List.of(OpInputMatcher.op(PersistentOp.class));
 
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "loop");
@@ -57,43 +60,36 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
 
         @Override
         public List<OpInputMatcher> accepted() {
-            return List.of(OpInputMatcher.op(PersistentOp.class));
+            return CHILD_MATCHERS;
         }
 
         @Override
         public CompileResult<CompiledOp> compile(PositionedGlyph boundary,
                                                   List<OpInput> matchedInputs,
                                                   List<OpInput> inputs) {
-            PersistentOp child = null;
-            for (OpInput input : inputs) {
-                if (!(input instanceof OpInput.Op op)
-                        || !(op.operator() instanceof PersistentOp persistent)) continue;
-                if (child != null) {
-                    return new CompileResult.Failure<>(List.of(
-                            new com.astune.gyromancy.array.compile.CompileDiagnostic(
-                                    "multiple_loop_effects",
-                                    "Loop accepts exactly one persistent effect")));
-                }
-                child = persistent;
-            }
-            if (child == null) {
+            List<OpInput> children = inputs.stream()
+                    .filter(OpInput.Op.class::isInstance)
+                    .toList();
+            if (children.size() != 1) {
                 return new CompileResult.Failure<>(List.of(
                         new com.astune.gyromancy.array.compile.CompileDiagnostic(
-                                "missing_loop_effect",
-                                "Loop requires a nested persistent effect")));
+                                children.isEmpty() ? "missing_loop_effect" : "multiple_loop_effects",
+                                "Loop requires exactly one nested persistent effect")));
             }
             return new CompileResult.Success<>(new LoopOp(
-                    boundary, matchedInputs, inputs, child));
+                    boundary, matchedInputs, inputs, children.getFirst()));
         }
     };
 
     private final PositionedGlyph boundary;
     private final List<OpInput> matchedInputs;
     private final List<OpInput> inputs;
-    private final PersistentOp child;
+    private final OpInput childInput;
     private UUID boundArrayId;
     private Set<String> childScratchKeys = Set.of();
     private boolean assignedAsEntityPayload;
+    private PersistentOp activeChild;
+    private OpRuntimeContext activeChildContext;
 
     /** Payload-only instance created when an entity is loaded from NBT. */
     private LoopOp() {
@@ -101,11 +97,11 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     }
 
     private LoopOp(PositionedGlyph boundary, List<OpInput> matchedInputs,
-                   List<OpInput> inputs, PersistentOp child) {
+                   List<OpInput> inputs, OpInput childInput) {
         this.boundary = boundary;
         this.matchedInputs = List.copyOf(matchedInputs);
         this.inputs = List.copyOf(inputs);
-        this.child = child;
+        this.childInput = childInput;
     }
 
     @Override
@@ -156,7 +152,7 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     @Override
     public void onEntityTick(EntityTickContext ctx) {
         if (ctx.isClientSide() || boundArrayId == null
-                || child == null) return;
+                || childInput == null) return;
         if (!(ctx.level() instanceof ServerLevel level)) return;
 
         ArrayObject array = level.getData(ModAttachments.ARRAY_MANAGER).getArrayObj(boundArrayId);
@@ -177,7 +173,21 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     @Override
     public void deactivate(OpRuntimeContext context, Map<String, Object> scratchData) {
         unregister(context.level(), this);
-        if (child != null) child.deactivate(childContext(context), scratchData);
+        if (activeChild != null) {
+            OpRuntimeContext runtime = activeChildContext == null
+                    ? childContext(context).forOp(activeChild) : activeChildContext;
+            activeChild.deactivate(runtime, scratchData);
+            activeChild = null;
+            activeChildContext = null;
+            return;
+        }
+        if (childInput == null) return;
+        OpResolution resolved = resolveChild(context);
+        if (isPersistent(resolved) && resolved.operator() instanceof PersistentOp persistent) {
+            persistent.deactivate(
+                    resolved.runtimeContextOr(childContext(context)).forOp(persistent),
+                    scratchData);
+        }
     }
 
     /** Called from the common server tick after entity effects have ticked. */
@@ -194,13 +204,13 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
 
     /** Re-activates the child directly for the entity that owns this payload. */
     private void triggerFromEntity(ServerLevel level, EntityTickContext ctx, ArrayObject array) {
-        if (child == null) return;
+        if (childInput == null) return;
 
         Vec3 emissionNormal = ctx.arrayFrame() == null
                 ? array.rootCircleGlyph().surface().normal()
                 : ctx.arrayFrame().normal();
         OpRuntimeContext context = new OpRuntimeContext(
-                level, child, ctx.position(), emissionNormal)
+                level, this, ctx.position(), emissionNormal)
                 .withArray(array, array.rootCircleGlyph())
                 .withParent(ctx.owner());
         RuntimeHandle handle = activateChild(context);
@@ -238,27 +248,50 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     }
 
     private RuntimeHandle activateChild(OpRuntimeContext context) {
-        RuntimeHandle handle = child.activate(childContext(context));
+        if (childInput == null) return new RuntimeHandle(Map.of());
+        OpResolution resolved = resolveChild(context);
+        OpRuntimeContext runtime = resolved.runtimeContextOr(childContext(context));
+        if (!isPersistent(resolved) || !(resolved.operator() instanceof PersistentOp persistent)) {
+            childScratchKeys = Set.of();
+            OpRuntimeFailure.terminate(runtime, this, OpRuntimeFailure.Kind.RUNTIME_ERROR,
+                    "Loop requires a PersistentOp after dynamic resolution");
+            return new RuntimeHandle(Map.of());
+        }
+        OpRuntimeContext persistentContext = runtime.forOp(persistent);
+        RuntimeHandle handle = persistent.activate(persistentContext);
+        activeChild = persistent;
+        activeChildContext = persistentContext;
         childScratchKeys = Set.copyOf(handle.scratchData().keySet());
         return handle;
     }
 
+    private OpResolution resolveChild(OpRuntimeContext context) {
+        OpRuntimeContext runtime = childContext(context);
+        return OpResolver.resolve(childInput, OpResolveContext.forRuntime(
+                this, OpResolveContext.UseSite.PERSISTENT_CHILD, runtime, boundary));
+    }
+
+    private static boolean isPersistent(OpResolution resolution) {
+        return OpInputMatcher.anyMatches(CHILD_MATCHERS, resolution);
+    }
+
     private OpRuntimeContext childContext(OpRuntimeContext context) {
+        OpRuntimeContext base = context == null ? OpRuntimeContext.empty() : context;
         ArrayObject array = null;
-        if (context.level() != null) {
-            MagicArrayManager manager = context.level().getData(ModAttachments.ARRAY_MANAGER);
+        if (base.level() != null) {
+            MagicArrayManager manager = base.level().getData(ModAttachments.ARRAY_MANAGER);
             if (boundArrayId != null) array = manager.getArrayObj(boundArrayId);
             if (array == null && boundary != null) {
                 array = manager.getArrayForGlyph(boundary.glyphUuid());
             }
         }
-        if (array == null) array = context.array();
+        if (array == null) array = base.array();
 
-        OpRuntimeContext childContext = context.forOp(child);
+        OpRuntimeContext childContext = base.forOp(this);
         if (array == null) return childContext;
 
-        PositionedGlyph rootGlyph = context.arrayRootGlyph() != null
-                ? context.arrayRootGlyph() : array.rootCircleGlyph();
+        PositionedGlyph rootGlyph = base.arrayRootGlyph() != null
+                ? base.arrayRootGlyph() : array.rootCircleGlyph();
         return childContext.withArray(array, rootGlyph);
     }
 
@@ -270,7 +303,7 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
         if (array == null || hasLiveChildEffect(level, array.scratchData())) return;
 
         Set<String> oldChildScratchKeys = childScratchKeys;
-        RuntimeHandle handle = activateChild(new OpRuntimeContext(level, child));
+        RuntimeHandle handle = activateChild(new OpRuntimeContext(level, this));
         Map<String, Object> updated = new HashMap<>(array.scratchData());
         for (String key : oldChildScratchKeys) updated.remove(key);
         updated.putAll(handle.scratchData());

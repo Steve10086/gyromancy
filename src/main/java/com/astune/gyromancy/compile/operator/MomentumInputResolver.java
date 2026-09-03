@@ -21,6 +21,11 @@ final class MomentumInputResolver {
     }
 
     ResolvedInputs resolve(PositionedGlyph boundary, List<OpInput> inputs) {
+        return resolve(boundary, inputs, OpResolveContext.forVector(boundary));
+    }
+
+    ResolvedInputs resolve(PositionedGlyph boundary, List<OpInput> inputs,
+                           OpResolveContext context) {
         List<MomentumOp.VectorInput> velocityInputs = new ArrayList<>();
         List<MomentumOp.AccelerationInput> accelerationInputs = new ArrayList<>();
         boolean dynamic = false;
@@ -40,7 +45,7 @@ final class MomentumInputResolver {
                 continue;
             }
 
-            addVectorGroup(velocityInputs, input);
+            addVectorGroup(velocityInputs, input, context);
         }
 
         return new ResolvedInputs(List.copyOf(velocityInputs),
@@ -65,12 +70,13 @@ final class MomentumInputResolver {
                         vector, motionMode(rune.symbolName()))));
     }
 
-    private void addVectorGroup(List<MomentumOp.VectorInput> result, OpInput input) {
+    private void addVectorGroup(List<MomentumOp.VectorInput> result, OpInput input,
+                                OpResolveContext context) {
         if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp) return;
 
         if (input instanceof OpInput.RawGroup
                 || input instanceof OpInput.Op op && op.sourceGroup() != null) {
-            if (addCompiledVector(result, vectorCompiler.compile(input))) return;
+            if (addCompiledVector(result, vectorCompiler.compile(input, context))) return;
         }
 
         if (input instanceof OpInput.Op op && op.operator() instanceof VectorOp vector) {

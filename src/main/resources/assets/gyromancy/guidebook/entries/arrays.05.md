@@ -12,3 +12,13 @@
 
 ## 一张纸条
 (移动修饰可以被[向量簇](entries:vector:menu)修饰, 向加速度修饰法阵添加${symbol.gyromancy.loop}符文能够让加速度持续更新)
+
+<!-- page -->
+
+## ？？
+
+:::image gyromancy:textures/guide/wireless_1.png width=100 height=50
+:::
+
+:::image gyromancy:textures/guide/wireless_2.png width=100 height=50
+:::

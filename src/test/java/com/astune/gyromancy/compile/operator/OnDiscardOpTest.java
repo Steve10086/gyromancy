@@ -52,13 +52,14 @@ class OnDiscardOpTest {
                 .findFirst()
                 .orElseThrow();
 
-        assertEquals(1, op.effects().size());
-        assertInstanceOf(FireProjectileOp.class, op.effects().getFirst());
+        assertEquals(1, op.discardInputs().size());
+        OpInput.Op childInput = assertInstanceOf(OpInput.Op.class, op.discardInputs().getFirst());
+        assertInstanceOf(FireProjectileOp.class, childInput.operator());
         OnDiscardPayload payload = assertInstanceOf(OnDiscardPayload.class, root.payload(List.of()).stream()
                 .filter(OnDiscardPayload.class::isInstance)
                 .findFirst()
                 .orElseThrow());
-        assertEquals(op.effects(), payload.content().effects());
+        assertEquals(op.discardInputs(), payload.content().inputs());
     }
 
     private static GroupNode group(PositionedGlyph boundary, com.astune.gyromancy.array.compile.ArrayNode... children) {

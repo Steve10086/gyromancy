@@ -6,6 +6,7 @@ import com.astune.gyromancy.compile.operator.LoopOp;
 import com.astune.gyromancy.compile.operator.TriggerOp;
 import com.astune.gyromancy.element.ElementChunkEventHandler;
 import com.astune.gyromancy.element.ElementTickProcessor;
+import com.astune.gyromancy.entity.projection.WandProjectionService;
 import com.astune.gyromancy.registry.*;
 import org.slf4j.Logger;
 
@@ -55,6 +56,8 @@ public class Gyromancy {
                 e -> ElementTickProcessor.onServerTick(e));
         NeoForge.EVENT_BUS.<ServerTickEvent.Post>addListener(
                 e -> MagicArrayDetector.onServerTick(e));
+        NeoForge.EVENT_BUS.<ServerTickEvent.Post>addListener(
+                WandProjectionService::onServerTick);
         NeoForge.EVENT_BUS.<ServerTickEvent.Pre>addListener(
                 TriggerOp::onServerTick);
         NeoForge.EVENT_BUS.<ServerTickEvent.Post>addListener(

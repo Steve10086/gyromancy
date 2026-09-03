@@ -18,9 +18,12 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.List;
 import java.util.Map;
@@ -28,12 +31,18 @@ import java.util.UUID;
 
 /** Creates the world-side canvas entities that make a wand's arrays executable. */
 public final class WandProjectionService {
+    /** Minecraft runs at 20 ticks per second; 0.5 seconds is ten ticks. */
+    static final long SECOND_PLANE_DELAY_TICKS = 10L;
+    private static final Map<UUID, PendingProjection> PENDING_SECOND_PLANES =
+            new LinkedHashMap<>();
+
     private WandProjectionService() {}
 
     public static void project(Level level, Player player, ItemStack wand,
                                WandLayout layout, InteractionHand hand) {
         if (!(level instanceof ServerLevel serverLevel)) return;
         discardOwned(serverLevel, player.getUUID());
+        PENDING_SECOND_PLANES.remove(player.getUUID());
 
         Vec3 view = player.getViewVector(1.0F).normalize();
         Direction facing = Direction.getNearest(view);
@@ -49,27 +58,18 @@ public final class WandProjectionService {
             java.util.Optional<CanvasDocument> cachedDocument = snapshots.get(slot).document();
             if (cachedDocument.isEmpty()) continue;
             populatedSlots++;
-            Vec3 center = WandProjectionPose.targetCenter(
-                    player.getEyePosition(), view, layout.slotOffset(slot), player.getYRot(),
-                    WandProjectionPose.mirrorForHand(player.getMainArm(), hand));
-            CanvasDocument document = cachedDocument.get();
-            projectedGlyphs += document.glyphs().size();
-            WandProjectionEntity projection = WandProjectionEntity.create(
-                    serverLevel, center, facing, copyForProjection(document), player.getUUID(),
-                    view,
-                    player.getYRot() + 180.0F, player.getXRot(),
-                    (float) layout.slotOffset(slot),
-                    WandProjectionPose.mirrorForHand(player.getMainArm(), hand));
-            if (!serverLevel.addFreshEntity(projection)) {
-                Gyromancy.LOGGER.warn("[Wand] Failed to add projection entity for player {}",
-                        player.getScoreboardName());
+            if (slot == 1 && snapshots.get(0).document().isPresent()) {
+                PENDING_SECOND_PLANES.put(player.getUUID(), new PendingProjection(
+                        serverLevel, player.getUUID(), snapshots, layout, hand,
+                        serverLevel.getGameTime() + SECOND_PLANE_DELAY_TICKS));
+                projectedGlyphs += cachedDocument.get().glyphs().size();
                 continue;
             }
-            spawnedSlots++;
-            if (player instanceof ServerPlayer serverPlayer) {
-                // The entity may not have entered the tracker yet when
-                // CanvasCompileService.onPlaced broadcasts its snapshot.
-                projection.sendSnapshot(serverPlayer, false);
+            CanvasDocument document = cachedDocument.get();
+            projectedGlyphs += document.glyphs().size();
+            if (spawnProjection(serverLevel, player, layout, hand, slot,
+                    view, facing, document)) {
+                spawnedSlots++;
             }
         }
         int arraysAfter = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
@@ -80,8 +80,43 @@ public final class WandProjectionService {
                 projectedGlyphs, arraysBefore, arraysAfter);
     }
 
+    /** Runs the delayed second-plane creation on the server thread. */
+    public static void onServerTick(ServerTickEvent.Post event) {
+        Iterator<Map.Entry<UUID, PendingProjection>> iterator =
+                PENDING_SECOND_PLANES.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, PendingProjection> entry = iterator.next();
+            PendingProjection pending = entry.getValue();
+            if (pending.level().getServer() != event.getServer()) {
+                iterator.remove();
+                continue;
+            }
+            if (pending.level().getGameTime() < pending.dueGameTime()) continue;
+
+            iterator.remove();
+            Player player = pending.level().getPlayerByUUID(pending.owner());
+            if (player == null || !player.isUsingItem()
+                    || !(player.getUseItem().getItem()
+                    instanceof com.astune.gyromancy.item.WandItem)) {
+                continue;
+            }
+            java.util.Optional<CanvasDocument> document = pending.snapshots()
+                    .get(1).document();
+            if (document.isEmpty()) continue;
+
+            Vec3 view = player.getViewVector(1.0F).normalize();
+            Direction facing = Direction.getNearest(view);
+            if (spawnProjection(pending.level(), player, pending.layout(), pending.hand(),
+                    1, view, facing, document.get())) {
+                Gyromancy.LOGGER.debug("[Wand] Delayed second projection spawned for {}",
+                        player.getScoreboardName());
+            }
+        }
+    }
+
     public static void stop(Level level, Player player) {
         if (!(level instanceof ServerLevel serverLevel)) return;
+        PENDING_SECOND_PLANES.remove(player.getUUID());
         int removed = discardOwned(serverLevel, player.getUUID());
         Gyromancy.LOGGER.info("[Wand] Projection stopped for {}: removed={}",
                 player.getScoreboardName(), removed);
@@ -98,6 +133,36 @@ public final class WandProjectionService {
         owned.forEach(Entity::discard);
         return owned.size();
     }
+
+    private static boolean spawnProjection(ServerLevel level, Player player,
+                                            WandLayout layout, InteractionHand hand,
+                                            int slot, Vec3 view, Direction facing,
+                                            CanvasDocument document) {
+        Vec3 center = WandProjectionPose.targetCenter(
+                player.getEyePosition(), view, layout.slotOffset(slot), player.getYRot(),
+                WandProjectionPose.mirrorForHand(player.getMainArm(), hand));
+        WandProjectionEntity projection = WandProjectionEntity.create(
+                level, center, facing, copyForProjection(document), player.getUUID(),
+                view,
+                player.getYRot() + 180.0F, player.getXRot(),
+                (float) layout.slotOffset(slot),
+                WandProjectionPose.mirrorForHand(player.getMainArm(), hand));
+        if (!level.addFreshEntity(projection)) {
+            Gyromancy.LOGGER.warn("[Wand] Failed to add projection entity for player {}",
+                    player.getScoreboardName());
+            return false;
+        }
+        if (player instanceof ServerPlayer serverPlayer) {
+            // The entity may not have entered the tracker yet when
+            // CanvasCompileService.onPlaced broadcasts its snapshot.
+            projection.sendSnapshot(serverPlayer, false);
+        }
+        return true;
+    }
+
+    private record PendingProjection(ServerLevel level, UUID owner,
+                                     WandSlotSnapshots snapshots, WandLayout layout,
+                                     InteractionHand hand, long dueGameTime) {}
 
     /** Prevents cached glyph UUIDs from colliding when one canvas is projected repeatedly. */
     private static CanvasDocument copyForProjection(CanvasDocument source) {

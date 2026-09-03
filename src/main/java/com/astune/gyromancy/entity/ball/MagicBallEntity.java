@@ -45,6 +45,7 @@ public abstract class MagicBallEntity extends MagicEntity {
     private final ElementType targetElement;
     private double averageElementLevel;
     private boolean impactThisTick;
+    private boolean blockImpactThisTick;
     Vec3 acceleration = Vec3.ZERO;
     private Vec3 pendingVelocity = Vec3.ZERO;
     private Vec3 pendingAcceleration = Vec3.ZERO;
@@ -67,6 +68,8 @@ public abstract class MagicBallEntity extends MagicEntity {
 
     @Override
     protected boolean tickBeforePayload() {
+        impactThisTick = false;
+        blockImpactThisTick = false;
         updateArrayRelativePosition();
         growIntoTargetSize();
 
@@ -89,7 +92,8 @@ public abstract class MagicBallEntity extends MagicEntity {
         }
 
         setPos(end);
-        impactThisTick = blockHit.getType() != HitResult.Type.MISS || hitLivingEntity(velocityThisTick);
+        blockImpactThisTick = blockHit.getType() != HitResult.Type.MISS;
+        impactThisTick = blockImpactThisTick || hitLivingEntity(velocityThisTick);
 
         addDeltaMovement(acceleration);
 
@@ -118,6 +122,10 @@ public abstract class MagicBallEntity extends MagicEntity {
     }
     public boolean hasImpactThisTick() {
         return impactThisTick;
+    }
+
+    public boolean hasBlockImpactThisTick() {
+        return blockImpactThisTick;
     }
 
     private boolean hitLivingEntity(Vec3 velocity) {

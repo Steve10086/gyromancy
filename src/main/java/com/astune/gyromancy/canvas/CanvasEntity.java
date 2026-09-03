@@ -474,4 +474,25 @@ public class CanvasEntity extends BlockAttachedEntity {
         stack.set(ModDataComponents.CANVAS_DOCUMENT.get(), document);
         return stack;
     }
+
+    /** Hanging canvases are anchored surfaces and ignore external forces such as tornado attraction. */
+    @Override
+    public boolean isPushable() {
+        return false;
+    }
+
+    @Override
+    public void push(Entity entity) {
+        // Canvas position is determined by its attachment, not entity collisions.
+    }
+
+    @Override
+    public void push(Vec3 movement) {
+        // Canvas position is determined by its attachment, not entity collisions.
+    }
+
+    @Override
+    public void push(double x, double y, double z) {
+        // Canvas position is determined by its attachment, not external forces.
+    }
 }

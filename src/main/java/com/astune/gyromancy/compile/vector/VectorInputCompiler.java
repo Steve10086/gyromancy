@@ -3,6 +3,7 @@ package com.astune.gyromancy.compile.vector;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.OpInput;
+import com.astune.gyromancy.compile.operator.OpResolveContext;
 import com.astune.gyromancy.array.compile.VectorCompiler;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 
@@ -16,8 +17,15 @@ final class VectorInputCompiler {
     static List<VectorComposition.Input> all(PositionedGlyph boundary,
                                              List<OpInput> inputs,
                                              VectorCompiler compiler) {
+        return all(boundary, inputs, compiler, OpResolveContext.forVector(boundary));
+    }
+
+    static List<VectorComposition.Input> all(PositionedGlyph boundary,
+                                             List<OpInput> inputs,
+                                             VectorCompiler compiler,
+                                             OpResolveContext context) {
         List<VectorComposition.Input> result = direct(boundary, inputs);
-        result.addAll(groups(inputs, compiler));
+        result.addAll(groups(inputs, compiler, context));
         return List.copyOf(result);
     }
 
@@ -34,12 +42,17 @@ final class VectorInputCompiler {
     }
 
     static List<VectorComposition.Input> groups(List<OpInput> inputs, VectorCompiler compiler) {
+        return groups(inputs, compiler, OpResolveContext.forVector(null));
+    }
+
+    static List<VectorComposition.Input> groups(List<OpInput> inputs,
+                                                VectorCompiler compiler,
+                                                OpResolveContext context) {
         List<VectorComposition.Input> result = new ArrayList<>();
         for (OpInput input : inputs) {
             if (!(input instanceof OpInput.RawGroup)
                     && !(input instanceof OpInput.Op)) continue;
-            CompileResult<CompiledOp> compiled =
-                    compiler.compile(input);
+            CompileResult<CompiledOp> compiled = compiler.compile(input, context);
             if (compiled instanceof CompileResult.Success<CompiledOp> success
                     && success.value() instanceof VectorOp vector) {
                 result.add(new VectorComposition.Input(vector, VectorComposition.Mode.DIRECT));

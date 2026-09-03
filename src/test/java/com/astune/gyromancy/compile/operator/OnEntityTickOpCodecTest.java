@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 class OnEntityTickOpCodecTest {
@@ -19,6 +20,8 @@ class OnEntityTickOpCodecTest {
                 new SmeltOp(),
                 new CarryItemsOp(),
                 new WaterBurstOp(),
+                new TornadoAttractionOp(false, new net.minecraft.world.phys.Vec3(1.0, 2.0, 3.0), 0.25),
+                new TornadoImpactOp(),
                 new BrewingOp(),
                 new MomentumOp(List.of(
                         new MomentumOp.AccelerationInput(StaticVectorOp.literal(
@@ -42,8 +45,15 @@ class OnEntityTickOpCodecTest {
         assertInstanceOf(SmeltOp.class, loaded.get(1));
         assertInstanceOf(CarryItemsOp.class, loaded.get(2));
         assertInstanceOf(WaterBurstOp.class, loaded.get(3));
-        assertInstanceOf(BrewingOp.class, loaded.get(4));
-        MomentumOp momentum = assertInstanceOf(MomentumOp.class, loaded.get(5));
+        TornadoAttractionOp attraction = assertInstanceOf(TornadoAttractionOp.class, loaded.get(4));
+        assertFalse(attraction.towardsCenter());
+        assertEquals(1.0 / Math.sqrt(14.0), attraction.rotationAxis().x, 1.0E-9);
+        assertEquals(2.0 / Math.sqrt(14.0), attraction.rotationAxis().y, 1.0E-9);
+        assertEquals(3.0 / Math.sqrt(14.0), attraction.rotationAxis().z, 1.0E-9);
+        assertEquals(0.25, attraction.angularVelocity());
+        assertInstanceOf(TornadoImpactOp.class, loaded.get(5));
+        assertInstanceOf(BrewingOp.class, loaded.get(6));
+        MomentumOp momentum = assertInstanceOf(MomentumOp.class, loaded.get(7));
         assertEquals(2, momentum.accelerationInputs().size());
         assertEquals(4.0, momentum.accelerationInputs().getFirst()
                 .vector().provide(new VectorContext((com.astune.gyromancy.api.geometry.SurfaceFrame) null,
@@ -54,15 +64,15 @@ class OnEntityTickOpCodecTest {
                         net.minecraft.world.phys.Vec3.ZERO)).length());
         assertEquals(MomentumOp.MotionMode.DIRECT,
                 momentum.accelerationInputs().get(1).motionMode());
-        RotationOp rotation = assertInstanceOf(RotationOp.class, loaded.get(6));
+        RotationOp rotation = assertInstanceOf(RotationOp.class, loaded.get(8));
         assertEquals(-3.0, rotation.rotationSpeed());
-        ElementOp elementPayload = assertInstanceOf(ElementOp.class, loaded.get(7));
+        ElementOp elementPayload = assertInstanceOf(ElementOp.class, loaded.get(9));
         assertEquals(ElementType.WATER, elementPayload.absorbedElement());
-        ElementVolumeOp volume = assertInstanceOf(ElementVolumeOp.class, loaded.get(8));
+        ElementVolumeOp volume = assertInstanceOf(ElementVolumeOp.class, loaded.get(10));
         assertEquals(ElementType.FIRE, volume.element());
         assertEquals("storedMana", volume.storedManaKey());
         assertEquals(10, volume.interval());
-        ElementConversionOp conversion = assertInstanceOf(ElementConversionOp.class, loaded.get(9));
+        ElementConversionOp conversion = assertInstanceOf(ElementConversionOp.class, loaded.get(11));
         assertEquals(ElementType.FIRE, conversion.element());
         assertEquals(10, conversion.interval());
     }

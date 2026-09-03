@@ -3,6 +3,7 @@ package com.astune.gyromancy.registry;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.array.runtime.wireless.WirelessRegistry;
 import com.astune.gyromancy.element.ElementChunkData;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -54,6 +55,17 @@ public final class ModAttachments {
             ARRAY_MANAGER = ATTACHMENTS.register("array_manager",
             () -> AttachmentType.builder(() -> new MagicArrayManager())
                     .serialize(MagicArrayManager.CODEC)
+                    .build()
+    );
+
+    /**
+     * Per-level persisted Wireless directory. Runtime subscriber ids are
+     * intentionally omitted by {@link WirelessRegistry#CODEC}.
+     */
+    public static final Supplier<AttachmentType<WirelessRegistry>>
+            WIRELESS_REGISTRY = ATTACHMENTS.register("wireless_registry",
+            () -> AttachmentType.builder(WirelessRegistry::new)
+                    .serialize(WirelessRegistry.CODEC)
                     .build()
     );
 }

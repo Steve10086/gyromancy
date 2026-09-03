@@ -26,7 +26,7 @@ public class ManaballRenderer extends EntityRenderer<ManaballEntity> {
     private static final ResourceLocation MANA_BALL_FX =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "mana_ball");
     private static final ResourceLocation SURROUNDING_MANA_FX =
-            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "surrounding_mana");
+            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "mana_particle");
     private static final float MODEL_Y_OFFSET = 0.5F;
     private static final Vec3 UP_AXIS = new Vec3(0, 1, 0);
     private final Map<ManaballEntity, EntityEffect> bodyEffects = new WeakHashMap<>();

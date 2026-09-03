@@ -7,6 +7,7 @@ import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.compile.operator.CompiledOp;
+import com.astune.gyromancy.compile.operator.OpResolveContext;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
@@ -56,9 +57,20 @@ public final class StaticVectorDefinition {
             public CompileResult<CompiledOp> compile(PositionedGlyph boundary,
                                                      List<OpInput> matchedInputs,
                                                      List<OpInput> inputs) {
+                return compile(OpResolveContext.forVector(boundary), boundary, matchedInputs, inputs);
+            }
+
+            @Override
+            public CompileResult<CompiledOp> compile(OpResolveContext context,
+                                                     PositionedGlyph boundary,
+                                                     List<OpInput> matchedInputs,
+                                                     List<OpInput> inputs) {
+                OpResolveContext effectiveContext = context == null
+                        ? OpResolveContext.forVector(boundary) : context;
                 return new CompileResult.Success<>(new StaticVectorOp(
                         id, boundary, inputs, 0,
-                        VectorInputCompiler.all(boundary, inputs, VectorDefinitionSupport.compiler()),
+                        VectorInputCompiler.all(boundary, inputs, VectorDefinitionSupport.compiler(),
+                                effectiveContext),
                         VectorDefinitionSupport.containsRune(inputs, "curl")));
             }
         };

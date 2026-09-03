@@ -258,6 +258,25 @@
       ]
         }
       ]
+    },
+    {
+      "components": [
+        {
+          "type": "gyromancy:auto_layout",
+          "width": 96,
+          "align": "center",
+          "padding": 1,
+          "gap": 1,
+          "components": [
+            {
+              "type": "modopedia:image",
+              "images": ["gyromancy:textures/guide/secret_text.png"],
+              "width": 64,
+              "height": 64
+            }
+          ]
+        }
+      ]
     }
   ]
 }

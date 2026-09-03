@@ -11,7 +11,6 @@ import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import net.minecraft.resources.ResourceLocation;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /** Attaches entity effects which are emitted when the owning effect is discarded. */
@@ -48,23 +47,20 @@ public final class OnDiscardOp implements CompiledOp {
     private final PositionedGlyph boundary;
     private final List<OpInput> matchedInputs;
     private final List<OpInput> inputs;
-    private final List<EntityEffectOp> effects;
+    private final List<OpInput> discardInputs;
 
     private OnDiscardOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
         this.boundary = boundary;
         this.matchedInputs = List.copyOf(matchedInputs);
         this.inputs = List.copyOf(inputs);
-        List<EntityEffectOp> effects = new ArrayList<>();
-        for (OpInput input : inputs) {
-            if (input instanceof OpInput.Op op && op.operator() instanceof EntityEffectOp effect) {
-                effects.add(effect);
-            }
-        }
-        this.effects = List.copyOf(effects);
+        this.discardInputs = this.inputs.stream()
+                .filter(OpInput.Op.class::isInstance)
+                .toList();
     }
 
-    public List<EntityEffectOp> effects() {
-        return effects;
+    /** Static child structure, resolved only when this handler is triggered. */
+    public List<OpInput> discardInputs() {
+        return discardInputs;
     }
 
     public List<OpInput> matchedInputs() {
@@ -93,6 +89,6 @@ public final class OnDiscardOp implements CompiledOp {
 
     @Override
     public void contributeEntityPayloads(List<EntityPayload> payloads, OpRuntimeContext context) {
-        payloads.add(new OnDiscardPayload(new OnDiscardContent(effects, null)));
+        payloads.add(new OnDiscardPayload(new OnDiscardContent(discardInputs, null), this));
     }
 }

@@ -2,6 +2,7 @@ package com.astune.gyromancy.array.compile;
 
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.compile.operator.CompiledOp;
+import com.astune.gyromancy.compile.operator.OpResolveContext;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -20,7 +21,13 @@ public abstract class GroupCompiler {
     }
 
     public final CompileResult<CompiledOp> compile(GroupNode ast) {
-        return compileGroup(ast, 0);
+        return compile(ast, null);
+    }
+
+    /** Compiles a group while preserving an optional parent projection context. */
+    public final CompileResult<CompiledOp> compile(GroupNode ast, OpResolveContext context) {
+        return compileGroup(ast, 0, context == null
+                ? OpResolveContext.forCompile(ast.boundary()) : context);
     }
 
     public final List<OpDefinition> definitions() {
@@ -33,11 +40,13 @@ public abstract class GroupCompiler {
         return List.copyOf(glyphs);
     }
 
-    private CompileResult<CompiledOp> compileGroup(GroupNode group, int depth) {
+    private CompileResult<CompiledOp> compileGroup(GroupNode group, int depth,
+                                                    OpResolveContext context) {
         if (!(group.body() instanceof SequenceNode sequence)) {
             return failure("missing_primary_element", "Group has no sequence body");
         }
 
+        OpResolveContext groupContext = context.withTargetBoundary(group.boundary());
         List<OpInput> inputs = new ArrayList<>();
         for (ArrayNode child : sequence.children()) {
             if (child instanceof SymbolNode symbol) {
@@ -50,7 +59,7 @@ public abstract class GroupCompiler {
                     continue;
                 }
 
-                CompileResult<CompiledOp> compiled = compileGroup(nested, depth + 1);
+                CompileResult<CompiledOp> compiled = compileGroup(nested, depth + 1, groupContext);
                 if (compiled instanceof CompileResult.Success<CompiledOp> success) {
                     inputs.add(new OpInput.Op(success.value(), nested));
                 } else if (compiled instanceof CompileResult.Failure<CompiledOp> failure) {
@@ -59,15 +68,19 @@ public abstract class GroupCompiler {
             }
         }
 
-        return createOp(group.boundary(), List.copyOf(inputs));
+        // Group compilation only materializes the static tree.  A nested
+        // resolvable Op remains its original OpInput until the parent that
+        // consumes it explicitly asks for an OpResolution.
+        return createOp(group.boundary(), List.copyOf(inputs), groupContext);
     }
 
-    private CompileResult<CompiledOp> createOp(PositionedGlyph boundary, List<OpInput> inputs) {
+    private CompileResult<CompiledOp> createOp(PositionedGlyph boundary, List<OpInput> inputs,
+                                               OpResolveContext context) {
         Match best = bestMatch(inputs);
         if (best == null) {
             return failure("missing_primary_element", "Local direct inputs did not match an operator");
         }
-        return best.definition().compile(boundary, List.copyOf(best.inputs()), inputs);
+        return best.definition().compile(context, boundary, List.copyOf(best.inputs()), inputs);
     }
 
     private Match bestMatch(List<OpInput> inputs) {

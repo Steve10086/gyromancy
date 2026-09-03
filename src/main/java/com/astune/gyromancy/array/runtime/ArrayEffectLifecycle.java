@@ -73,30 +73,44 @@ public final class ArrayEffectLifecycle {
         CompiledArray compiled = success.value();
         if (!(compiled.root() instanceof PersistentOp)) return Optional.empty();
 
-        UUID arrayId = UUID.randomUUID();
-        long compilationEffectEndTick =
-                level.getGameTime() + ArrayObject.COMPILATION_EFFECT_TICKS;
-        ArrayObject activationArray = new ArrayObject(
-                arrayId,
-                compiled.rootCircleGlyph(),
-                compiled.boundGlyphs(),
-                compilationEffectEndTick,
-                Map.of("__array_color", compiled.color()));
-        RuntimeHandle handle = OpRuntimeDispatcher.activate(compiled, level, activationArray);
-        Map<String, Object> scratchData = new HashMap<>(handle.scratchData());
-        scratchData.put("__array_color", compiled.color());
+        return activateCompiled(level, mgr, compiled);
+    }
 
-        ArrayObject arr = new ArrayObject(
-                arrayId,
-                compiled.rootCircleGlyph(),
-                compiled.boundGlyphs(),
-                compilationEffectEndTick,
-                Map.copyOf(scratchData));
-        mgr.registerArrayObj(arr);
-        bindPersistentEntities(level, arr.arrayId(), arr.scratchData());
-        Gyromancy.LOGGER.info("[MagicArrayDetector] Array activated: root={}, bound={}",
-                circleGlyph.symbolId(), compiled.boundGlyphs().size());
-        return Optional.of(arr);
+    /**
+     * Rebuilds one active array after a runtime structure replacement. This
+     * deliberately follows the same lifecycle as a canvas modification:
+     * deactivate the old runtime, rebuild from the manager's current glyph
+     * tree, then activate a fresh array object. Unlike {@link #compileNew},
+     * it never claims another circle compilation opportunity.
+     */
+    public static Optional<ArrayObject> recompose(ServerLevel level, UUID arrayId) {
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        ArrayObject current = mgr.getArrayObj(arrayId);
+        if (current == null) return Optional.empty();
+
+        PositionedGlyph root = mgr.getGlyph(current.rootCircleGlyph().glyphUuid());
+        if (root == null || root.role() != SymbolRole.OUTER_CIRCLE
+                || mgr.parentCircle(root) != null) {
+            deactivate(level, current);
+            return Optional.empty();
+        }
+
+        GroupNode ast = ArrayAstBuilder.build(root, mgr,
+                glyph -> GlyphStrokeValidator.isValidForCollection(glyph, mgr, level));
+        CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(ast, mgr.opDefinitions());
+        if (!(result instanceof CompileResult.Success<CompiledArray> success)
+                || !(success.value().root() instanceof PersistentOp)) {
+            deactivate(level, current);
+            if (result instanceof CompileResult.Failure<CompiledArray> failure) {
+                Gyromancy.LOGGER.debug("[MagicArrayRuntime] Recompose failed for glyph #{}: {}",
+                        root.glyphId(), failure.diagnostics());
+                ArrayCompileDebug.printFailure(level, failure);
+            }
+            return Optional.empty();
+        }
+
+        deactivate(level, current);
+        return activateCompiled(level, mgr, success.value());
     }
 
     /**
@@ -183,9 +197,42 @@ public final class ArrayEffectLifecycle {
     public static void deactivate(ServerLevel level, ArrayObject array) {
         OpRuntimeDispatcher.deactivate(level, array);
         discardAllEmittedEntities(level, array.arrayId());
+        level.getData(ModAttachments.WIRELESS_REGISTRY).unsubscribe(array.arrayId());
         level.getData(ModAttachments.ARRAY_MANAGER).unregisterArrayObj(array.arrayId());
         Gyromancy.LOGGER.info("[MagicArrayDetector] Array deactivated: root={}",
                 array.rootCircleGlyph().symbolId());
+    }
+
+    private static Optional<ArrayObject> activateCompiled(
+            ServerLevel level, MagicArrayManager manager, CompiledArray compiled) {
+        UUID arrayId = UUID.randomUUID();
+        long compilationEffectEndTick =
+                level.getGameTime() + ArrayObject.COMPILATION_EFFECT_TICKS;
+        ArrayObject activationArray = new ArrayObject(
+                arrayId,
+                compiled.rootCircleGlyph(),
+                compiled.boundGlyphs(),
+                compilationEffectEndTick,
+                Map.of("__array_color", compiled.color()));
+        RuntimeHandle handle = OpRuntimeDispatcher.activate(compiled, level, activationArray);
+        if (OpRuntimeFailure.consumePendingTermination(activationArray)) {
+            EmitResult.discardEmittedEntities(level, handle.scratchData());
+            return Optional.empty();
+        }
+        Map<String, Object> scratchData = new HashMap<>(handle.scratchData());
+        scratchData.put("__array_color", compiled.color());
+
+        ArrayObject array = new ArrayObject(
+                arrayId,
+                compiled.rootCircleGlyph(),
+                compiled.boundGlyphs(),
+                compilationEffectEndTick,
+                Map.copyOf(scratchData));
+        manager.registerArrayObj(array);
+        bindPersistentEntities(level, array.arrayId(), array.scratchData());
+        Gyromancy.LOGGER.info("[MagicArrayDetector] Array activated: root={}, bound={}",
+                compiled.rootCircleGlyph().symbolId(), compiled.boundGlyphs().size());
+        return Optional.of(array);
     }
 
     /**

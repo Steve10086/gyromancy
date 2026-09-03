@@ -8,6 +8,7 @@ import com.astune.gyromancy.entity.ball.OldFireballEntity;
 import com.astune.gyromancy.entity.ball.WaterBallEntity;
 import com.astune.gyromancy.entity.ball.IceBallEntity;
 import com.astune.gyromancy.entity.ball.DryBallEntity;
+import com.astune.gyromancy.entity.ball.TornadoBallEntity;
 import com.astune.gyromancy.canvas.CanvasEntity;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.astune.gyromancy.entity.projection.WandProjectionEntity;
@@ -64,6 +65,7 @@ public final class ModEntities {
     public static final Supplier<EntityType<WaterBallEntity>> WATER_BALL = registerBall("water_ball", WaterBallEntity::new);
     public static final Supplier<EntityType<IceBallEntity>> ICE_BALL = registerBall("ice_ball", IceBallEntity::new);
     public static final Supplier<EntityType<DryBallEntity>> DRY_BALL = registerBall("dry_ball", DryBallEntity::new);
+    public static final Supplier<EntityType<TornadoBallEntity>> TORNADO_BALL = registerBall("tornado_ball", TornadoBallEntity::new);
 
     public static final Supplier<EntityType<CanvasEntity>> CANVAS =
             ENTITIES.register("canvas", () -> EntityType.Builder

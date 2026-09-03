@@ -17,6 +17,7 @@ import com.astune.gyromancy.compile.operator.ProjectionOp;
 import com.astune.gyromancy.compile.operator.RotationOp;
 import com.astune.gyromancy.compile.operator.SplitEmitOp;
 import com.astune.gyromancy.compile.operator.WaterProjectileOp;
+import com.astune.gyromancy.compile.operator.WirelessOp;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -53,6 +54,46 @@ class ArrayNodeCompilerTest {
         List<EntityPayload> payloads = new ArrayList<>();
         success.value().root().contributeEntityPayloads(payloads, OpRuntimeContext.empty());
         assertEquals(List.of(success.value().root()), payloads);
+    }
+
+    @Test
+    void wirelessPublishesItsSingleDirectCircleSource() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph space = glyph("space", SymbolRole.CENTER_SYMBOL, 2);
+        PositionedGlyph secretOne = glyph("secret_text_1", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph source = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 4);
+        PositionedGlyph unsupported = glyph("unsupported", SymbolRole.PARAMETER_RUNE, 5);
+        GroupNode ast = group(outer, new SymbolNode(space), new SymbolNode(secretOne),
+                group(source, new SymbolNode(unsupported)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast, List.of(WirelessOp.DEFINITION)));
+        WirelessOp wireless = assertInstanceOf(WirelessOp.class, success.value().root());
+
+        assertEquals(true, wireless.publishesSource());
+        assertEquals("wireless:1", wireless.key());
+    }
+
+    @Test
+    void loopAcceptsADeferredWirelessConsumerUntilRuntimeResolution() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph loop = glyph("loop", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph wirelessCircle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
+        PositionedGlyph space = glyph("space", SymbolRole.CENTER_SYMBOL, 4);
+        PositionedGlyph secretOne = glyph("secret_text_1", SymbolRole.PARAMETER_RUNE, 5);
+        GroupNode ast = group(outer, new SymbolNode(loop),
+                group(wirelessCircle, new SymbolNode(space), new SymbolNode(secretOne)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast, List.of(WirelessOp.DEFINITION, LoopOp.DEFINITION)));
+        LoopOp loopOp = assertInstanceOf(LoopOp.class, success.value().root());
+        WirelessOp child = assertInstanceOf(WirelessOp.class,
+                assertInstanceOf(OpInput.Op.class, loopOp.inputs().get(1)).operator());
+
+        assertEquals(false, child.publishesSource());
+        assertEquals("wireless:1", child.key());
     }
 
     @Test

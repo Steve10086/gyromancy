@@ -7,6 +7,7 @@ import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.compile.operator.CompiledOp;
+import com.astune.gyromancy.compile.operator.OpResolveContext;
 import com.astune.gyromancy.compile.operator.RotationOp;
 import net.minecraft.resources.ResourceLocation;
 
@@ -32,17 +33,27 @@ final class RotationVectorDefinition {
             return VectorDefinitionSupport.accepted(false);
         }
 
-        @Override
-        public CompileResult<CompiledOp> compile(PositionedGlyph boundary,
+            @Override
+            public CompileResult<CompiledOp> compile(PositionedGlyph boundary,
                                                  List<OpInput> matchedInputs,
                                                  List<OpInput> inputs) {
-            PositionedGlyph loop = ((OpInput.Rune) matchedInputs.getFirst()).glyph();
-            return new CompileResult.Success<>(new RotationVectorOp(
-                    ID, boundary, inputs, 0,
+                return compile(OpResolveContext.forVector(boundary), boundary, matchedInputs, inputs);
+            }
+
+            @Override
+            public CompileResult<CompiledOp> compile(OpResolveContext context,
+                                                     PositionedGlyph boundary,
+                                                     List<OpInput> matchedInputs,
+                                                     List<OpInput> inputs) {
+                OpResolveContext effectiveContext = context == null
+                        ? OpResolveContext.forVector(boundary) : context;
+                PositionedGlyph loop = ((OpInput.Rune) matchedInputs.getFirst()).glyph();
+                return new CompileResult.Success<>(new RotationVectorOp(
+                        ID, boundary, inputs, 0,
                     VectorInputCompiler.direct(boundary, inputs),
-                    VectorInputCompiler.groups(inputs, VectorDefinitionSupport.compiler()),
+                    VectorInputCompiler.groups(inputs, VectorDefinitionSupport.compiler(), effectiveContext),
                     loop.length() * RotationOp.ROTATION_SPEED_SCALE));
-        }
+            }
     };
 
     private RotationVectorDefinition() {}

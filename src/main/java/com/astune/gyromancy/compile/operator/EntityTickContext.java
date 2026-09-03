@@ -29,6 +29,7 @@ public final class EntityTickContext {
     private final boolean alive;
     private final boolean fullyGrown;
     private final boolean impact;
+    private final boolean blockImpact;
     private final float size;
     private final float targetSize;
     private double averageElementLevel;
@@ -71,6 +72,19 @@ public final class EntityTickContext {
                              BiConsumer<MagicBallEntity, String> bindGeneratedEntity,
                              DoubleConsumer setTargetVolume, DoubleConsumer setAverageElementLevel,
                              SurfaceFrame arrayFrame, Object parent) {
+        this(owner, level, tickCount, position, velocity, facing, acceleration, bounds, clientSide, alive,
+                fullyGrown, impact, size, targetSize, averageElementLevel, data, discard, addFreshEntity,
+                bindGeneratedEntity, setTargetVolume, setAverageElementLevel, arrayFrame, parent, false);
+    }
+
+    public EntityTickContext(Entity owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
+                             Vec3 facing, Vec3 acceleration, AABB bounds, boolean clientSide, boolean alive,
+                             boolean fullyGrown, boolean impact, float size, float targetSize,
+                             double averageElementLevel, Map<String, Object> data,
+                             Runnable discard, Consumer<Entity> addFreshEntity,
+                             BiConsumer<MagicBallEntity, String> bindGeneratedEntity,
+                             DoubleConsumer setTargetVolume, DoubleConsumer setAverageElementLevel,
+                             SurfaceFrame arrayFrame, Object parent, boolean blockImpact) {
         this.owner = owner;
         this.parent = parent;
         this.level = level;
@@ -85,6 +99,7 @@ public final class EntityTickContext {
         this.alive = alive;
         this.fullyGrown = fullyGrown;
         this.impact = impact;
+        this.blockImpact = blockImpact;
         this.size = size;
         this.targetSize = targetSize;
         this.averageElementLevel = averageElementLevel;
@@ -104,7 +119,7 @@ public final class EntityTickContext {
                 entity.getTargetSize(), entity.getAverageElementLevel(), data,
                 entity::discard, entity.level()::addFreshEntity, entity::bindGeneratedEntity,
                 entity::setTargetVolume, entity::setAverageElementLevel, entity.currentArrayFrame(),
-                entity.parent());
+                entity.parent(), entity.hasBlockImpactThisTick());
     }
 
     public static EntityTickContext from(MagicFieldEntity entity, Map<String, Object> data, Vec3 acceleration) {
@@ -145,6 +160,9 @@ public final class EntityTickContext {
     public boolean isFullyGrown() { return fullyGrown; }
 
     public boolean hasImpact() { return impact; }
+
+    /** Whether the owner hit a block during the movement step that preceded this payload tick. */
+    public boolean hasBlockImpact() { return blockImpact; }
 
     public float size() { return size; }
 

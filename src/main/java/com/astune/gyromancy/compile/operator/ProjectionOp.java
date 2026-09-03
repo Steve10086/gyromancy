@@ -11,6 +11,7 @@ import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.RegisteredOp;
+import com.astune.gyromancy.array.runtime.OpRuntimeFailure;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
@@ -39,6 +40,9 @@ import static java.lang.Math.max;
 public final class ProjectionOp implements CompiledOp, PersistentOp {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "projection");
+    private static final List<OpInputMatcher> SOURCE_MATCHERS = List.of(
+            OpInputMatcher.boundary(SymbolRole.OUTER_CIRCLE),
+            OpInputMatcher.rawGroup(SymbolRole.OUTER_CIRCLE));
 
     public static final OpDefinition DEFINITION = new OpDefinition() {
         @Override
@@ -53,18 +57,15 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
 
         @Override
         public List<OpInputMatcher> accepted() {
-            return List.of(
-                    OpInputMatcher.rune("arrow"),
-                    OpInputMatcher.rune("arrow_up"),
-                    OpInputMatcher.boundary(SymbolRole.OUTER_CIRCLE),
-                    OpInputMatcher.rawGroup(SymbolRole.OUTER_CIRCLE));
+            return List.of(OpInputMatcher.rune("arrow"), OpInputMatcher.rune("arrow_up"),
+                    SOURCE_MATCHERS.getFirst(), SOURCE_MATCHERS.getLast());
         }
 
         @Override
         public CompileResult<CompiledOp> compile(PositionedGlyph boundary,
                                                   List<OpInput> matchedInputs,
                                                   List<OpInput> inputs) {
-            if (findSourceCircle(inputs).isEmpty()) {
+            if (!hasStaticSourceCircle(inputs)) {
                 return new CompileResult.Failure<>(List.of(
                         new com.astune.gyromancy.array.compile.CompileDiagnostic(
                                 "missing_projection_source",
@@ -113,16 +114,14 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
     @Override
     public RuntimeHandle activate(OpRuntimeContext context) {
         ServerLevel level = context.level();
-        Optional<SourceCircle> sourceInput = findSourceCircle(inputs);
+        Optional<SourceCircle> sourceInput = resolveSourceCircle(context);
         if (sourceInput.isEmpty()) {
             Gyromancy.LOGGER.warn(
                     "[Projection] Root glyph #{} has no outer-circle source input",
                     boundary.glyphId());
             return new RuntimeHandle(Map.of());
         }
-        Optional<SourceCircle> source = sourceInput
-                .map(circle -> new SourceCircle(context.liveGlyph(circle.circle()), null))
-                .flatMap(circle -> resolveSource(level, circle));
+        Optional<SourceCircle> source = sourceInput.flatMap(circle -> resolveSource(level, circle));
         if (source.isEmpty()) {
             SourceCircle sourceCircle = sourceInput.get();
             String canvasDescription = sourceCircle.circle().sourceCanvasId()
@@ -232,18 +231,43 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
                 && v >= outer.minWorldY() && v <= outer.maxWorldY();
     }
 
-    private static Optional<SourceCircle> findSourceCircle(List<OpInput> inputs) {
+    private static boolean hasStaticSourceCircle(List<OpInput> inputs) {
         for (OpInput input : inputs) {
-            PositionedGlyph circle;
             if (input instanceof OpInput.Op op) {
-                circle = op.operator().boundary();
+                if (op.operator() instanceof OpResolvable) return true;
+                PositionedGlyph circle = op.operator().boundary();
+                if (circle != null && circle.role() == SymbolRole.OUTER_CIRCLE) return true;
             } else if (input instanceof OpInput.RawGroup raw) {
-                circle = raw.boundary();
-            } else {
+                PositionedGlyph circle = raw.boundary();
+                if (circle != null && circle.role() == SymbolRole.OUTER_CIRCLE) return true;
+            }
+        }
+        return false;
+    }
+
+    private Optional<SourceCircle> resolveSourceCircle(OpRuntimeContext context) {
+        for (OpInput input : inputs) {
+            if (input instanceof OpInput.RawGroup raw) {
+                if (raw.boundary() != null && raw.boundary().role() == SymbolRole.OUTER_CIRCLE) {
+                    return Optional.of(new SourceCircle(context.liveGlyph(raw.boundary()), null));
+                }
                 continue;
             }
+            if (!(input instanceof OpInput.Op)) continue;
+
+            OpResolution resolution = OpResolver.resolve(input, OpResolveContext.forRuntime(
+                    this, OpResolveContext.UseSite.GROUP_INPUT, context, boundary));
+            OpRuntimeContext sourceContext = resolution.runtimeContextOr(context);
+            if (!OpInputMatcher.anyMatches(SOURCE_MATCHERS, resolution)) {
+                OpRuntimeFailure.terminate(sourceContext, this, OpRuntimeFailure.Kind.RUNTIME_ERROR,
+                        "Projection requires an outer-circle source after dynamic resolution");
+                return Optional.empty();
+            }
+
+            PositionedGlyph circle = resolution.sourceGroup() == null
+                    ? resolution.operator().boundary() : resolution.sourceGroup().boundary();
             if (circle != null && circle.role() == SymbolRole.OUTER_CIRCLE) {
-                return Optional.of(new SourceCircle(circle, null));
+                return Optional.of(new SourceCircle(sourceContext.liveGlyph(circle), null));
             }
         }
         return Optional.empty();
