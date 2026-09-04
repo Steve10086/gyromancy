@@ -13,6 +13,7 @@ import com.astune.gyromancy.client.effect.ClientEffectLifecycle;
 import com.astune.gyromancy.client.effect.ClientRayEffects;
 import com.astune.gyromancy.client.effect.FlipbookEffect;
 import com.astune.gyromancy.client.effect.PhotonFxWarmup;
+import com.astune.gyromancy.client.effect.PhotonPixelFxRenderer;
 import com.astune.gyromancy.client.effect.VortexOrbitEffect;
 import com.astune.gyromancy.client.effect.WandProjectionGlowRenderer;
 import com.astune.gyromancy.client.guide.MarkdownGuideRuntime;
@@ -117,6 +118,8 @@ public class GyromancyClient {
         // ── Vortex effect tick (game-time guard inside) ──
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST,
                 (RenderFrameEvent.Pre e) -> PaintCameraController.onRenderFramePre(e));
+        NeoForge.EVENT_BUS.<RenderFrameEvent.Pre>addListener(
+                PhotonPixelFxRenderer::onRenderFramePre);
         NeoForge.EVENT_BUS.<ClientTickEvent.Post>addListener(
                 PaintCameraController::onClientTick);
         NeoForge.EVENT_BUS.<ClientTickEvent.Post>addListener(

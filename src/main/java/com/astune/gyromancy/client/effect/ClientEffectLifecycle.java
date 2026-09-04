@@ -31,6 +31,7 @@ public final class ClientEffectLifecycle {
         FireballRenderer.clearClientState();
         ManaballRenderer.clearClientState();
         OldFireballRenderer.clearClientState();
+        PhotonPixelFxRenderer.onClientLevelUnload();
         invalidatePhotonRenderState();
         WandProjectionGlowRenderer.onClientLevelUnload();
         IrisRenderBridge.onClientLevelUnload();

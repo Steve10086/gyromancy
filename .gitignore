@@ -50,3 +50,6 @@ venv
 
 ### Training artifacts ###
 train/
+
+### decompiled file###
+com/

@@ -11,7 +11,11 @@
     "GameRendererMixin",
     "GuiMixin",
     "LocalPlayerMixin",
-    "PaintInputHandlerMixin"
+    "PaintInputHandlerMixin",
+    "PhotonFXRenderPassMixin",
+    "PostEffectStackMixin",
+    "RenderPassPipelineMixin",
+    "RenderPassPipelineMaskInvoker"
   ],
   "injectors": {
     "defaultRequire": 1

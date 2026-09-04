@@ -11,6 +11,7 @@ import com.astune.gyromancy.client.canvas.CanvasTooltipComponent;
 import com.astune.gyromancy.client.item.WandClientItemExtensions;
 import com.astune.gyromancy.client.glyph.GlyphImageProvider;
 import com.astune.gyromancy.client.glyph.GlyphRenderer;
+import com.astune.gyromancy.client.effect.PhotonPixelFxRenderer;
 import com.astune.gyromancy.client.guide.AutoLayoutPageComponent;
 import com.astune.gyromancy.client.guide.GuideLinkFormatter;
 import com.astune.gyromancy.client.guide.MarkdownPageComponent;
@@ -48,6 +49,7 @@ public final class ClientSetup {
         // below so static menu pages cannot be initialized without it.
         TextFormatterRegistry.get().register(new GuideLinkFormatter());
         event.enqueueWork(() -> {
+            PhotonPixelFxRenderer.registerTextureInput();
             CanvasImageProviderRegistry.register(GlyphImageProvider.INSTANCE, 2);
             CanvasRendererRegistry.registerPixelRenderer(GlyphRenderer.INSTANCE, 2);
             PageComponentRegistry.get().register(
