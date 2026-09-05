@@ -9,15 +9,12 @@ import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.RegisteredOp;
-import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.entity.ball.TornadoBallEntity;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /** Emits a wind-element tornado ball. */
 @RegisteredOp
@@ -41,7 +38,7 @@ public final class TornadoProjectileOp extends ProjectileEntityOp {
             // authored through a nested motion or emission op.
             return List.of(
                     OpInputMatcher.rune("engaging"),
-                    OpInputMatcher.rune("fix"),
+                    OpInputMatcher.rune("revert"),
                     OpInputMatcher.op(CompiledOp.class));
         }
 
@@ -76,7 +73,26 @@ public final class TornadoProjectileOp extends ProjectileEntityOp {
 
     @Override
     protected Collection<? extends EntityPayload> conditionalPayload() {
-        return List.of();
+        Set<EntityPayload> payload = new HashSet<>();
+        boolean revert = false;
+        for (OpInput o : inputs){
+            if (o instanceof OpInput.Rune rune){
+                switch (rune.symbolName()){
+                    case "revert" -> {
+                        revert = true;
+                    }
+                    case "engaging" -> {
+                        payload.add(new ElementConversionOp(ElementType.WIND, ELEMENT_EXCHANGE_INTERVAL));
+                    }
+                }
+            }
+        }
+        if (revert) {
+            payload.add(new TornadoAttractionOp(false));
+        }else{
+            payload.add(new TornadoAttractionOp(true));
+        }
+        return payload.stream().toList();
     }
 
     @Override
@@ -92,11 +108,6 @@ public final class TornadoProjectileOp extends ProjectileEntityOp {
     @Override
     protected ResourceLocation getId() {
         return ID;
-    }
-
-    @Override
-    public void deactivate(OpRuntimeContext ctx, Map<String, Object> scratchData) {
-        // OpRuntimeDispatcher discards emitted entities before invoking this hook.
     }
 
     private static PositionedGlyph primaryRune(List<OpInput> inputs) {

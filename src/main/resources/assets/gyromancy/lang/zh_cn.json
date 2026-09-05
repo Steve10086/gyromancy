@@ -26,6 +26,8 @@
   "item.gyromancy.copper_ring": "铜环",
   "item.gyromancy.canvas.dimensions": "尺寸：%s × %s格",
   "item.gyromancy.canvas.resolution": "分辨率：%s × %s",
+  "item.gyromancy.canvas.help": "普通放置为收束卷轴；Shift+放置或 Shift+右键可直接展开",
+  "message.gyromancy.canvas.cannot_unfurl": "这个地方似乎没法展开",
   "screen.gyromancy.canvas": "画布",
   "screen.gyromancy.canvas.resolution": "%s × %s（%sx）",
   "screen.gyromancy.canvas.inventory": "物品栏",

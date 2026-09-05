@@ -8,7 +8,6 @@ import com.astune.gyromancy.array.compile.ArrayNodeCompiler;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.CompiledArray;
 import com.astune.gyromancy.array.compile.GroupNode;
-import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.compile.operator.PersistentOp;
 import com.astune.gyromancy.registry.ModAttachments;
@@ -44,7 +43,6 @@ public final class OpRuntimeDispatcher {
     }
 
     public static void deactivate(ServerLevel level, ArrayObject array) {
-        EmitResult.discardEmittedEntities(level, array.scratchData());
         PersistentOp persistent = array.scratchData().get(COMPILED_OP_KEY) instanceof PersistentOp cached
                 ? cached
                 : recoverPersistentOp(array, level.getData(ModAttachments.ARRAY_MANAGER));

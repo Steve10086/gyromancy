@@ -26,6 +26,8 @@
   "item.gyromancy.copper_nugget": "Copper Nugget",
   "item.gyromancy.canvas.dimensions": "Size: %s x %s blocks",
   "item.gyromancy.canvas.resolution": "Resolution: %s x %s",
+  "item.gyromancy.canvas.help": "Place as a stored scroll; Shift-place or Shift-right-click to unfold.",
+  "message.gyromancy.canvas.cannot_unfurl": "The canvas cannot unfold here.",
   "screen.gyromancy.canvas": "Canvas",
   "screen.gyromancy.canvas.resolution": "%s x %s  (%sx)",
   "screen.gyromancy.canvas.inventory": "Inventory",

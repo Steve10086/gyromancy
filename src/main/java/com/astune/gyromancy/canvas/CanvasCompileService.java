@@ -264,9 +264,16 @@ public final class CanvasCompileService {
         if (diff.isEmpty()) {
             if (resolutionOnly) {
                 canvas.replaceDocument(baseline, true);
-                refreshRetainedGlyphGeometry(level, canvas);
+                // A collapsed canvas intentionally has no world glyphs to
+                // refresh. Its cached document is activated only when the
+                // editor session ends and it unfurls.
+                if (!canvas.isCollapsed()) {
+                    refreshRetainedGlyphGeometry(level, canvas);
+                }
                 canvas.broadcastSnapshot();
-                MagicArrayDetector.syncWorldState(level);
+                if (!canvas.isCollapsed()) {
+                    MagicArrayDetector.syncWorldState(level);
+                }
             }
             return true;
         }
@@ -286,6 +293,15 @@ public final class CanvasCompileService {
         List<CanvasGlyph> nextGlyphs = new ArrayList<>(retained);
         nextGlyphs.addAll(recognized);
         CanvasDocument next = submitted.withCompileCache(nextGlyphs, List.of());
+
+        // Submissions are made when the editor closes. Keep a collapsed
+        // canvas entirely document-local until its finish packet unfurls it;
+        // onPlaced then registers every glyph and creates arrays exactly once.
+        if (canvas.isCollapsed()) {
+            canvas.replaceDocument(next, true);
+            canvas.broadcastSnapshot();
+            return true;
+        }
 
         MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);
         for (CanvasGlyph glyph : invalidated) {

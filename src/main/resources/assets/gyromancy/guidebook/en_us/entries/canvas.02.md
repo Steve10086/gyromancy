@@ -2,7 +2,7 @@
 
 ## Simple to Use?
 
-Place a canvas, then right-click it to open the editor. You will also need a pen and ink.
+Placing a stored scroll does not activate its arrays. Right-click the scroll to open the editor; when you leave the editor, the canvas unfurls and activates valid arrays. Shift-place to unfurl immediately, or Shift-right-click a stored scroll to unfurl it directly. You will also need a pen and ink.
 
 Select the tool you wish to use from the hotbar.
 

@@ -34,4 +34,5 @@ class CanvasOrientationTest {
         assertEquals(new Vec3(1, 0, 0), CanvasOrientation.widthAxis(Direction.DOWN));
         assertEquals(new Vec3(0, 0, 1), CanvasOrientation.heightAxis(Direction.DOWN));
     }
+
 }

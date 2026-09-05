@@ -196,7 +196,7 @@ public final class ArrayEffectLifecycle {
 
     public static void deactivate(ServerLevel level, ArrayObject array) {
         OpRuntimeDispatcher.deactivate(level, array);
-        discardAllEmittedEntities(level, array.arrayId());
+        discardNonProjectileEmittedEntities(level, array.arrayId());
         level.getData(ModAttachments.WIRELESS_REGISTRY).unsubscribe(array.arrayId());
         level.getData(ModAttachments.ARRAY_MANAGER).unregisterArrayObj(array.arrayId());
         Gyromancy.LOGGER.info("[MagicArrayDetector] Array deactivated: root={}",
@@ -274,7 +274,11 @@ public final class ArrayEffectLifecycle {
         }
     }
 
-    private static void discardAllEmittedEntities(ServerLevel level, UUID arrayId) {
+    /**
+     * Projectile balls enter their own deferred-discard lifecycle during the
+     * root operator's teardown. Other emitted entities still stop immediately.
+     */
+    private static void discardNonProjectileEmittedEntities(ServerLevel level, UUID arrayId) {
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
         Set<UUID> discarded = new HashSet<>();
         while (true) {
@@ -286,6 +290,7 @@ public final class ArrayEffectLifecycle {
                         || !discarded.add(ref.uuid())) continue;
                 foundNew = true;
                 if (ref.resolve(level) instanceof net.minecraft.world.entity.Entity entity
+                        && !(entity instanceof MagicBallEntity)
                         && entity.isAlive()) entity.discard();
             }
             if (!foundNew) return;

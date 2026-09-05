@@ -179,7 +179,7 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
 
     @Override
     public void deactivate(OpRuntimeContext context, Map<String, Object> scratchData) {
-        // EmitResult ownership discards the fixed projection before this hook.
+        EmitResult.discardEmittedEntities(context.level(), scratchData);
     }
 
     private Vec3 projectionOffset(OpRuntimeContext context) {

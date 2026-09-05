@@ -12,10 +12,11 @@
     "GuiMixin",
     "LocalPlayerMixin",
     "PaintInputHandlerMixin",
-    "PhotonFXRenderPassMixin",
-    "PostEffectStackMixin",
-    "RenderPassPipelineMixin",
-    "RenderPassPipelineMaskInvoker"
+    "PhotonRuntimeFilterPostEffectMixin",
+    "PhotonRuntimeFilterPipelineMixin",
+    "PhotonRuntimeFilterCpuDrawMixin",
+    "PhotonRuntimeFilterInstancedDrawMixin",
+    "PhotonRuntimeFilterMaskStateAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

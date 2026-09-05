@@ -15,11 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class FireballEntity extends MagicBallEntity {
-    private static final int DEFAULT_LIFETIME = 500;
     private static final double MAX_SIZE = 4.5;
     private static final float DEFAULT_EXPLOSION_POWER = 1.5F;
-    private int lifetime = DEFAULT_LIFETIME;
-
 
     public FireballEntity(EntityType<FireballEntity> type, Level level) {
         super(type, level, ElementType.FIRE);
@@ -34,28 +31,15 @@ public class FireballEntity extends MagicBallEntity {
         setPos(pos);
     }
 
-    public void setLifetime(int lifetime) {
-        this.lifetime = lifetime;
-        runtimeData().put(FireProjectileOp.LIFETIME_KEY, lifetime);
-    }
-
-
     @Override
     protected boolean tickBeforePayload() {
         if (!super.tickBeforePayload()) return false;
-        if (tickCount > lifetime) {
-            discard();
-            return false;
-        }
-
-        runtimeData().put(FireProjectileOp.LIFETIME_KEY, lifetime);
         return true;
     }
 
     private void initRuntimeData(float explosionPower) {
         runtimeData().putIfAbsent(FireProjectileOp.STORED_MANA_KEY, 0L);
         runtimeData().putIfAbsent(FireProjectileOp.OLD_SPAWNED_KEY, false);
-        runtimeData().put(FireProjectileOp.LIFETIME_KEY, lifetime);
         runtimeData().put(ExplosionOp.EXPLOSION_POWER_KEY, explosionPower);
         runtimeData().put(ExplosionOp.MAX_SIZE_KEY, MAX_SIZE);
     }
@@ -66,13 +50,11 @@ public class FireballEntity extends MagicBallEntity {
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         if (tag.contains("ExplosionPower")) runtimeData().put(ExplosionOp.EXPLOSION_POWER_KEY, tag.getFloat("ExplosionPower"));
-        if (tag.contains("Lifetime")) lifetime = tag.getInt("Lifetime");
         if (tag.contains("AccelX")) {
             acceleration = new Vec3(tag.getDouble("AccelX"), tag.getDouble("AccelY"), tag.getDouble("AccelZ"));
         }
 
         if (tag.contains("StoredMana")) runtimeData().put(FireProjectileOp.STORED_MANA_KEY, tag.getLong("StoredMana"));
-        runtimeData().put(FireProjectileOp.LIFETIME_KEY, lifetime);
         runtimeData().put(FireProjectileOp.OLD_SPAWNED_KEY, tag.getBoolean("OldSpawned"));
         runtimeData().put(ExplosionOp.MAX_SIZE_KEY, MAX_SIZE);
     }
@@ -81,7 +63,6 @@ public class FireballEntity extends MagicBallEntity {
     protected void addAdditionalSaveData(@NotNull CompoundTag tag) {
         super.addAdditionalSaveData(tag);
         tag.putFloat("ExplosionPower", ((Number)runtimeData().getOrDefault(ExplosionOp.EXPLOSION_POWER_KEY, DEFAULT_EXPLOSION_POWER)).floatValue());
-        tag.putInt("Lifetime", lifetime);
         tag.putDouble("AccelX", acceleration.x);
         tag.putDouble("AccelY", acceleration.y);
         tag.putDouble("AccelZ", acceleration.z);

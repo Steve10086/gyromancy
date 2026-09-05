@@ -38,7 +38,6 @@ public final class PhotonFxWarmup {
                     resource.getNamespace(), fxPath);
             if (FXHelper.getFX(fxId) != null) loaded++;
         }
-
         warmed = true;
         Gyromancy.LOGGER.debug("[Gyromancy] Warmed {} Photon FX definitions", loaded);
     }

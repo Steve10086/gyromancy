@@ -1,5 +1,6 @@
 package com.astune.gyromancy.compile.operator;
 
+import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.OpInput;
@@ -8,8 +9,6 @@ import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.runtime.emit.EntityEmitter;
 import com.astune.gyromancy.entity.ball.MagicBallEntity;
-import com.astune.gyromancy.entity.ball.WaterBallEntity;
-import com.astune.gyromancy.symbol.CenterSymbol;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
@@ -44,6 +43,21 @@ public abstract class ProjectileEntityOp  extends EntityEffectOp {
             EntityEmitter.INSTANCE.emit(level, getId(), entity, result);
         }
         return result.toRuntimeHandle();
+    }
+
+    /**
+     * Every projectile records its spawned balls in the runtime handle.  Keep
+     * their teardown here so all projectile variants enter their own deferred
+     * discard lifecycle.
+     */
+    @Override
+    public final void deactivate(OpRuntimeContext ctx, Map<String, Object> scratchData) {
+        for (var emitted : EmitResult.emissions(scratchData)) {
+            if (emitted.ref() instanceof ArrayObject.EntityRef ref
+                    && ref.resolve(ctx.level()) instanceof MagicBallEntity entity) {
+                entity.readyToDiscard();
+            }
+        }
     }
 
     public abstract MagicBallEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size);

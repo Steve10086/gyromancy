@@ -36,6 +36,7 @@ public abstract class MagicBallEntity extends MagicEntity {
             SynchedEntityData.defineId(MagicBallEntity.class, EntityDataSerializers.FLOAT);
     protected static final float SPAWN_SIZE = 0.1F;
     private static final int GROWTH_RATE = 2;
+    public static final int DEFAULT_READY_TO_DISCARD_MAX_LIFETIME = 200;
     public static final double MIN_LAUNCH_SIZE = 0.5f;
 
     private UUID boundArrayId;
@@ -51,11 +52,15 @@ public abstract class MagicBallEntity extends MagicEntity {
     private Vec3 pendingAcceleration = Vec3.ZERO;
 
     private boolean launched = false;
+    private int lifetime;
+
+    private int maxLifetime = DEFAULT_READY_TO_DISCARD_MAX_LIFETIME;
 
     public MagicBallEntity(EntityType<? extends MagicBallEntity> type, Level level, ElementType targetElement) {
         super(type, level);
         this.targetElement = targetElement;
         this.noPhysics = true;
+        this.maxLifetime = (int) (getTargetBallSize() * DEFAULT_READY_TO_DISCARD_MAX_LIFETIME);
     }
 
     public MagicBallEntity(EntityType<? extends MagicBallEntity> type, Level level, ElementType targetElement, Vec3 velocity, Vec3 acceleration) {
@@ -64,10 +69,13 @@ public abstract class MagicBallEntity extends MagicEntity {
         this.pendingAcceleration = acceleration;
         this.targetElement = targetElement;
         this.noPhysics = true;
+        this.maxLifetime = (int) (getTargetBallSize() * DEFAULT_READY_TO_DISCARD_MAX_LIFETIME);
     }
 
     @Override
     protected boolean tickBeforePayload() {
+        if (advanceDiscardTimer()) return false;
+
         impactThisTick = false;
         blockImpactThisTick = false;
         updateArrayRelativePosition();
@@ -97,6 +105,33 @@ public abstract class MagicBallEntity extends MagicEntity {
 
         addDeltaMovement(acceleration);
 
+        return true;
+    }
+
+    /** Starts this projectile's deferred cleanup timer. */
+    public final void readyToDiscard() {
+        lifetime = 1;
+    }
+
+    public final int lifetime() {
+        return lifetime;
+    }
+
+    public final int maxLifetime() {
+        return maxLifetime;
+    }
+
+    public int getMaxLifetime() {
+        return maxLifetime;
+    }
+    public final void setMaxLifetime(int maxLifetime) {
+        this.maxLifetime = Math.max(0, maxLifetime);
+    }
+
+    private boolean advanceDiscardTimer() {
+        if (level().isClientSide || lifetime <= 0) return false;
+        if (++lifetime <= maxLifetime) return false;
+        discard();
         return true;
     }
 
@@ -400,6 +435,10 @@ public abstract class MagicBallEntity extends MagicEntity {
             pendingAcceleration = new Vec3(tag.getDouble("PendingAccelX"), tag.getDouble("PendingAccelY"), tag.getDouble("PendingAccelZ"));
         }
         launched = tag.getBoolean("Launched");
+        lifetime = Math.max(0, tag.getInt("DiscardLifetime"));
+        if (tag.contains("MaxDiscardLifetime")) {
+            maxLifetime = Math.max(0, tag.getInt("MaxDiscardLifetime"));
+        }
         if (boundArrayId != null) {
             setArrayParentIfAbsent(boundArrayId);
             bindPayloadToArray(boundArrayId);
@@ -436,6 +475,8 @@ public abstract class MagicBallEntity extends MagicEntity {
         tag.putDouble("PendingAccelY", pendingAcceleration.y);
         tag.putDouble("PendingAccelZ", pendingAcceleration.z);
         tag.putBoolean("Launched", launched);
+        tag.putInt("DiscardLifetime", lifetime);
+        tag.putInt("MaxDiscardLifetime", maxLifetime);
 
     }
 

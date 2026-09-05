@@ -3,23 +3,17 @@ package com.astune.gyromancy.compile.operator;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
-import com.astune.gyromancy.array.runtime.emit.EntityEmitter;
-import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.RegisteredOp;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
-import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.entity.ball.FireballEntity;
 import com.astune.gyromancy.entity.ball.MagicBallEntity;
-import com.astune.gyromancy.symbol.CenterSymbol;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import org.checkerframework.checker.units.qual.A;
 
 import java.util.*;
 
@@ -61,7 +55,6 @@ public final class FireProjectileOp extends ProjectileEntityOp {
 
     public static final String STORED_MANA_KEY = "storedMana";
     public static final String OLD_SPAWNED_KEY = "oldSpawned";
-    public static final String LIFETIME_KEY = "lifetime";
 
     private FireProjectileOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
         super(ID, ElementType.FIRE, boundary, matchedInputs, inputs);
@@ -102,13 +95,6 @@ public final class FireProjectileOp extends ProjectileEntityOp {
             //payload.add(new RemoveOnHitOp());
         }
         return payload.stream().toList();
-    }
-
-    @Override
-    public void deactivate(OpRuntimeContext ctx, Map<String, Object> scratchData) {
-        ServerLevel level = ctx.level();
-        CenterSymbol.boundEntity(level, scratchData, CenterSymbol.FIREBALL_KEY)
-                .ifPresent(entity -> entity.discard());
     }
 
     @Override

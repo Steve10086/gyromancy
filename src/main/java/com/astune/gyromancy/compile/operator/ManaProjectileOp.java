@@ -98,6 +98,7 @@ public final class ManaProjectileOp extends EntityEffectOp {
     @Override
     public void deactivate(OpRuntimeContext ctx, Map<String, Object> scratchData) {
         ServerLevel level = ctx.level();
+        EmitResult.discardEmittedEntities(level, scratchData);
         PositionedGlyph center = primaryRune();
         if (center == null) return;
         SymbolCatalog.getEndEffect(center.symbolId())

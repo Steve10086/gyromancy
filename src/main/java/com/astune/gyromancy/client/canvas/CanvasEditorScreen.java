@@ -4,6 +4,7 @@ import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.canvas.CanvasEditorTool;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.network.SubmitCanvasEditPacket;
+import com.astune.gyromancy.network.FinishCanvasEditPacket;
 import com.astune.gyromancy.network.SubmitCanvasInventoryPacket;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -994,6 +995,10 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
             PacketDistributor.sendToServer(new SubmitCanvasEditPacket(
                     entityId, baseRevision, scale, colors.clone(), effects.clone()));
         }
+        // A collapsed canvas becomes active only after its editor session has
+        // ended. This packet is intentionally also sent for regular canvases,
+        // where it is a harmless no-op.
+        PacketDistributor.sendToServer(new FinishCanvasEditPacket(entityId));
         List<SubmitCanvasInventoryPacket.SlotChange> inventoryChanges =
                 inventoryChanges();
         if (!inventoryChanges.isEmpty()) {

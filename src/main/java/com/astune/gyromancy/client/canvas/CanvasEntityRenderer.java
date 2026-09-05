@@ -1,20 +1,30 @@
 package com.astune.gyromancy.client.canvas;
 
+import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.canvas.CanvasEntity;
+import com.astune.gyromancy.canvas.CanvasScrollGeometry;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 
 /** Renders the paper and strokes as one server-synchronized texture. */
 public final class CanvasEntityRenderer extends EntityRenderer<CanvasEntity> {
+    private static final ModelResourceLocation COLLAPSED_MODEL = ModelResourceLocation.standalone(
+            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "entity/canvas_plot"));
+
     public CanvasEntityRenderer(EntityRendererProvider.Context context) {
         super(context);
     }
@@ -22,24 +32,27 @@ public final class CanvasEntityRenderer extends EntityRenderer<CanvasEntity> {
     @Override
     public void render(CanvasEntity entity, float yaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource buffers, int packedLight) {
-        CanvasDocument document = CanvasClientState.document(entity.getId());
-        ResourceLocation texture = CanvasClientState.textureLocation(entity);
-        if (document == null || texture == null) return;
+        if (entity instanceof ProjectionCanvasEntity) {
+            super.render(entity, yaw, partialTick, poseStack, buffers, packedLight);
+            return;
+        }
 
         poseStack.pushPose();
-        if (entity instanceof ProjectionCanvasEntity) {
+        if (entity.isCollapsed()) {
+            renderCollapsedModel(entity, poseStack, buffers, packedLight);
             poseStack.popPose();
             super.render(entity, yaw, partialTick, poseStack, buffers, packedLight);
             return;
         }
-        if (entity.getDirection().getAxis().isVertical()) {
-            float floorRotation = entity.getDirection() == net.minecraft.core.Direction.UP
-                    ? 90.0F : -90.0F;
-            poseStack.mulPose(Axis.XP.rotationDegrees(floorRotation));
-            poseStack.mulPose(Axis.ZP.rotationDegrees(180.0F));
-        } else {
-            poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - yaw));
+        applyAttachmentOrientation(entity, yaw, poseStack);
+
+        CanvasDocument document = CanvasClientState.document(entity.getId());
+        ResourceLocation texture = CanvasClientState.textureLocation(entity);
+        if (document == null || texture == null) {
+            poseStack.popPose();
+            return;
         }
+
         VertexConsumer consumer = buffers.getBuffer(RenderType.entityCutoutNoCull(texture));
         PoseStack.Pose pose = poseStack.last();
         // Use the same document that produced the texture so the rendered quad
@@ -58,6 +71,40 @@ public final class CanvasEntityRenderer extends EntityRenderer<CanvasEntity> {
                 packedLight);
         poseStack.popPose();
         super.render(entity, yaw, partialTick, poseStack, buffers, packedLight);
+    }
+
+    private static void applyAttachmentOrientation(CanvasEntity entity, float yaw,
+                                                   PoseStack poseStack) {
+        if (entity.getDirection().getAxis().isVertical()) {
+            float floorRotation = entity.getDirection() == net.minecraft.core.Direction.UP
+                    ? 90.0F : -90.0F;
+            poseStack.mulPose(Axis.XP.rotationDegrees(floorRotation));
+            poseStack.mulPose(Axis.ZP.rotationDegrees(180.0F));
+        } else {
+            poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - yaw));
+        }
+    }
+
+    /** Renders the user-supplied Blockbench scroll with its authored texture. */
+    private static void renderCollapsedModel(CanvasEntity entity, PoseStack poseStack,
+                                             MultiBufferSource buffers,
+                                             int packedLight) {
+        BakedModel model = Minecraft.getInstance().getModelManager().getModel(COLLAPSED_MODEL);
+        poseStack.pushPose();
+        // Preserve the Blockbench origin. Only orient its Z axis vertically,
+        // then stretch that axis to the physical height of this canvas.
+        poseStack.mulPose(CanvasScrollGeometry.rotation(entity.getDirection()));
+        poseStack.scale(1.0F, 1.0F, CanvasScrollGeometry.lengthScale(entity.syncedHeight()));
+        VertexConsumer consumer = buffers.getBuffer(
+                RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS));
+        Minecraft.getInstance().getItemRenderer().renderModelLists(
+                model, ItemStack.EMPTY, packedLight, OverlayTexture.NO_OVERLAY, poseStack, consumer);
+        poseStack.popPose();
+    }
+
+    /** Registers the standalone model so it is available through ModelManager. */
+    public static ModelResourceLocation collapsedModel() {
+        return COLLAPSED_MODEL;
     }
 
     private static void texturedQuad(PoseStack.Pose pose,

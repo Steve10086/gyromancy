@@ -39,8 +39,18 @@ public final class CanvasItem extends Item {
         Level level = context.getLevel();
         CanvasDocument document = stack.getOrDefault(
                 ModDataComponents.CANVAS_DOCUMENT.get(), CanvasDocument.blank(1, 1));
-        CanvasEntity canvas = CanvasEntity.create(level, placementPos, direction, document);
-        if (!canvas.survives()) return InteractionResult.CONSUME;
+        // A normal placement stores the document as an inactive scroll. Hold
+        // Shift to deliberately place an immediately active canvas instead.
+        boolean collapsed = player == null || !player.isShiftKeyDown();
+        CanvasEntity canvas = CanvasEntity.create(
+                level, placementPos, direction, document, collapsed);
+        boolean canPlace = collapsed ? canvas.survives() : canvas.canUnfurl();
+        if (!canPlace) {
+            if (!level.isClientSide && !collapsed && player != null) {
+                CanvasEntity.notifyCannotUnfurl(player);
+            }
+            return InteractionResult.CONSUME;
+        }
 
         if (!level.isClientSide) {
             canvas.playPlacementSound();
@@ -61,6 +71,7 @@ public final class CanvasItem extends Item {
                 document.physicalWidth(), document.physicalHeight()));
         tooltip.add(Component.translatable("item.gyromancy.canvas.resolution",
                 document.resolutionWidth(), document.resolutionHeight()));
+        tooltip.add(Component.translatable("item.gyromancy.canvas.help"));
     }
 
     @Override

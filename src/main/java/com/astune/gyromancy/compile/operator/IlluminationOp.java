@@ -105,9 +105,4 @@ public final class IlluminationOp extends ProjectileEntityOp {
                 Gyromancy.MODID, "star"));
     }
 
-    @Override
-    public void deactivate(com.astune.gyromancy.array.runtime.OpRuntimeContext ctx,
-                           java.util.Map<String, Object> scratchData) {
-        // Emitted entities are discarded by OpRuntimeDispatcher before this hook.
-    }
 }

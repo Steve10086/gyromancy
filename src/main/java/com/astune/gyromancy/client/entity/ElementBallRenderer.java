@@ -26,8 +26,12 @@ public class ElementBallRenderer<T extends MagicBallEntity> extends EntityRender
     private final Map<T, EntityEffect> effects = new WeakHashMap<>();
 
     public ElementBallRenderer(EntityRendererProvider.Context context, String effect, int color) {
+        this(context, ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, effect), color);
+    }
+
+    public ElementBallRenderer(EntityRendererProvider.Context context, ResourceLocation effectId, int color) {
         super(context);
-        this.effectId = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, effect);
+        this.effectId = effectId;
         this.color = color;
         INSTANCES.add(this);
     }

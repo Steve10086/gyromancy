@@ -48,25 +48,52 @@ class TornadoProjectileOpTest {
     }
 
     @Test
-    void attractionUsesSizeScaledCappedInverseSquareRootForce() {
-        double capped = TornadoAttractionOp.forceMagnitude(2.0F, 0.01);
-        double farther = TornadoAttractionOp.forceMagnitude(2.0F, 9.0);
+    void attractionSlowsRadialMotionToZeroAtTheCenter() {
+        double radius = 10.0;
+        double farTarget = TornadoAttractionOp.targetRadialVelocity(true, 2.0F, 9.0, radius);
+        double nearTarget = TornadoAttractionOp.targetRadialVelocity(true, 2.0F, 0.01, radius);
+        double brakingPush = TornadoAttractionOp.radialCorrection(-0.20, nearTarget);
 
-        assertEquals(2.0 * TornadoAttractionOp.MAX_FORCE_PER_SIZE, capped, 1.0E-9);
-        assertEquals(2.0 * TornadoAttractionOp.CURVE_FORCE_PER_SIZE / Math.sqrt(9.0 / 2.0), farther, 1.0E-9);
-        assertTrue(farther < capped);
+        assertEquals(-0.40, farTarget, 1.0E-9);
+        assertTrue(nearTarget < 0.0);
+        assertTrue(Math.abs(nearTarget) < Math.abs(farTarget));
+        assertTrue(brakingPush > 0.0, "a too-fast inward entity is pushed outward to brake");
+        assertEquals(0.0, TornadoAttractionOp.targetRadialVelocity(true, 2.0F, 0.0, radius), 1.0E-9);
     }
 
     @Test
-    void attractionAddsAngularVelocityAlongTheConfiguredAxis() {
+    void attractionUsesOneTenthForceForNonItemEntitiesIncludingPlayers() {
+        double itemForce = TornadoAttractionOp.maxVelocityCorrection(true);
+        double entityForce = TornadoAttractionOp.maxVelocityCorrection(false);
+        double itemBrakingSpeed = TornadoAttractionOp.targetRadialVelocity(
+                true, 2.0F, 0.01, 10.0, itemForce);
+        double entityBrakingSpeed = TornadoAttractionOp.targetRadialVelocity(
+                true, 2.0F, 0.01, 10.0, entityForce);
+
+        assertEquals(TornadoAttractionOp.MAX_VELOCITY_CORRECTION, itemForce, 1.0E-9);
+        assertEquals(itemForce * 0.10, entityForce, 1.0E-9);
+        assertTrue(Math.abs(entityBrakingSpeed) < Math.abs(itemBrakingSpeed),
+                "the weaker non-item force begins braking at a lower speed");
+    }
+
+    @Test
+    void attractionControlsAngularVelocityInsteadOfAddingItEveryTick() {
         Vec3 axis = new Vec3(0.0, 1.0, 0.0);
-        Vec3 positive = TornadoAttractionOp.rotationalPush(new Vec3(2.0, 0.0, 0.0), axis, 0.25);
-        Vec3 negative = TornadoAttractionOp.rotationalPush(new Vec3(2.0, 0.0, 0.0), axis, -0.25);
+        Vec3 centerToTarget = new Vec3(2.0, 0.0, 0.0);
+        Vec3 positive = TornadoAttractionOp.targetRotationalVelocity(centerToTarget, axis, 0.25);
+        Vec3 negative = TornadoAttractionOp.targetRotationalVelocity(centerToTarget, axis, -0.25);
+        Vec3 noPushAtTargetSpeed = TornadoAttractionOp.rotationalCorrection(
+                positive, centerToTarget, axis, 0.25);
+        Vec3 brakingPush = TornadoAttractionOp.rotationalCorrection(
+                new Vec3(0.0, 0.0, -1.0), centerToTarget, axis, 0.25);
 
         assertEquals(0.0, positive.x, 1.0E-9);
         assertEquals(0.0, positive.y, 1.0E-9);
         assertEquals(-0.5, positive.z, 1.0E-9);
         assertEquals(0.5, negative.z, 1.0E-9);
+        assertEquals(Vec3.ZERO, noPushAtTargetSpeed);
+        assertEquals(0.18, brakingPush.z, 1.0E-9,
+                "an entity faster than the target orbit receives braking force");
     }
 
     private static PositionedGlyph glyph(String name, SymbolRole role, int id) {

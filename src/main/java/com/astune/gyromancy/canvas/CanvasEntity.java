@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
@@ -46,12 +47,13 @@ import java.util.Optional;
 import java.util.Objects;
 
 /**
- * A portable, editable hanging canvas. Its collision box is always 1/16 block
- * thick while width and height come from the stored document.
+ * A portable, editable hanging canvas. Normal canvases use their document's
+ * dimensions; collapsed canvases use the bounds of their scroll model.
  */
 public class CanvasEntity extends BlockAttachedEntity {
     public static final float DEPTH = 1.0F / 16.0F;
     private static final String DOCUMENT_TAG = "CanvasDocument";
+    private static final String COLLAPSED_TAG = "Collapsed";
 
     private static final EntityDataAccessor<Integer> DATA_WIDTH =
             SynchedEntityData.defineId(CanvasEntity.class, EntityDataSerializers.INT);
@@ -61,6 +63,12 @@ public class CanvasEntity extends BlockAttachedEntity {
             SynchedEntityData.defineId(CanvasEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_REVISION =
             SynchedEntityData.defineId(CanvasEntity.class, EntityDataSerializers.INT);
+    /**
+     * A collapsed canvas remains the same entity and retains its document, but
+     * deliberately has no world-side glyph or array registrations.
+     */
+    private static final EntityDataAccessor<Boolean> DATA_COLLAPSED =
+            SynchedEntityData.defineId(CanvasEntity.class, EntityDataSerializers.BOOLEAN);
 
     private CanvasDocument document = CanvasDocument.blank(1, 1);
     private int revision;
@@ -79,8 +87,14 @@ public class CanvasEntity extends BlockAttachedEntity {
 
     public static CanvasEntity create(Level level, BlockPos pos, Direction direction,
                                       CanvasDocument document) {
+        return create(level, pos, direction, document, false);
+    }
+
+    public static CanvasEntity create(Level level, BlockPos pos, Direction direction,
+                                      CanvasDocument document, boolean collapsed) {
         CanvasEntity canvas = new CanvasEntity(ModEntities.CANVAS.get(), level, pos);
         canvas.setDocumentInternal(document, false);
+        canvas.entityData.set(DATA_COLLAPSED, collapsed);
         canvas.setDirection(direction);
         return canvas;
     }
@@ -147,11 +161,12 @@ public class CanvasEntity extends BlockAttachedEntity {
         builder.define(DATA_HEIGHT, 1);
         builder.define(DATA_SCALE, 1);
         builder.define(DATA_REVISION, 0);
+        builder.define(DATA_COLLAPSED, false);
     }
 
     @Override
     public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
-        if (DATA_WIDTH.equals(key) || DATA_HEIGHT.equals(key)) {
+        if (DATA_WIDTH.equals(key) || DATA_HEIGHT.equals(key) || DATA_COLLAPSED.equals(key)) {
             recalculateBoundingBox();
         }
         super.onSyncedDataUpdated(key);
@@ -161,12 +176,24 @@ public class CanvasEntity extends BlockAttachedEntity {
     protected void recalculateBoundingBox() {
         if (direction == null) return;
         AABB bounds = calculateBoundingBox(pos, direction);
-        Vec3 center = bounds.getCenter();
-        setPosRaw(center.x, center.y, center.z);
+        // The Blockbench scroll is authored relative to its hanging origin.
+        // Keep that origin for the collapsed renderer instead of implicitly
+        // recentering its geometry at the entity position.
+        Vec3 renderOrigin = isCollapsed()
+                ? CanvasScrollGeometry.origin(pos, direction) : bounds.getCenter();
+        setPosRaw(renderOrigin.x, renderOrigin.y, renderOrigin.z);
         setBoundingBox(bounds);
     }
 
     private AABB calculateBoundingBox(BlockPos pos, Direction facing) {
+        if (isCollapsed()) {
+            return CanvasScrollGeometry.bounds(pos, facing, syncedHeight());
+        }
+        return calculateUnfurledBoundingBox(pos, facing);
+    }
+
+    /** Calculates the active canvas bounds without changing the current scroll state. */
+    private AABB calculateUnfurledBoundingBox(BlockPos pos, Direction facing) {
         double width = syncedWidth();
         double height = syncedHeight();
         Vec3 base = Vec3.atCenterOf(pos).relative(facing, -0.46875);
@@ -188,19 +215,44 @@ public class CanvasEntity extends BlockAttachedEntity {
 
     @Override
     public boolean survives() {
-        AABB supportBox = getBoundingBox()
+        if (isCollapsed()) {
+            // The scroll is attached by the clicked face alone. Its visual
+            // length may span multiple blocks, but it must not require an
+            // unfolded canvas' entire support plane before it can be placed.
+            return isValidSupport(pos.relative(direction.getOpposite()));
+        }
+
+        return hasUnfurledSupport();
+    }
+
+    /**
+     * Tests whether this entity's document can occupy the normal canvas state
+     * at its current anchor. This deliberately does not toggle synced state,
+     * so a failed unfold leaves the scroll untouched on both sides.
+     */
+    public boolean canUnfurl() {
+        return hasUnfurledSupport();
+    }
+
+    private boolean hasUnfurledSupport() {
+        // The unfolded canvas is centred near its support plane, while the
+        // normal canvas uses a half-block shift to inspect its full support
+        // plane rather than its own thin render plane.
+        AABB supportBox = calculateUnfurledBoundingBox(pos, direction)
                 .move(Vec3.atLowerCornerOf(direction.getNormal()).scale(-0.5))
                 .deflate(1.0E-7);
-        boolean supported = BlockPos.betweenClosedStream(supportBox).allMatch(supportPos -> {
-            var state = level().getBlockState(supportPos);
-            return state.isSolid()
-                    || DiodeBlock.isDiode(state)
-                    || Block.canSupportCenter(level(), supportPos, direction);
-        });
+        boolean supported = BlockPos.betweenClosedStream(supportBox).allMatch(this::isValidSupport);
         // Other attached entities may occupy the same plane (for example a
         // ProjectionOp result). They are visual surfaces, not a reason for a
         // supported canvas to fall.
         return supported;
+    }
+
+    private boolean isValidSupport(BlockPos supportPos) {
+        var state = level().getBlockState(supportPos);
+        return state.isSolid()
+                || DiodeBlock.isDiode(state)
+                || Block.canSupportCenter(level(), supportPos, direction);
     }
 
     public CanvasDocument document() {
@@ -221,6 +273,27 @@ public class CanvasEntity extends BlockAttachedEntity {
 
     public int syncedScale() {
         return entityData.get(DATA_SCALE);
+    }
+
+    /** Whether this canvas is stored as a scroll rather than an active surface. */
+    public boolean isCollapsed() {
+        return entityData.get(DATA_COLLAPSED);
+    }
+
+    /** Restores an inactive scroll to a normal canvas after interaction has approved it. */
+    public boolean unfurl() {
+        if (level().isClientSide || !isCollapsed()) return false;
+        entityData.set(DATA_COLLAPSED, false);
+        if (level() instanceof ServerLevel serverLevel) {
+            CanvasCompileService.onPlaced(serverLevel, this);
+            broadcastSnapshot();
+        }
+        return true;
+    }
+
+    public static void notifyCannotUnfurl(Player player) {
+        player.displayClientMessage(
+                Component.translatable("message.gyromancy.canvas.cannot_unfurl"), true);
     }
 
     public void replaceDocument(CanvasDocument next, boolean incrementRevision) {
@@ -374,7 +447,13 @@ public class CanvasEntity extends BlockAttachedEntity {
         if (hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
         if (!level().isClientSide && player instanceof ServerPlayer serverPlayer
                 && player.distanceToSqr(this) <= 64.0) {
-            sendSnapshot(serverPlayer, true);
+            if (isCollapsed() && !canUnfurl()) {
+                notifyCannotUnfurl(serverPlayer);
+            } else if (isCollapsed() && player.isShiftKeyDown()) {
+                unfurl();
+            } else {
+                sendSnapshot(serverPlayer, true);
+            }
         }
         return InteractionResult.sidedSuccess(level().isClientSide);
     }
@@ -382,7 +461,7 @@ public class CanvasEntity extends BlockAttachedEntity {
     @Override
     public void onAddedToLevel() {
         super.onAddedToLevel();
-        if (level() instanceof ServerLevel serverLevel) {
+        if (!isCollapsed() && level() instanceof ServerLevel serverLevel) {
             CanvasCompileService.onPlaced(serverLevel, this);
         }
     }
@@ -390,7 +469,7 @@ public class CanvasEntity extends BlockAttachedEntity {
     @Override
     public void onRemovedFromLevel() {
         RemovalReason reason = getRemovalReason();
-        if (reason != null && reason.shouldDestroy()
+        if (!isCollapsed() && reason != null && reason.shouldDestroy()
                 && level() instanceof ServerLevel serverLevel) {
             CanvasCompileService.onRemoved(serverLevel, this);
         }
@@ -402,6 +481,7 @@ public class CanvasEntity extends BlockAttachedEntity {
         super.addAdditionalSaveData(compound);
         compound.putByte("facing_3d", (byte) direction.get3DDataValue());
         compound.putInt("revision", revision);
+        compound.putBoolean(COLLAPSED_TAG, isCollapsed());
         DataResult<net.minecraft.nbt.Tag> encoded =
                 CanvasDocument.CODEC.encodeStart(NbtOps.INSTANCE, document);
         encoded.resultOrPartial(message -> {
@@ -412,6 +492,7 @@ public class CanvasEntity extends BlockAttachedEntity {
     public void readAdditionalSaveData(CompoundTag compound) {
         super.readAdditionalSaveData(compound);
         revision = Math.max(0, compound.getInt("revision"));
+        entityData.set(DATA_COLLAPSED, compound.getBoolean(COLLAPSED_TAG));
         if (compound.contains(DOCUMENT_TAG)) {
             CanvasDocument.CODEC.parse(NbtOps.INSTANCE, compound.get(DOCUMENT_TAG))
                     .result().ifPresent(value -> document = value);

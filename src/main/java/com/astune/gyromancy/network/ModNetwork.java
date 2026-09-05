@@ -46,6 +46,12 @@ public final class ModNetwork {
         );
 
         registrar.playToServer(
+                FinishCanvasEditPacket.TYPE,
+                FinishCanvasEditPacket.STREAM_CODEC,
+                FinishCanvasEditPacket::handleServer
+        );
+
+        registrar.playToServer(
                 SubmitCanvasInventoryPacket.TYPE,
                 SubmitCanvasInventoryPacket.STREAM_CODEC,
                 SubmitCanvasInventoryPacket::handleServer
