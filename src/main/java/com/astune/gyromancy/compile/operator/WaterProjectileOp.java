@@ -67,7 +67,7 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
                     new com.astune.gyromancy.array.compile.CompileDiagnostic(
                             "missing_primary_element", "Water operator requires water rune")));
         }
-        return new CompileResult.Success<>(new WaterProjectileOp(boundary, matchedInputs, inputs));
+        return rejectUnsupportedInputs(new WaterProjectileOp(boundary, matchedInputs, inputs), inputs);
     }
 
     @Override

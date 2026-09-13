@@ -49,7 +49,7 @@ public final class IlluminationOp extends ProjectileEntityOp {
         public CompileResult<CompiledOp> compile(PositionedGlyph boundary,
                                                   List<OpInput> matchedInputs,
                                                   List<OpInput> inputs) {
-            return new CompileResult.Success<>(new IlluminationOp(boundary, matchedInputs, inputs));
+            return rejectUnsupportedInputs(new IlluminationOp(boundary, matchedInputs, inputs), inputs);
         }
     };
 

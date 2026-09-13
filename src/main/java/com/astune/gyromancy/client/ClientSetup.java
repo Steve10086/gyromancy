@@ -6,6 +6,7 @@ import com.astune.gyromancy.client.entity.ManaballRenderer;
 import com.astune.gyromancy.client.entity.OldFireballRenderer;
 import com.astune.gyromancy.client.entity.ElementBallRenderer;
 import com.astune.gyromancy.client.entity.WaterBallRenderer;
+import com.astune.gyromancy.client.entity.WindFieldRenderer;
 import com.astune.gyromancy.client.canvas.CanvasEntityRenderer;
 import com.astune.gyromancy.client.canvas.CanvasTooltipComponent;
 import com.astune.gyromancy.client.item.WandClientItemExtensions;
@@ -91,6 +92,7 @@ public final class ClientSetup {
         event.registerEntityRenderer(ModEntities.DRY_BALL.get(), context -> new ElementBallRenderer<>(context, "mana_ball", 0xFFD8B36A));
         event.registerEntityRenderer(ModEntities.TORNADO_BALL.get(), context ->
                 new ElementBallRenderer<>(context, TORNADO_FX, 0xFFB8F8FF));
+        event.registerEntityRenderer(ModEntities.WIND_FIELD.get(), WindFieldRenderer::new);
         event.registerEntityRenderer(ModEntities.CANVAS.get(), CanvasEntityRenderer::new);
         event.registerEntityRenderer(ModEntities.CANVAS_PROJECTION.get(), CanvasEntityRenderer::new);
         event.registerEntityRenderer(ModEntities.WAND_PROJECTION.get(), CanvasEntityRenderer::new);

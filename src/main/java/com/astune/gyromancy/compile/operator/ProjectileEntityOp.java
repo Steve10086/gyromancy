@@ -4,6 +4,8 @@ import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.OpInput;
+import com.astune.gyromancy.array.compile.CompileDiagnostic;
+import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
@@ -17,6 +19,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
 public abstract class ProjectileEntityOp  extends EntityEffectOp {
+    private static final String SHAPE_UNSUPPORTED = "projectile_rejects_shape";
 
     protected ProjectileEntityOp(ResourceLocation id, ElementType element, PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
         super(id, element, boundary, matchedInputs, inputs);
@@ -61,6 +64,19 @@ public abstract class ProjectileEntityOp  extends EntityEffectOp {
     }
 
     public abstract MagicBallEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size);
+
+    /** A field shape has no projectile meaning and is rejected during compilation. */
+    protected static <T extends CompiledOp> CompileResult<T> rejectUnsupportedInputs(
+            T compiled, List<OpInput> inputs) {
+        for (OpInput input : inputs) {
+            if (input instanceof OpInput.Op op && op.operator() instanceof ShapeOp) {
+                return new CompileResult.Failure<>(List.of(new CompileDiagnostic(
+                        SHAPE_UNSUPPORTED,
+                        "Projectile operators cannot use a field shape operator")));
+            }
+        }
+        return new CompileResult.Success<>(compiled);
+    }
 
     protected List<EntityPayload> payloadFor() {
         Set<EntityPayload> payload = new HashSet<>(defaultPayload());

@@ -62,7 +62,7 @@ public final class FireProjectileOp extends ProjectileEntityOp {
 
     public static CompileResult<CompiledOp> create(PositionedGlyph boundary, List<OpInput> matchedInputs,
                                                  List<OpInput> inputs) {
-        return new CompileResult.Success<>(new FireProjectileOp(boundary, matchedInputs, inputs));
+        return rejectUnsupportedInputs(new FireProjectileOp(boundary, matchedInputs, inputs), inputs);
     }
 
     @Override

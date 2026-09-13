@@ -11,8 +11,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "com.lowdragmc.photon.client.gameobject.particle.renderer.InstancedRenderBackend", remap = false)
 public abstract class PhotonRuntimeFilterInstancedDrawMixin {
 
-    @Inject(method = "drawWithShader", at = @At("HEAD"), remap = false)
-    private void gyromancy$bindFxColorBeforeInstancedDraw(ShaderInstance shader, CallbackInfo ci) {
+    @Inject(
+            method = "drawWithShader",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ShaderInstance;apply()V", shift = At.Shift.AFTER),
+            remap = false
+    )
+    private void gyromancy$bindFxColorAfterInstancedShaderApply(ShaderInstance shader, CallbackInfo ci) {
         PhotonRuntimeFilterLayer.bindCaptureTargetForDraw();
     }
 }

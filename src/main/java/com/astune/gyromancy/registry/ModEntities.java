@@ -9,6 +9,7 @@ import com.astune.gyromancy.entity.ball.WaterBallEntity;
 import com.astune.gyromancy.entity.ball.IceBallEntity;
 import com.astune.gyromancy.entity.ball.DryBallEntity;
 import com.astune.gyromancy.entity.ball.TornadoBallEntity;
+import com.astune.gyromancy.entity.field.WindFieldEntity;
 import com.astune.gyromancy.canvas.CanvasEntity;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.astune.gyromancy.entity.projection.WandProjectionEntity;
@@ -66,6 +67,14 @@ public final class ModEntities {
     public static final Supplier<EntityType<IceBallEntity>> ICE_BALL = registerBall("ice_ball", IceBallEntity::new);
     public static final Supplier<EntityType<DryBallEntity>> DRY_BALL = registerBall("dry_ball", DryBallEntity::new);
     public static final Supplier<EntityType<TornadoBallEntity>> TORNADO_BALL = registerBall("tornado_ball", TornadoBallEntity::new);
+
+    public static final Supplier<EntityType<WindFieldEntity>> WIND_FIELD =
+            ENTITIES.register("wind_field", () -> EntityType.Builder
+                    .<WindFieldEntity>of(WindFieldEntity::new, MobCategory.MISC)
+                    .sized(1.0F, 1.0F)
+                    .updateInterval(1)
+                    .clientTrackingRange(64)
+                    .build(Gyromancy.MODID + ":wind_field"));
 
     public static final Supplier<EntityType<CanvasEntity>> CANVAS =
             ENTITIES.register("canvas", () -> EntityType.Builder

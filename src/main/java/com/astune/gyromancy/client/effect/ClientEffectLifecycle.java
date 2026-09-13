@@ -6,6 +6,7 @@ import com.astune.gyromancy.client.compat.iris.IrisRenderBridge;
 import com.astune.gyromancy.client.entity.ElementBallRenderer;
 import com.astune.gyromancy.client.entity.FireballRenderer;
 import com.astune.gyromancy.client.entity.ManaballRenderer;
+import com.astune.gyromancy.client.entity.MagicFieldRenderer;
 import com.astune.gyromancy.client.entity.OldFireballRenderer;
 import com.lowdragmc.photon.client.compat.iris.IrisCompat;
 import com.lowdragmc.photon.client.gameobject.emitter.renderpipeline.RenderPassPipeline;
@@ -31,6 +32,7 @@ public final class ClientEffectLifecycle {
         FireballRenderer.clearClientState();
         ManaballRenderer.clearClientState();
         OldFireballRenderer.clearClientState();
+        MagicFieldRenderer.clearClientState();
         PhotonRuntimeFilterLayer.onClientLevelUnload();
         invalidatePhotonRenderState();
         WandProjectionGlowRenderer.onClientLevelUnload();

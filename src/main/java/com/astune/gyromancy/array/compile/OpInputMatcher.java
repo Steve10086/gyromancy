@@ -7,7 +7,8 @@ import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.symbol.SecretTextSymbol;
 
 public sealed interface OpInputMatcher permits OpInputMatcher.Rune, OpInputMatcher.Op,
-        OpInputMatcher.BoundaryRole, OpInputMatcher.RawGroupRole, OpInputMatcher.SecretTextRune {
+        OpInputMatcher.BoundaryRole, OpInputMatcher.RawGroupRole, OpInputMatcher.RawGroup,
+        OpInputMatcher.SecretTextRune {
     boolean matches(OpInput input);
 
     /**
@@ -43,6 +44,11 @@ public sealed interface OpInputMatcher permits OpInputMatcher.Rune, OpInputMatch
 
     static OpInputMatcher rawGroup(SymbolRole role) {
         return new RawGroupRole(role);
+    }
+
+    /** Matches a passive, uncompiled nested group with any boundary role. */
+    static OpInputMatcher rawGroup() {
+        return new RawGroup();
     }
 
     /** Matches any one of the distinct secret-text parameter runes. */
@@ -113,6 +119,19 @@ public sealed interface OpInputMatcher permits OpInputMatcher.Rune, OpInputMatch
                     && resolution.sourceGroup() != null
                     && resolution.sourceGroup().boundary() != null
                     && resolution.sourceGroup().boundary().role() == role;
+        }
+    }
+
+    /** Static matcher for any failed, passive nested group. */
+    record RawGroup() implements OpInputMatcher {
+        @Override
+        public boolean matches(OpInput input) {
+            return isDeferred(input) || input instanceof OpInput.RawGroup;
+        }
+
+        @Override
+        public boolean matches(OpResolution resolution) {
+            return resolution != null && resolution.sourceGroup() != null;
         }
     }
 

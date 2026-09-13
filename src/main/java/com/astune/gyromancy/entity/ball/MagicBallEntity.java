@@ -110,7 +110,11 @@ public abstract class MagicBallEntity extends MagicEntity {
 
     /** Starts this projectile's deferred cleanup timer. */
     public final void readyToDiscard() {
-        lifetime = 1;
+        if (!launched) {
+            lifetime = maxLifetime;
+        }else{
+            lifetime = 1;
+        }
     }
 
     public final int lifetime() {

@@ -1,300 +1,190 @@
 package com.astune.gyromancy.entity.field;
 
 import com.astune.gyromancy.api.array.ArrayObject;
+import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.api.field.FieldDirection;
+import com.astune.gyromancy.api.field.MagicFieldShape;
+import com.astune.gyromancy.api.field.ShapeOrientation;
 import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.EntityTickContext;
-import com.astune.gyromancy.compile.operator.ElementVolumeOp;
 import com.astune.gyromancy.element.ElementStorageManager;
-import com.astune.gyromancy.entity.ArrayRelativePosition;
 import com.astune.gyromancy.entity.MagicEntity;
-import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.registry.ModAttachments;
-import com.astune.gyromancy.util.MagicBallGeometry;
+import com.astune.gyromancy.registry.ModEntityDataSerializers;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
-import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Base entity for magic effects that occupy a persistent volume.
+ * A stationary, fixed-shape magic area.
  *
- * <p>Unlike a {@code MagicBallEntity}, a field is fully sized as soon as it
- * is created. Its motion is damped by a fixed deceleration and is capped at
- * the speed it had when it was created.</p>
+ * <p>Its shape, bounds, total energy, and resulting average energy are fixed
+ * when the field is created. The shape owns its own geometry orientation;
+ * {@link FieldDirection} remains a separate authored field property.</p>
  */
 public abstract class MagicFieldEntity extends MagicEntity {
-    private static final EntityDataAccessor<Float> DATA_TARGET_SIZE =
-            SynchedEntityData.defineId(MagicFieldEntity.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<Float> DATA_CURRENT_SIZE =
-            SynchedEntityData.defineId(MagicFieldEntity.class, EntityDataSerializers.FLOAT);
+    private static final String ARRAY_SLOT_PREFIX = "__magic_field/";
 
-    protected static final float SPAWN_SIZE = 0.1F;
-    private static final int GROWTH_RATE = 2;
-    private static final double RESISTANCE_ACCELERATION = 0.002D;
-    private static final double SPEED_EPSILON = 1.0E-12;
-    private static final int FOLLOW_TICKS = 20;
+    private static final EntityDataAccessor<FieldDirection> DATA_DIRECTION =
+            SynchedEntityData.defineId(
+                    MagicFieldEntity.class,
+                    ModEntityDataSerializers.FIELD_DIRECTION.get()
+            );
+    private static final EntityDataAccessor<CompoundTag> DATA_SHAPE =
+            SynchedEntityData.defineId(MagicFieldEntity.class, EntityDataSerializers.COMPOUND_TAG);
 
-    private UUID boundArrayId;
-    private ArrayRelativePosition arrayRelativePosition;
+    /**
+     * Assigned only during construction or saved-data reconstruction. A live
+     * field exposes no replacement API, so its geometry remains immutable.
+     */
+    private MagicFieldShape shape;
+    /** Field-relative broad-phase bounds supplied by the oriented shape. */
+    private AABB shapeBounds;
     private final ElementType targetElement;
-    private double averageElementLevel;
-    private boolean impactThisTick;
-    protected Vec3 acceleration = Vec3.ZERO;
-    private double initialSpeed;
+    private ShapeOrientation shapeOrientation;
+    private double energy;
+    private double averageEnergy;
+    private double averageConcentration;
+    private Vec3 anchoredPosition;
+    private UUID boundArrayId;
 
-    protected MagicFieldEntity(EntityType<?> type, Level level) {
-        this(type, level, ElementType.MANA);
-    }
-
-    protected MagicFieldEntity(EntityType<?> type,
-                               Level level, ElementType targetElement) {
+    protected MagicFieldEntity(EntityType<?> type, Level level, MagicFieldShape shape,
+                               FieldDirection direction, ElementType targetElement, double energy) {
         super(type, level);
-        this.targetElement = targetElement;
+        this.shape = Objects.requireNonNull(shape, "shape");
+        this.targetElement = Objects.requireNonNull(targetElement, "targetElement");
+        this.energy = validateEnergy(energy);
+        this.averageEnergy = averageEnergy(shape, this.energy);
         this.noPhysics = true;
+        entityData.set(DATA_DIRECTION, Objects.requireNonNull(direction, "direction"));
+        refreshShapeOrientation();
     }
 
-    protected MagicFieldEntity(EntityType<?> type,
-                               Level level, ElementType targetElement,
-                               Vec3 velocity, Vec3 acceleration) {
-        this(type, level, targetElement);
-        configureMotion(velocity, acceleration);
+    /** Returns the immutable shape supplied while creating this field. */
+    public final MagicFieldShape shape() {
+        return shape;
+    }
+
+    /** Returns the field's direction, independent of its shape. */
+    public FieldDirection direction() {
+        return entityData.get(DATA_DIRECTION);
+    }
+
+    public void setDirection(FieldDirection direction) {
+        entityData.set(DATA_DIRECTION, Objects.requireNonNull(direction, "direction"));
+        refreshShapeOrientation();
     }
 
     /**
-     * Configures the field's initial motion. Fields do not have a launch
-     * phase, so their initial velocity is active immediately.
+     * The orientation copied from and bound to {@link #direction()} for all
+     * oriented shape queries. Its forward vector is a distinct immutable
+     * {@link Vec3}, so shape math cannot mutate or replace field direction.
      */
-    protected final void configureMotion(Vec3 velocity, Vec3 acceleration) {
-        this.initialSpeed = Math.max(0.0, velocity.length());
-        this.acceleration = acceleration;
-        this.velocityThisTick = velocity;
-        setDeltaMovement(velocity);
+    public final ShapeOrientation shapeOrientation() {
+        return shapeOrientation;
     }
 
-    @Override
-    protected boolean tickBeforePayload() {
-        updateArrayRelativePosition();
-        growIntoTargetSize();
-
-        Vec3 velocity = cappedSpeed(velocityThisTick);
-        setDeltaMovement(velocity);
-
-        Vec3 start = position();
-        Vec3 end = start.add(velocity);
-        HitResult blockHit = level().clip(new ClipContext(start, end, ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE, this));
-        if (blockHit.getType() != HitResult.Type.MISS) {
-            end = blockHit.getLocation();
-        }
-
-        setPos(end);
-        impactThisTick = blockHit.getType() != HitResult.Type.MISS || hitLivingEntity(velocity);
-        setDeltaMovement(cappedSpeed(applyAccelerationAndResistance(velocity)));
-
-        return true;
+    /** Total energy supplied while creating this field. */
+    public final double energy() {
+        return energy;
     }
 
-    @Override
-    protected void tickAfterPayload() {
-        // Payloads may add momentum after the base motion update; enforce the
-        // field's initial-speed limit for the velocity that leaves this tick.
-        setDeltaMovement(cappedSpeed(getDeltaMovement()));
+    /** Average energy calculated from the fixed shape and total energy. */
+    public final double averageEnergy() {
+        return averageEnergy;
     }
 
-    @Override
-    protected EntityTickContext payloadContext(Map<String, Object> runtimeData) {
-        return EntityTickContext.from(this, runtimeData, payloadAcceleration());
+    /** JavaBean aliases for integrations that do not use record-style accessors. */
+    public final double getEnergy() {
+        return energy();
     }
 
-    @Override
-    protected List<? extends EntityPayload> defaultPayload() {
-        return List.of(ElementVolumeOp.stability(targetElement));
+    public final double getAverageEnergy() {
+        return averageEnergy();
     }
 
-    protected Vec3 payloadAcceleration() {
-        return acceleration;
+    /** The element whose concentration is sampled inside this field. */
+    public final ElementType elementType() {
+        return targetElement;
     }
 
-    @Override
-    protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
-        super.defineSynchedData(builder);
-        builder.define(DATA_TARGET_SIZE, SPAWN_SIZE);
-        builder.define(DATA_CURRENT_SIZE, SPAWN_SIZE);
+    /** The latest average concentration of {@link #elementType()} inside the shape. */
+    public final double averageConcentration() {
+        return averageConcentration;
     }
 
-    public boolean hasImpactThisTick() {
-        return impactThisTick;
+    public final double getAverageConcentration() {
+        return averageConcentration();
     }
 
-    private boolean hitLivingEntity(Vec3 velocity) {
-        AABB searchBox = getBoundingBox().expandTowards(velocity).inflate(0.1);
-        return !level().getEntitiesOfClass(LivingEntity.class, searchBox,
-                LivingEntity::isAlive).isEmpty();
+    /** Compatibility alias matching the corresponding MagicBallEntity accessor. */
+    public final double getAverageElementLevel() {
+        return averageConcentration();
     }
 
-    public float getFieldSize() {
-        return entityData.get(DATA_CURRENT_SIZE);
+    /** Returns the shape's broad-phase bounds translated to this field's centre position. */
+    public final AABB fieldBounds() {
+        return shapeBounds.move(position());
     }
 
-    public float getCurrentSize() {
-        return getFieldSize();
+    /**
+     * Delegates exact membership testing to the supplied shape after only a
+     * translation to this field's centre. The shape receives the orientation
+     * bound to {@link #direction()}.
+     */
+    public final boolean isInside(Vec3 point) {
+        return shape.isInside(point.subtract(position()), shapeOrientation);
     }
 
-    public float getTargetFieldSize() {
-        return entityData.get(DATA_TARGET_SIZE);
-    }
-
-    public float getTargetSize() {
-        return getTargetFieldSize();
-    }
-
-    public boolean isFullyGrown() {
-        return getFieldSize() >= getTargetFieldSize();
-    }
-
-    public int getGrowthTicks() {
-        return getTargetFieldSize() <= SPAWN_SIZE ? 0 : (int) Math.ceil(100.0F / GROWTH_RATE);
-    }
-
-    public void setFieldSize(float size) {
-        setInitialSize(size);
-    }
-
-    public void setTargetVolume(double volume) {
-        Vec3 velocity = getDeltaMovement();
-        setTargetSize((float) MagicBallGeometry.sizeForVolume(volume, SPAWN_SIZE));
-        setDeltaMovement(velocity);
-    }
-
-    /** Changes the target size; the current size catches up during ticks. */
-    protected void setTargetSize(float size) {
-        float targetSize = Math.max(SPAWN_SIZE, size);
-        entityData.set(DATA_TARGET_SIZE, targetSize);
-        refreshDimensions();
-    }
-
-    /** Sets both sizes for the field's initial appearance. */
-    private void setInitialSize(float size) {
-        float targetSize = Math.max(SPAWN_SIZE, size);
-        entityData.set(DATA_TARGET_SIZE, targetSize);
-        entityData.set(DATA_CURRENT_SIZE, targetSize);
-        refreshDimensions();
-    }
-
-    protected Vec3 launchVelocity(Vec3 velocity, double arrowSizeSum, double liftDirection) {
-        double speed = velocity.length();
-        double lift = ((arrowSizeSum - speed) + 0.2 * speed) * liftDirection;
-        return velocity.add(0.0, lift, 0.0);
-    }
-
-    protected void growIntoTargetSize() {
-        float currentSize = getFieldSize();
-        float targetSize = getTargetFieldSize();
-        if (currentSize == targetSize) return;
-
-        float step = Math.max(0.001F,
-                (Math.max(currentSize, targetSize) - SPAWN_SIZE) * GROWTH_RATE / 100.0F);
-        entityData.set(DATA_CURRENT_SIZE, currentSize < targetSize
-                ? Math.min(targetSize, currentSize + step)
-                : Math.max(targetSize, currentSize - step));
-        refreshDimensions();
-    }
-
-    private Vec3 applyAccelerationAndResistance(Vec3 velocity) {
-        Vec3 accelerated = velocity.add(acceleration);
-        double speed = accelerated.length();
-        if (speed <= SPEED_EPSILON) return Vec3.ZERO;
-
-        // A fixed negative acceleration in the direction opposite to motion.
-        double resistedSpeed = Math.max(0.0, speed - RESISTANCE_ACCELERATION);
-        return accelerated.scale(resistedSpeed / speed);
-    }
-
-    private Vec3 cappedSpeed(Vec3 velocity) {
-        double speed = velocity.length();
-        if (speed <= SPEED_EPSILON || speed <= initialSpeed) return velocity;
-        if (initialSpeed <= SPEED_EPSILON) return Vec3.ZERO;
-        return velocity.scale(initialSpeed / speed);
-    }
-
-    public void bindToArray(UUID arrayId) {
-        this.boundArrayId = arrayId;
+    /** Binds this field to an array, replacing the old field of this exact class. */
+    public final void bindToArray(UUID arrayId) {
+        boundArrayId = Objects.requireNonNull(arrayId, "arrayId");
         if (level() instanceof ServerLevel serverLevel) {
-            ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
-                    .getArrayObj(arrayId);
-            if (array != null) setParentIfAbsent(array);
+            MagicArrayManager manager = serverLevel.getData(ModAttachments.ARRAY_MANAGER);
+            ArrayObject array = manager.getArrayObj(arrayId);
+            if (array != null) {
+                replaceExistingArrayField(serverLevel, manager, array);
+                setParentIfAbsent(array);
+            }
         }
-        captureArrayRelativePosition();
         bindPayloadToArray(arrayId);
     }
 
-    public SurfaceFrame currentArrayFrame() {
-        if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return null;
-        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER).getArrayObj(boundArrayId);
-        return array == null ? null : array.rootCircleGlyph().surface();
+    /** The owning array, if this field was emitted by one. */
+    public final UUID boundArrayId() {
+        return boundArrayId;
     }
 
-    private void updateArrayRelativePosition() {
-        if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return;
-        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
-                .getArrayObj(boundArrayId);
-        if (array == null) {
-            arrayRelativePosition = null;
-            return;
+    /** Once the first tick fixes its anchor, direct teleports are ignored too. */
+    @Override
+    public final void setPos(double x, double y, double z) {
+        if (anchoredPosition == null) {
+            super.setPos(x, y, z);
         }
-        if (!shouldFollow(serverLevel.getGameTime(), array.compilationEffectEndTick(),
-                getDeltaMovement(), payloadAcceleration())) {
-            arrayRelativePosition = null;
-            return;
-        }
-        if (arrayRelativePosition == null) {
-            arrayRelativePosition = ArrayRelativePosition.capture(
-                    position(), array.rootCircleGlyph().center(),
-                    array.rootCircleGlyph().surface());
-        }
-        setPos(arrayRelativePosition.resolve(
-                array.rootCircleGlyph().center(), array.rootCircleGlyph().surface()));
     }
 
-    private static boolean shouldFollow(long gameTime, long compilationEffectEndTick,
-                                        Vec3 velocity, Vec3 acceleration) {
-        long activatedTick = compilationEffectEndTick - ArrayObject.COMPILATION_EFFECT_TICKS;
-        long age = gameTime - activatedTick;
-        return compilationEffectEndTick > 0L
-                && age >= 0L && age < FOLLOW_TICKS
-                && velocity.lengthSqr() == 0.0
-                && acceleration.lengthSqr() == 0.0;
-    }
-
-    private void captureArrayRelativePosition() {
-        if (!(level() instanceof ServerLevel serverLevel) || boundArrayId == null) return;
-        ArrayObject array = serverLevel.getData(ModAttachments.ARRAY_MANAGER)
-                .getArrayObj(boundArrayId);
-        if (array == null) return;
-        arrayRelativePosition = ArrayRelativePosition.capture(
-                position(), array.rootCircleGlyph().center(),
-                array.rootCircleGlyph().surface());
-    }
-
-    public void bindGeneratedEntity(com.astune.gyromancy.entity.ball.MagicBallEntity entity,
-                                    String scratchKey) {
+    /** Binds a ball emitted by this field's payload to the same array. */
+    public final void bindGeneratedEntity(com.astune.gyromancy.entity.ball.MagicBallEntity entity,
+                                          String scratchKey) {
         if (boundArrayId == null || !(level() instanceof ServerLevel serverLevel)) return;
 
         entity.bindToArray(boundArrayId);
@@ -302,65 +192,73 @@ public abstract class MagicFieldEntity extends MagicEntity {
                 .setArrayScratchValue(boundArrayId, scratchKey, ArrayObject.EntityRef.of(entity));
     }
 
-    public double getAverageElementLevel() {
-        return averageElementLevel;
-    }
-
-    public void setAverageElementLevel(double averageElementLevel) {
-        this.averageElementLevel = averageElementLevel;
-    }
-
-    public ElementType elementType() {
-        return targetElement;
+    @Override
+    protected final boolean tickBeforePayload() {
+        if (anchoredPosition == null) {
+            anchoredPosition = position();
+        } else if (!anchoredPosition.equals(position())) {
+            super.setPos(anchoredPosition.x, anchoredPosition.y, anchoredPosition.z);
+        }
+        velocityThisTick = Vec3.ZERO;
+        setDeltaMovement(Vec3.ZERO);
+        if (!level().isClientSide) refreshAverageConcentration();
+        return true;
     }
 
     @Override
-    public void onSyncedDataUpdated(@NotNull EntityDataAccessor<?> key) {
-        super.onSyncedDataUpdated(key);
-        if (DATA_TARGET_SIZE.equals(key) || DATA_CURRENT_SIZE.equals(key)) {
-            refreshDimensions();
-        }
+    protected final void tickAfterPayload() {
+        // Payloads may not turn a field into a moving entity.
+        velocityThisTick = Vec3.ZERO;
+        setDeltaMovement(Vec3.ZERO);
+    }
+
+    @Override
+    protected final EntityTickContext payloadContext(Map<String, Object> runtimeData) {
+        return EntityTickContext.from(this, runtimeData);
+    }
+
+    @Override
+    protected List<? extends EntityPayload> defaultPayload() {
+        return List.of();
     }
 
     @Override
     public @NotNull EntityDimensions getDimensions(@NotNull Pose pose) {
-        float size = getFieldSize();
-        return EntityDimensions.scalable(size, size);
+        float width = (float) Math.max(0.01,
+                Math.max(shapeBounds.getXsize(), shapeBounds.getZsize()));
+        float height = (float) Math.max(0.01, shapeBounds.getYsize());
+        return EntityDimensions.scalable(width, height);
+    }
+
+    /**
+     * A field is centred on its position, whereas normal entity dimensions
+     * start at its feet. Returning the shape broad-phase box directly keeps
+     * the real entity AABB exactly aligned with {@link #fieldBounds()}.
+     */
+    @Override
+    protected AABB makeBoundingBox() {
+        return shapeBounds == null ? super.makeBoundingBox() : fieldBounds();
     }
 
     @Override
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-
-        if (tag.contains("Size")) {
-            float targetSize = Math.max(SPAWN_SIZE, tag.getFloat("Size"));
-            entityData.set(DATA_TARGET_SIZE, targetSize);
-            entityData.set(DATA_CURRENT_SIZE, tag.contains("CurrentSize")
-                    ? Math.max(SPAWN_SIZE, tag.getFloat("CurrentSize"))
-                    : targetSize);
-            refreshDimensions();
-        } else if (tag.contains("CurrentSize")) {
-            setInitialSize(tag.getFloat("CurrentSize"));
+        if (tag.contains("Shape", Tag.TAG_COMPOUND)) {
+            restoreShape(readShape(tag.getCompound("Shape")));
         }
-        if (tag.hasUUID("ArrayId")) boundArrayId = tag.getUUID("ArrayId");
-        if (tag.contains("ArrayRelativeU")) {
-            arrayRelativePosition = new ArrayRelativePosition(
-                    tag.getDouble("ArrayRelativeU"),
-                    tag.getDouble("ArrayRelativeV"),
-                    tag.getDouble("ArrayRelativeNormal"));
+        if (tag.contains("Direction")) {
+            FieldDirection.CODEC
+                    .parse(NbtOps.INSTANCE, tag.get("Direction"))
+                    .result()
+                    .ifPresent(this::setDirection);
         }
-        if (tag.contains("AccelX")) {
-            acceleration = new Vec3(tag.getDouble("AccelX"),
-                    tag.getDouble("AccelY"), tag.getDouble("AccelZ"));
+        if (tag.contains("Energy")) {
+            energy = validateEnergy(tag.getDouble("Energy"));
         }
-        if (tag.contains("InitialSpeed")) {
-            initialSpeed = Math.max(0.0, tag.getDouble("InitialSpeed"));
-        } else {
-            initialSpeed = getDeltaMovement().length();
-        }
-        velocityThisTick = cappedSpeed(getDeltaMovement());
-        setDeltaMovement(velocityThisTick);
-        if (boundArrayId != null) {
+        averageEnergy = averageEnergy(shape, energy);
+        syncShapeData();
+        if (tag.hasUUID("ArrayId")) {
+            boundArrayId = tag.getUUID("ArrayId");
             setArrayParentIfAbsent(boundArrayId);
             bindPayloadToArray(boundArrayId);
         }
@@ -369,37 +267,129 @@ public abstract class MagicFieldEntity extends MagicEntity {
     @Override
     protected void addAdditionalSaveData(@NotNull CompoundTag tag) {
         super.addAdditionalSaveData(tag);
-        tag.putFloat("Size", getTargetFieldSize());
-        tag.putFloat("CurrentSize", getFieldSize());
+        tag.putDouble("Energy", energy);
+        CompoundTag shapeTag = new CompoundTag();
+        addShapeData(shapeTag);
+        if (!shapeTag.isEmpty()) tag.put("Shape", shapeTag);
+        FieldDirection.CODEC
+                .encodeStart(NbtOps.INSTANCE, direction())
+                .result()
+                .ifPresent(directionTag -> tag.put("Direction", directionTag));
         if (boundArrayId != null) tag.putUUID("ArrayId", boundArrayId);
-        if (arrayRelativePosition != null) {
-            tag.putDouble("ArrayRelativeU", arrayRelativePosition.u());
-            tag.putDouble("ArrayRelativeV", arrayRelativePosition.v());
-            tag.putDouble("ArrayRelativeNormal", arrayRelativePosition.normal());
+    }
+
+    /**
+     * Writes this field's concrete immutable shape. A field implementation
+     * with a custom external shape overrides this alongside {@link
+     * #readShape(CompoundTag)}.
+     */
+    protected void addShapeData(@NotNull CompoundTag tag) {
+    }
+
+    /**
+     * Recreates this field's concrete shape during load or client sync. The
+     * default preserves the construction shape for non-serialised shapes.
+     */
+    protected MagicFieldShape readShape(@NotNull CompoundTag tag) {
+        return shape;
+    }
+
+    private void replaceExistingArrayField(ServerLevel level, MagicArrayManager manager, ArrayObject array) {
+        String slot = ARRAY_SLOT_PREFIX + getClass().getName();
+        Object previous = array.scratchData().get(slot);
+        if (previous instanceof ArrayObject.EntityRef ref
+                && ref.resolve(level) instanceof MagicFieldEntity oldField
+                && oldField != this && oldField.isAlive()) {
+            oldField.discard();
         }
-        tag.putDouble("AccelX", acceleration.x);
-        tag.putDouble("AccelY", acceleration.y);
-        tag.putDouble("AccelZ", acceleration.z);
-        tag.putDouble("InitialSpeed", initialSpeed);
+        manager.setArrayScratchValue(array.arrayId(), slot, ArrayObject.EntityRef.of(this));
     }
 
-    public boolean inSphere(Vec3 target, double radius) {
-        return MagicBallGeometry.inSphere(position(), target, radius);
+    /**
+     * Samples block-centre concentrations from the shape bounds and retains
+     * only points accepted by the externally supplied shape. This is
+     * intentionally not an AABB-only calculation.
+     */
+    private void refreshAverageConcentration() {
+        List<BlockPos> positions = new ArrayList<>();
+        BlockPos.betweenClosedStream(fieldBounds())
+                .map(BlockPos::immutable)
+                .filter(pos -> shape.isInside(pos.getCenter().subtract(position()), shapeOrientation))
+                .forEach(positions::add);
+        averageConcentration = positions.isEmpty()
+                ? 0.0
+                : (double) ElementStorageManager.INSTANCE.sum(level(), positions, targetElement)
+                        / positions.size();
     }
 
-    protected List<BlockPos> containedPositions(float size) {
-        return MagicBallGeometry.containedPositions(position(), size);
+    private static AABB validateBounds(AABB bounds) {
+        Objects.requireNonNull(bounds, "shape bounds");
+        if (!Double.isFinite(bounds.minX) || !Double.isFinite(bounds.minY) || !Double.isFinite(bounds.minZ)
+                || !Double.isFinite(bounds.maxX) || !Double.isFinite(bounds.maxY)
+                || !Double.isFinite(bounds.maxZ)
+                || bounds.getXsize() <= 0.0 || bounds.getYsize() <= 0.0 || bounds.getZsize() <= 0.0) {
+            throw new IllegalArgumentException("Magic field shape bounds must be finite and non-empty");
+        }
+        return bounds;
     }
 
-    protected long consumeElement(List<BlockPos> positions, ElementType type, long amount) {
-        return ElementStorageManager.INSTANCE.consume(level(), positions, type, amount);
+    private void refreshShapeOrientation() {
+        shapeOrientation = new ShapeOrientation(direction());
+        shapeBounds = validateBounds(shape.bounds(shapeOrientation));
+        // Entity only recalculates its AABB when explicitly refreshed. This
+        // also applies synced direction changes on the client.  Minecraft's
+        // refreshDimensions() path uses EntityDimensions and therefore cannot
+        // preserve a non-square, rotated broad-phase box; restore the exact
+        // shape bounds immediately afterwards.
+        refreshDimensions();
+        setBoundingBox(fieldBounds());
     }
 
-    protected void reduceElementWithMana(ElementType type, long manaCost) {
-        reduceElementWithMana(containedPositions(getTargetSize()), type, manaCost);
+    /** Applies a serialised shape without making live field geometry mutable. */
+    private void restoreShape(MagicFieldShape restoredShape) {
+        shape = Objects.requireNonNull(restoredShape, "restoredShape");
+        refreshShapeOrientation();
     }
 
-    private void reduceElementWithMana(List<BlockPos> positions, ElementType type, long manaCost) {
-        ElementStorageManager.INSTANCE.reduceWithMana(level(), positions, type, manaCost);
+    /** Synchronises the concrete shape after the field subclass has initialised it. */
+    protected final void syncShapeData() {
+        if (level().isClientSide) return;
+        CompoundTag tag = new CompoundTag();
+        addShapeData(tag);
+        entityData.set(DATA_SHAPE, tag);
+    }
+
+    private static double validateEnergy(double energy) {
+        if (!Double.isFinite(energy) || energy < 0.0) {
+            throw new IllegalArgumentException("Magic field energy must be finite and non-negative");
+        }
+        return energy;
+    }
+
+    private static double averageEnergy(MagicFieldShape shape, double energy) {
+        double averageEnergy = shape.averageEnergy(energy);
+        if (!Double.isFinite(averageEnergy)) {
+            throw new IllegalArgumentException("Magic field average energy must be finite");
+        }
+        return averageEnergy;
+    }
+
+    @Override
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(DATA_DIRECTION, WindFieldEntity.DEFAULT_DIRECTION);
+        builder.define(DATA_SHAPE, new CompoundTag());
+    }
+
+    @Override
+    public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
+        super.onSyncedDataUpdated(key);
+
+        if (DATA_DIRECTION.equals(key)) {
+            refreshShapeOrientation();
+        } else if (DATA_SHAPE.equals(key)) {
+            CompoundTag shapeTag = entityData.get(DATA_SHAPE);
+            if (!shapeTag.isEmpty()) restoreShape(readShape(shapeTag));
+        }
     }
 }

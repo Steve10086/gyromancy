@@ -32,6 +32,21 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
     private static final double MOMENTUM_SCALE = 1.0 / 10;
     private static final double DIRECTION_EPSILON = 1.0E-8;
 
+    /**
+     * Applies the same lift used by the projectile momentum path.  Arrow
+     * vectors are authored in the array plane; the residual length is added
+     * on the world-up axis so opposing arrows still produce a usable motion
+     * direction.  Fields use this helper when converting their arrows into a
+     * fixed {@link com.astune.gyromancy.api.field.FieldDirection}.
+     */
+    public static Vec3 withUpwardComponent(Vec3 vector, double arrowSizeSum,
+                                           double liftDirection) {
+        Vec3 safeVector = vector == null ? Vec3.ZERO : vector;
+        double speed = safeVector.length();
+        double lift = ((arrowSizeSum - speed)) * liftDirection;
+        return safeVector.add(0.0, lift, 0.0);
+    }
+
     /** How the provided vector is applied against the reference axis. */
     public enum MotionMode {
         DIRECT,

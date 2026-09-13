@@ -122,15 +122,14 @@ public final class EntityTickContext {
                 entity.parent(), entity.hasBlockImpactThisTick());
     }
 
-    public static EntityTickContext from(MagicFieldEntity entity, Map<String, Object> data, Vec3 acceleration) {
+    public static EntityTickContext from(MagicFieldEntity entity, Map<String, Object> data) {
+        float size = (float) Math.max(entity.fieldBounds().getXsize(),
+                Math.max(entity.fieldBounds().getYsize(), entity.fieldBounds().getZsize()));
         return new EntityTickContext(entity, entity.level(), entity.tickCount, entity.position(),
-                entity.velocityThisTick(), entity.getLookAngle(), acceleration, entity.getBoundingBox(),
-                entity.level().isClientSide,
-                entity.isAlive(), entity.isFullyGrown(), entity.hasImpactThisTick(), entity.getFieldSize(),
-                entity.getTargetSize(), entity.getAverageElementLevel(), data,
-                entity::discard, entity.level()::addFreshEntity, entity::bindGeneratedEntity,
-                entity::setTargetVolume, entity::setAverageElementLevel, entity.currentArrayFrame(),
-                entity.parent());
+                Vec3.ZERO, entity.direction().vector(), Vec3.ZERO, entity.fieldBounds(),
+                entity.level().isClientSide, entity.isAlive(), true, false, size, size,
+                entity.averageConcentration(), data, entity::discard, entity.level()::addFreshEntity,
+                entity::bindGeneratedEntity, ignored -> {}, ignored -> {}, null, entity.parent());
     }
 
     public Entity owner() { return owner; }

@@ -22,6 +22,7 @@ final class EntityPayloadCodecs {
             Map.entry(LoopOp.ID, LoopOp.CODEC),
             Map.entry(TornadoAttractionOp.ID, TornadoAttractionOp.CODEC),
             Map.entry(TornadoImpactOp.ID, TornadoImpactOp.CODEC),
+            Map.entry(WindFieldPushOp.ID, WindFieldPushOp.CODEC),
             Map.entry(OnDiscardPayload.ID, OnDiscardPayload.CODEC),
             Map.entry(RemoveOnHitOp.ID, OnDiscardPayload.CODEC)
     );

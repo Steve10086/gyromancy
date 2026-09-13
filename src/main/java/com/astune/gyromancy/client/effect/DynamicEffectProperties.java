@@ -7,6 +7,7 @@ import com.lowdragmc.photon.client.gameobject.particle.IParticle;
 import com.lowdragmc.photon.client.gameobject.particle.TrailParticle;
 import com.lowdragmc.photon.client.gameobject.particle.aratrail.AraTrailParticle;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
@@ -15,6 +16,8 @@ final class DynamicEffectProperties {
     private float size = 0f;
     private float alpha = -1f;
     private Vector4f color;
+
+    private Vec3 dir = Vec3.ZERO;
 
     void setSize(float size) { this.size = size; }
     void setAlpha(float alpha) { this.alpha = Math.clamp(alpha, 0, 1); }
@@ -27,6 +30,10 @@ final class DynamicEffectProperties {
         );
     }
     void setOffset(double x, double y, double z) { offset.set((float) x, (float) y, (float) z); }
+
+    void setDir(Vec3 dir){
+        this.dir = dir;
+    }
 
     Vec3 offset(Vec3 position) {
         return position.add(offset.x, offset.y, offset.z);
@@ -43,7 +50,16 @@ final class DynamicEffectProperties {
         }
         if (size > 0) {
             runtime.root.updateScale(new Vector3f(size, size, size));
+        }
+        if (dir.lengthSqr() > 1e-8) {
+            Vector3f target = dir.normalize().toVector3f();
 
+            Quaternionf rotation = new Quaternionf().rotationTo(
+                    new Vector3f(0, 0, 1),
+                    target
+            );
+
+            runtime.root.updateRotation(rotation);
         }
     }
 

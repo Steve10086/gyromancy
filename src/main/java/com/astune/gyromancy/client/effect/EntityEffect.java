@@ -92,6 +92,11 @@ public class EntityEffect {
         started = false;
     }
 
+    /** Returns whether the Photon runtime is still emitting this effect. */
+    public boolean isAlive() {
+        return started && runner != null && runner.isAlive();
+    }
+
     /** Stops all custom entity executors before Photon changes level. */
     public static void clearAll() {
         for (EntityEffect effect : new ArrayList<>(ACTIVE)) effect.stop();
@@ -108,6 +113,11 @@ public class EntityEffect {
     }
     public EntityEffect setOffset(double x, double y, double z) {
         properties.setOffset(x, y, z);
+        return this;
+    }
+
+    public EntityEffect setDir(Vec3 dir){
+        properties.setDir(dir);
         return this;
     }
 
@@ -153,6 +163,10 @@ public class EntityEffect {
 
         boolean isRuntimeValid() {
             return runtime != null && runtime.isValid();
+        }
+
+        boolean isAlive() {
+            return runtime != null && runtime.isValid() && runtime.isAlive();
         }
 
         void kill() {

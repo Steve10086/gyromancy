@@ -47,6 +47,7 @@ public class Gyromancy {
         ModRecipes.RECIPE_SERIALIZERS.register(modEventBus);
         ModMenus.MENUS.register(modEventBus);
         ModSymbols.register(modEventBus);
+        ModEntityDataSerializers.register(modEventBus);
 
         // ── NeoForge.EVENT_BUS — explicit (no @EventBusSubscriber) ──
         NeoForge.EVENT_BUS.register(this); // picks up @SubscribeEvent instance methods

@@ -62,7 +62,7 @@ public final class TornadoProjectileOp extends ProjectileEntityOp {
             return new CompileResult.Failure<>(List.of(new CompileDiagnostic(
                     "missing_primary_element", "Tornado projectile requires wind rune")));
         }
-        return new CompileResult.Success<>(new TornadoProjectileOp(boundary, matchedInputs, inputs));
+        return rejectUnsupportedInputs(new TornadoProjectileOp(boundary, matchedInputs, inputs), inputs);
     }
 
     @Override
