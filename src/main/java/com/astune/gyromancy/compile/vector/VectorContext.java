@@ -13,7 +13,8 @@ public record VectorContext(
         Vec3 velocity,
         Vec3 facing,
         Vec3 arrayNormal,
-        long tick
+        long tick,
+        double gravity
 ) {
     public VectorContext {
         compileFrame = compileFrame == null ? Optional.empty() : compileFrame;
@@ -22,27 +23,35 @@ public record VectorContext(
         velocity = velocity == null ? Vec3.ZERO : velocity;
         facing = facing == null ? Vec3.ZERO : facing;
         arrayNormal = arrayNormal == null ? Vec3.ZERO : arrayNormal;
+        gravity = Double.isFinite(gravity) ? gravity : 0.0;
     }
 
     public VectorContext(SurfaceFrame compileFrame, SurfaceFrame activationFrame,
                          SurfaceFrame liveFrame, Vec3 velocity, Vec3 facing,
                          Vec3 arrayNormal) {
         this(Optional.ofNullable(compileFrame), Optional.ofNullable(activationFrame),
-                Optional.ofNullable(liveFrame), velocity, facing, arrayNormal, 0L);
+                Optional.ofNullable(liveFrame), velocity, facing, arrayNormal, 0L, 0.0);
     }
 
     public VectorContext(SurfaceFrame compileFrame, SurfaceFrame activationFrame,
                          SurfaceFrame liveFrame, Vec3 velocity, Vec3 facing,
                          Vec3 arrayNormal, long tick) {
         this(Optional.ofNullable(compileFrame), Optional.ofNullable(activationFrame),
-                Optional.ofNullable(liveFrame), velocity, facing, arrayNormal, tick);
+                Optional.ofNullable(liveFrame), velocity, facing, arrayNormal, tick, 0.0);
     }
 
     public VectorContext(Optional<SurfaceFrame> compileFrame,
                          Optional<SurfaceFrame> activationFrame,
                          Optional<SurfaceFrame> liveFrame, Vec3 velocity,
                          Vec3 facing, Vec3 arrayNormal) {
-        this(compileFrame, activationFrame, liveFrame, velocity, facing, arrayNormal, 0L);
+        this(compileFrame, activationFrame, liveFrame, velocity, facing, arrayNormal, 0L, 0.0);
+    }
+
+    public VectorContext(Optional<SurfaceFrame> compileFrame,
+                         Optional<SurfaceFrame> activationFrame,
+                         Optional<SurfaceFrame> liveFrame, Vec3 velocity,
+                         Vec3 facing, Vec3 arrayNormal, long tick) {
+        this(compileFrame, activationFrame, liveFrame, velocity, facing, arrayNormal, tick, 0.0);
     }
 
 }

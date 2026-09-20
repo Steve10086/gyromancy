@@ -4,6 +4,7 @@ import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.EntityTickContext;
 import com.astune.gyromancy.registry.ModAttachments;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -66,7 +67,7 @@ public abstract class MagicEntity extends Entity {
         return velocityThisTick;
     }
     public void setPayload(List<? extends EntityPayload> payload) {
-        this.payload = new ArrayList<>(payload);
+        this.payload = new ArrayList<>(EntityPayload.orderedByTickPhase(payload));
         payloadInitialized = true;
         entityData.set(DATA_PAYLOAD, payloadTag(this.payload));
     }
@@ -74,6 +75,9 @@ public abstract class MagicEntity extends Entity {
     protected List<? extends EntityPayload> defaultPayload() {
         return List.of();
     }
+
+    /** The world positions covered by this effect's active geometry. */
+    public abstract List<BlockPos> listInside();
 
     protected Map<String, Object> runtimeData() {
         return runtimeData;
@@ -214,14 +218,15 @@ public abstract class MagicEntity extends Entity {
     }
 
     private void loadSyncedPayload() {
-        payload = new ArrayList<>(EntityPayload.loadPayloadList(entityData.get(DATA_PAYLOAD), PAYLOAD_KEY, defaultPayload()));
+        payload = new ArrayList<>(EntityPayload.orderedByTickPhase(
+                EntityPayload.loadPayloadList(entityData.get(DATA_PAYLOAD), PAYLOAD_KEY, defaultPayload())));
         payloadInitialized = true;
         loadSyncedPayloadStates();
     }
 
     private void initializeDefaultPayload() {
         if (payloadInitialized) return;
-        payload = new ArrayList<>(defaultPayload());
+        payload = new ArrayList<>(EntityPayload.orderedByTickPhase(defaultPayload()));
         payloadInitialized = true;
         entityData.set(DATA_PAYLOAD, payloadTag(payload));
     }

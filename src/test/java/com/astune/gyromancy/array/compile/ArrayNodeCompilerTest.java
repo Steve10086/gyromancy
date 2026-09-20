@@ -479,6 +479,24 @@ class ArrayNodeCompilerTest {
     }
 
     @Test
+    void secretTextOnlyNestedGroupIsPreservedAsRawInput() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph star = glyph("star", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 4);
+        PositionedGlyph secret = glyph("secret_text_1", SymbolRole.PARAMETER_RUNE, 5);
+        GroupNode ast = group(outer, new SymbolNode(star), new SymbolNode(split),
+                group(inner, new SymbolNode(secret)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast, List.of(ProjectionOp.DEFINITION)));
+        ProjectionOp root = assertInstanceOf(ProjectionOp.class, success.value().root());
+
+        assertInstanceOf(OpInput.RawGroup.class, root.inputs().get(2));
+    }
+
+    @Test
     void unacceptedRawGroupStillBlocksNormalOperatorCompilation() {
         PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph star = glyph("star", SymbolRole.PARAMETER_RUNE, 2);
@@ -495,28 +513,17 @@ class ArrayNodeCompilerTest {
     }
 
     @Test
-    void engagingRuneCompilesStandaloneElementOp() {
+    void engagingRuneHasNoStandaloneRegisteredOperator() {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph engaging = glyph("engaging", SymbolRole.PARAMETER_RUNE, 2);
         GroupNode ast = group(circle, new SymbolNode(engaging));
 
-        @SuppressWarnings("unchecked")
-        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
-                ArrayNodeCompiler.compile(ast));
-
-        assertInstanceOf(ElementOp.class, success.value().root());
+        assertInstanceOf(CompileResult.Failure.class, ArrayNodeCompiler.compile(ast));
     }
 
     @Test
     void elementOpDefaultsToManaAbsorptionWithoutContentElement() {
-        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
-        PositionedGlyph engaging = glyph("engaging", SymbolRole.PARAMETER_RUNE, 2);
-        GroupNode ast = group(circle, new SymbolNode(engaging));
-
-        @SuppressWarnings("unchecked")
-        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
-                ArrayNodeCompiler.compile(ast));
-        ElementOp root = assertInstanceOf(ElementOp.class, success.value().root());
+        ElementOp root = new ElementOp();
 
         assertEquals(ElementType.MANA, root.absorbedElement());
         List<EntityPayload> payloads = new ArrayList<>();
@@ -526,16 +533,8 @@ class ArrayNodeCompilerTest {
     }
 
     @Test
-    void elementOpUsesContentElementForPayloadAbsorption() {
-        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
-        PositionedGlyph engaging = glyph("engaging", SymbolRole.PARAMETER_RUNE, 2);
-        PositionedGlyph fire = glyph("fire", SymbolRole.PARAMETER_RUNE, 3);
-        GroupNode ast = group(circle, new SymbolNode(engaging), new SymbolNode(fire));
-
-        @SuppressWarnings("unchecked")
-        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
-                ArrayNodeCompiler.compile(ast));
-        ElementOp root = assertInstanceOf(ElementOp.class, success.value().root());
+    void elementOpUsesConfiguredContentElementForPayloadAbsorption() {
+        ElementOp root = new ElementOp(ElementType.FIRE);
 
         assertEquals(ElementType.FIRE, root.absorbedElement());
         List<EntityPayload> payloads = new ArrayList<>();
@@ -561,20 +560,14 @@ class ArrayNodeCompilerTest {
     }
 
     @Test
-    void projectileCanOwnNestedElementPayload() {
+    void unregisteredElementOpCannotBeNestedAsProjectilePayload() {
         PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
         PositionedGlyph water = glyph("water", SymbolRole.CENTER_SYMBOL, 3);
         PositionedGlyph engaging = glyph("engaging", SymbolRole.PARAMETER_RUNE, 4);
         GroupNode ast = group(outer, new SymbolNode(water), group(inner, new SymbolNode(engaging)));
 
-        @SuppressWarnings("unchecked")
-        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
-                ArrayNodeCompiler.compile(ast));
-        WaterProjectileOp root = assertInstanceOf(WaterProjectileOp.class, success.value().root());
-        CompiledOp child = assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator();
-
-        assertInstanceOf(ElementOp.class, child);
+        assertInstanceOf(CompileResult.Failure.class, ArrayNodeCompiler.compile(ast));
     }
 
     @Test

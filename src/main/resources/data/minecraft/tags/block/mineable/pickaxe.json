@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "gyromancy:fire_crystal",
+    "gyromancy:water_crystal",
+    "gyromancy:wind_crystal",
+    "gyromancy:earth_crystal"
+  ]
+}

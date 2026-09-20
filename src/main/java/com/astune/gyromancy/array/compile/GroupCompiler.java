@@ -3,6 +3,7 @@ package com.astune.gyromancy.array.compile;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.compile.operator.OpResolveContext;
+import com.astune.gyromancy.symbol.SecretTextSymbol;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -59,6 +60,14 @@ public abstract class GroupCompiler {
                     continue;
                 }
 
+                // Secret-text-only groups are data, not executable arrays. A
+                // wireless source may consist entirely of these groups, so
+                // preserve them as raw input before looking for an operator.
+                if (isSecretTextOnlyGroup(nested)) {
+                    inputs.add(new OpInput.RawGroup(nested, List.of()));
+                    continue;
+                }
+
                 CompileResult<CompiledOp> compiled = compileGroup(nested, depth + 1, groupContext);
                 if (compiled instanceof CompileResult.Success<CompiledOp> success) {
                     inputs.add(new OpInput.Op(success.value(), nested));
@@ -72,6 +81,14 @@ public abstract class GroupCompiler {
         // resolvable Op remains its original OpInput until the parent that
         // consumes it explicitly asks for an OpResolution.
         return createOp(group.boundary(), List.copyOf(inputs), groupContext);
+    }
+
+    private static boolean isSecretTextOnlyGroup(GroupNode group) {
+        if (!(group.body() instanceof SequenceNode sequence) || sequence.children().isEmpty()) {
+            return false;
+        }
+        return sequence.children().stream().allMatch(child -> child instanceof SymbolNode symbol
+                && SecretTextSymbol.fromId(symbol.glyph().symbolId()) != null);
     }
 
     private CompileResult<CompiledOp> createOp(PositionedGlyph boundary, List<OpInput> inputs,

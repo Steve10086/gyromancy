@@ -93,7 +93,9 @@ class OpResolutionTest {
         GroupNode runtimeSource = group(glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 34),
                 glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 35, 7.0));
         PhaseForwardingOp deferred = new PhaseForwardingOp(root, compileSource, runtimeSource);
-        OpInput deferredInput = new OpInput.Op(deferred, compileSource);
+        // A WirelessOp consumer has no compile-time source group; the source
+        // is supplied only after its runtime resolution.
+        OpInput deferredInput = new OpInput.Op(deferred, null);
 
         MomentumOp momentum = MomentumOp.compiled(root, List.of(new OpInput.Rune(motion)),
                 List.of(new OpInput.Rune(motion), deferredInput),
@@ -103,6 +105,35 @@ class OpResolutionTest {
                 new EmitOp.Emission(Vec3.ZERO, 0.0, 1.0F, false), OpRuntimeContext.empty());
 
         assertEquals(7.0, emission.motionSum(), 1.0E-6);
+    }
+
+    @Test
+    void nestedMomentumRecompilesDeferredWirelessVectorAtRuntime() {
+        PositionedGlyph root = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 36);
+        PositionedGlyph motion = glyph("motion", SymbolRole.PARAMETER_RUNE, 37);
+        GroupNode compileSource = group(glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 38),
+                glyph("arrow", SymbolRole.PARAMETER_RUNE, 39, 2.0));
+        GroupNode runtimeSource = group(glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 40),
+                glyph("arrow", SymbolRole.PARAMETER_RUNE, 41, 7.0));
+        PhaseForwardingOp deferred = new PhaseForwardingOp(root, compileSource, runtimeSource);
+        OpInput deferredInput = new OpInput.Op(deferred, null);
+        MomentumInputResolver resolver = new MomentumInputResolver(
+                new VectorCompiler(VectorOpDefinitions.definitions()));
+
+        MomentumOp nested = MomentumOp.compiled(root, List.of(new OpInput.Rune(motion)),
+                List.of(new OpInput.Rune(motion), deferredInput), resolver);
+        OpInput nestedInput = new OpInput.Op(nested, compileSource);
+        MomentumOp outer = MomentumOp.compiled(root, List.of(new OpInput.Rune(motion)),
+                List.of(new OpInput.Rune(motion), nestedInput), resolver);
+
+        List<EntityPayload> payloads = new java.util.ArrayList<>();
+        outer.contributeEntityPayloads(payloads, OpRuntimeContext.empty());
+        MomentumOp payload = assertInstanceOf(MomentumOp.class, payloads.getFirst());
+
+        Vec3 resolvedAcceleration = payload.accelerationForTick(Vec3.ZERO);
+        assertEquals(0.7, resolvedAcceleration.length(), 1.0E-6,
+                () -> "resolved acceleration=" + resolvedAcceleration
+                        + ", inputs=" + payload.accelerationInputs().size());
     }
 
     @Test

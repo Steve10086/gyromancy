@@ -41,7 +41,7 @@ final class MomentumInputResolver {
             }
 
             if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp momentum) {
-                addMomentumAcceleration(accelerationInputs, momentum);
+                addMomentumAcceleration(accelerationInputs, momentum, context);
                 continue;
             }
 
@@ -75,7 +75,8 @@ final class MomentumInputResolver {
         if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp) return;
 
         if (input instanceof OpInput.RawGroup
-                || input instanceof OpInput.Op op && op.sourceGroup() != null) {
+                || input instanceof OpInput.Op op
+                && (op.sourceGroup() != null || op.operator() instanceof OpResolvable)) {
             if (addCompiledVector(result, vectorCompiler.compile(input, context))) return;
         }
 
@@ -85,17 +86,23 @@ final class MomentumInputResolver {
     }
 
     private static void addMomentumAcceleration(
-            List<MomentumOp.AccelerationInput> result, MomentumOp momentum) {
-        MomentumOp.UpdateMode updateMode = momentum.dynamic()
+            List<MomentumOp.AccelerationInput> result, MomentumOp momentum,
+            OpResolveContext context) {
+        ResolvedInputs resolved = context != null
+                && context.phase() == OpResolveContext.Phase.RUNTIME
+                ? momentum.resolvedInputsFor(context.runtimeContext())
+                : new ResolvedInputs(momentum.velocityInputs(), momentum.accelerationInputs(),
+                momentum.dynamic());
+        MomentumOp.UpdateMode updateMode = resolved.dynamic()
                 ? MomentumOp.UpdateMode.DYNAMIC
                 : MomentumOp.UpdateMode.SNAPSHOT;
-        for (MomentumOp.VectorInput input : momentum.velocityInputs()) {
+        for (MomentumOp.VectorInput input : resolved.velocityInputs()) {
             result.add(new MomentumOp.AccelerationInput(
                     input.vector(), input.motionMode(), updateMode));
         }
         // Preserve acceleration authored by deeper nested MomentumOps when a
         // MomentumOp is itself consumed as a vector source.
-        result.addAll(momentum.accelerationInputs());
+        result.addAll(resolved.accelerationInputs());
     }
 
     private static boolean addCompiledVector(

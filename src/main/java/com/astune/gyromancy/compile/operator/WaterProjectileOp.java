@@ -82,11 +82,12 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
                 new RemoveOnHitOp(),
                 new CarryItemsOp(),
                 new ElementVolumeOp(ElementType.WATER, STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
-                        VOLUME_LOSS, EQUILIBRIUM, MAX_VOLUME_LEVEL, MANA_TO_VOLUME)
+                        VOLUME_LOSS, EQUILIBRIUM, MAX_VOLUME_LEVEL, MANA_TO_VOLUME),
+                new WaterCrystalOp()
         );
     }
     public List<EntityPayload> conditionalPayload() {
-        Set<EntityPayload> payload = new HashSet<>();
+        Set<EntityPayload> payload = new LinkedHashSet<>();
         for (OpInput o : inputs){
             if (o instanceof OpInput.Rune rune){
                 switch (rune.symbolName()){
@@ -110,7 +111,7 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
 
     @Override
     protected List<EntityPayload> payloadFor(OpRuntimeContext context) {
-        Set<EntityPayload> payload = new HashSet<>(defaultPayload());
+        Set<EntityPayload> payload = new LinkedHashSet<>(defaultPayload());
         payload.addAll(conditionalPayload());
         return payload(payload.stream().toList(), context);
     }

@@ -155,6 +155,16 @@ public abstract class MagicFieldEntity extends MagicEntity {
         return shape.isInside(point.subtract(position()), shapeOrientation);
     }
 
+    @Override
+    public final List<BlockPos> listInside() {
+        List<BlockPos> positions = new ArrayList<>();
+        BlockPos.betweenClosedStream(fieldBounds())
+                .map(BlockPos::immutable)
+                .filter(pos -> shape.isInside(pos.getCenter().subtract(position()), shapeOrientation))
+                .forEach(positions::add);
+        return positions;
+    }
+
     /** Binds this field to an array, replacing the old field of this exact class. */
     public final void bindToArray(UUID arrayId) {
         boundArrayId = Objects.requireNonNull(arrayId, "arrayId");
@@ -311,11 +321,7 @@ public abstract class MagicFieldEntity extends MagicEntity {
      * intentionally not an AABB-only calculation.
      */
     private void refreshAverageConcentration() {
-        List<BlockPos> positions = new ArrayList<>();
-        BlockPos.betweenClosedStream(fieldBounds())
-                .map(BlockPos::immutable)
-                .filter(pos -> shape.isInside(pos.getCenter().subtract(position()), shapeOrientation))
-                .forEach(positions::add);
+        List<BlockPos> positions = listInside();
         averageConcentration = positions.isEmpty()
                 ? 0.0
                 : (double) ElementStorageManager.INSTANCE.sum(level(), positions, targetElement)

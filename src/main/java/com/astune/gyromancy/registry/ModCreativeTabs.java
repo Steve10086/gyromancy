@@ -36,6 +36,10 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.WAND.get());
                         output.accept(ModItems.RUNE_CARVING_TABLE.get());
                         output.accept(ModItems.GUIDEBOOK.get());
+                        output.accept(ModItems.FIRE_CRYSTAL.get());
+                        output.accept(ModItems.WATER_CRYSTAL.get());
+                        output.accept(ModItems.WIND_CRYSTAL.get());
+                        output.accept(ModItems.EARTH_CRYSTAL.get());
                     })
                     .build());
 }

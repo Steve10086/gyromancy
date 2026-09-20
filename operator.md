@@ -201,6 +201,21 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 
 它不是 array root Op，由 entity tick 管线执行，并需要在 `EntityPayloadCodecs` 这类 codec 表中注册。
 
+### 同 tick 执行顺序（TickPhase）
+
+同一实体上的 payload 在一个 tick 内按 `EntityPayload.tickPhase()` 声明的阶段顺序执行：
+
+1. `PRODUCE`：生产后续阶段要花的资源（例如 `ElementOp` 吸收元素并在球内释放 MANA）；
+2. `GROW`：把资源花在实体本身上（例如 `ElementVolumeOp` 用 MANA 改变体积，并按当前元素浓度决定上限）；
+3. `CONVERT`：处理消费后的剩余资源（例如 `ElementConversionOp` 把剩余 MANA 转成元素）；
+4. `EFFECT`：默认阶段，触发/反应/工具型 payload（例如 `ExplosionOp`、结晶生成）。
+
+`MagicEntity` 在 `setPayload`、同步 payload 加载和默认 payload 初始化时都会调用 `EntityPayload.orderedByTickPhase(...)` 做一次稳定排序，因此：
+
+- payload 的组装顺序（HashSet 迭代顺序、注册顺序等）不再影响行为；
+- 同阶段的 payload 保持原有相对顺序；
+- 新增 payload 只需声明自己所属的阶段，不需要依赖调用方排序，也不需要在别处维护“谁先跑”的约定。
+
 ## 注册边界
 
 系统里有两条独立注册线。

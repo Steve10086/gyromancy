@@ -47,6 +47,11 @@ public final class ElementConversionOp extends OnEntityTickOp {
     int interval() { return interval; }
 
     @Override
+    public TickPhase tickPhase() {
+        return TickPhase.CONVERT;
+    }
+
+    @Override
     public void onEntityTick(EntityTickContext ctx) {
         if (ctx.isClientSide() || !ctx.isFullyGrown() || interval <= 0 || ctx.tickCount() % interval != 0) return;
 

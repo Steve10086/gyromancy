@@ -7,7 +7,6 @@ import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
-import com.astune.gyromancy.array.compile.RegisteredOp;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import com.astune.gyromancy.util.MagicBallGeometry;
@@ -22,7 +21,6 @@ import java.util.Optional;
 
 import static java.lang.Math.max;
 
-@RegisteredOp
 public final class ElementOp extends OnEntityTickOp implements CompiledOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "element");
     private static final ResourceLocation ENGAGING_SYMBOL =
@@ -151,6 +149,11 @@ public final class ElementOp extends OnEntityTickOp implements CompiledOp {
     @Override
     protected Codec<ElementOp> codec() {
         return CODEC;
+    }
+
+    @Override
+    public TickPhase tickPhase() {
+        return TickPhase.PRODUCE;
     }
 
     @Override

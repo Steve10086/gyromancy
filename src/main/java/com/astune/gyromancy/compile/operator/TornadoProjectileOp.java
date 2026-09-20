@@ -97,7 +97,7 @@ public final class TornadoProjectileOp extends ProjectileEntityOp {
 
     @Override
     protected Collection<? extends EntityPayload> defaultPayload() {
-        return List.of(new TornadoAttractionOp(true), new TornadoImpactOp());
+        return List.of(new TornadoAttractionOp(true), new TornadoImpactOp(), new WindCrystalOp());
     }
 
     @Override

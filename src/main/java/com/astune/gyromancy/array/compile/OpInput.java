@@ -19,9 +19,10 @@ public sealed interface OpInput permits OpInput.Rune, OpInput.Op, OpInput.RawGro
     }
 
     /**
-     * A nested group which could not compile into an operator. It remains a
-     * passive input so an operator such as ProjectionOp can consume its
-     * boundary and glyph tree without making it executable.
+     * A nested group which is intentionally kept as authored data instead of
+     * being compiled into an executable operator. It remains a passive input
+     * so operators such as ProjectionOp, ShapeOp, and WirelessOp can consume
+     * its boundary and glyph tree without making it executable.
      */
     record RawGroup(GroupNode group, List<CompileDiagnostic> failures) implements OpInput {
         public RawGroup {

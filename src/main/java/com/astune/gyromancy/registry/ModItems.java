@@ -67,4 +67,17 @@ public final class ModItems {
     /** In-game manual for the basic Gyromancy workflow. */
     public static final DeferredItem<GuidebookItem> GUIDEBOOK = ITEMS.register(
             "guidebook", GuidebookItem::new);
+
+    /** Unplaceable crystal drops harvested from grown element crystal blocks. */
+    public static final DeferredItem<Item> FIRE_CRYSTAL = ITEMS.register(
+            "fire_crystal", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> WATER_CRYSTAL = ITEMS.register(
+            "water_crystal", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> WIND_CRYSTAL = ITEMS.register(
+            "wind_crystal", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> EARTH_CRYSTAL = ITEMS.register(
+            "earth_crystal", () -> new Item(new Item.Properties()));
 }

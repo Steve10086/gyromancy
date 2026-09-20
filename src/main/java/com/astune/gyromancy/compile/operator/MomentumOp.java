@@ -12,6 +12,7 @@ import com.astune.gyromancy.symbol.SymbolCatalog;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -309,7 +310,8 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
                 ? compileFrame.map(SurfaceFrame::normal).orElse(Vec3.ZERO)
                 : arrayFrame.normal();
         VectorContext vectorContext = vectorContext(null, ctx.velocity(), ctx.facing(),
-                arrayFrame, arrayNormal);
+                arrayFrame, arrayNormal,
+                ctx.owner() == null ? 0.0 : ctx.owner().getGravity());
         List<Vec3> sampled = accelerationVectors(vectorContext);
         acceleration = solveVector(ctx.velocity(), ctx.facing(), vectorContext,
                 accelerationInputs, sampled);
@@ -397,6 +399,14 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
         }
         return inputResolver.resolve(boundary, inputs, OpResolveContext.forRuntime(
                 this, OpResolveContext.UseSite.VECTOR, context, boundary));
+    }
+
+    /**
+     * Lets a parent MomentumOp re-resolve this operator's deferred vector
+     * inputs when the parent is itself consumed as a vector source.
+     */
+    MomentumInputResolver.ResolvedInputs resolvedInputsFor(OpRuntimeContext context) {
+        return resolvedInputs(context);
     }
 
     private List<Vec3> spawnVectorSnapshots(VectorContext context,
@@ -521,13 +531,26 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
     private VectorContext vectorContext(OpRuntimeContext context, Vec3 velocity,
                                         Vec3 facing, SurfaceFrame liveFrame,
                                         Vec3 arrayNormal) {
+        return vectorContext(context, velocity, facing, liveFrame, arrayNormal,
+                gravityFor(context));
+    }
+
+    private VectorContext vectorContext(OpRuntimeContext context, Vec3 velocity,
+                                        Vec3 facing, SurfaceFrame liveFrame,
+                                        Vec3 arrayNormal, double gravity) {
         SurfaceFrame activation = activationFrame.orElse(null);
         if (context != null) {
             activation = context.activationFrame() == null ? activation : context.activationFrame();
             liveFrame = context.liveFrame() == null ? liveFrame : context.liveFrame();
         }
-        return new VectorContext(compileFrame.orElse(null), activation, liveFrame,
-                velocity, facing, arrayNormal, elapsedTicks);
+        return new VectorContext(Optional.ofNullable(compileFrame.orElse(null)),
+                Optional.ofNullable(activation), Optional.ofNullable(liveFrame),
+                velocity, facing, arrayNormal, elapsedTicks, gravity);
+    }
+
+    private static double gravityFor(OpRuntimeContext context) {
+        if (context == null || !(context.parent() instanceof Entity entity)) return 0.0;
+        return entity.getGravity();
     }
 
     private static Vec3 directionOrZero(Vec3 direction) {

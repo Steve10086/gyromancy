@@ -212,6 +212,9 @@ public final class ShapeOp implements CompiledOp {
         OpResolution resolution = OpResolver.resolve(input, OpResolveContext.forRuntime(
                 this, OpResolveContext.UseSite.GROUP_INPUT, context, boundary));
         if (resolution.sourceGroup() == null) {
+            if (input instanceof OpInput.Op op && op.operator() instanceof WirelessOp) {
+                throw new ShapeParameterException("Wireless field shape source was not found");
+            }
             throw new ShapeParameterException("A deferred field shape parameter did not resolve to a source group");
         }
         return resolution.sourceGroup();

@@ -51,6 +51,9 @@ public final class VectorOpSerialization {
             INPUT_CODEC.listOf().fieldOf("inputs").forGetter(StaticRotationVectorData::inputs),
             Codec.BOOL.fieldOf("curl").forGetter(StaticRotationVectorData::curl)
     ).apply(instance, StaticRotationVectorData::new));
+    private static final Codec<RevertVectorData> REVERT_VECTOR_CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            INPUT_CODEC.listOf().fieldOf("inputs").forGetter(RevertVectorData::inputs)
+    ).apply(instance, RevertVectorData::new));
 
     private static final List<Adapter<?>> ADAPTERS = new CopyOnWriteArrayList<>();
 
@@ -137,6 +140,41 @@ public final class VectorOpSerialization {
             @Override
             public Optional<LegacyData> encodeLegacy(ArrayNormalVectorOp vector) {
                 return Optional.of(LegacyData.scalar(vector.scale(), "array_normal", false));
+            }
+        });
+        register(new Adapter<GravityVectorOp>() {
+            @Override
+            public ResourceLocation id() {
+                return adapterId("gravity_vector");
+            }
+
+            @Override
+            public Class<GravityVectorOp> vectorType() {
+                return GravityVectorOp.class;
+            }
+
+            @Override
+            public Codec<GravityVectorOp> codec() {
+                return Codec.unit(() -> new GravityVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0));
+            }
+        });
+        register(new Adapter<RevertVectorOp>() {
+            @Override
+            public ResourceLocation id() {
+                return adapterId("revert_vector");
+            }
+
+            @Override
+            public Class<RevertVectorOp> vectorType() {
+                return RevertVectorOp.class;
+            }
+
+            @Override
+            public Codec<RevertVectorOp> codec() {
+                return REVERT_VECTOR_CODEC.xmap(
+                        data -> new RevertVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0,
+                                deserializeInputs(data.inputs())),
+                        vector -> new RevertVectorData(serializeInputs(vector.vectorInputs())));
             }
         });
     }
@@ -315,6 +353,8 @@ public final class VectorOpSerialization {
                                       double rotationSpeed) {}
 
     private record StaticRotationVectorData(List<SerializedInput> inputs, boolean curl) {}
+
+    private record RevertVectorData(List<SerializedInput> inputs) {}
 
     public record LegacyData(Vec3 direction, double magnitude, boolean alongFacing,
                              Vec3 localDirection, Optional<String> directionFrame) {

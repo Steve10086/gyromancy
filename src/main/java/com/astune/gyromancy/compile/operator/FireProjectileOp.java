@@ -19,11 +19,12 @@ import java.util.*;
 
 @RegisteredOp
 public final class FireProjectileOp extends ProjectileEntityOp {
-
-    private static final double FIRE_VOLUME_LOSS = 0.1;
-    private static final double FIRE_EQUILIBRIUM = 100.0;
-    private static final double MAX_VOLUME_FIRE_LEVEL = 2000.0;
-    private static final double MANA_TO_VOLUME = 0.01;
+    private static final int ELEMENT_EXCHANGE_INTERVAL = 10;
+    private static final double VOLUME_LOSS = 0.1;
+    private static final double EQUILIBRIUM = 1000.0;
+    private static final double MAX_VOLUME_LEVEL = 200.0;
+    private static final double MANA_TO_VOLUME = 0.05;
+    public static final String STORED_MANA_KEY = "storedMana";
 
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "fireball");
     public static final OpDefinition DEFINITION = new OpDefinition() {
@@ -53,7 +54,6 @@ public final class FireProjectileOp extends ProjectileEntityOp {
         }
     };
 
-    public static final String STORED_MANA_KEY = "storedMana";
     public static final String OLD_SPAWNED_KEY = "oldSpawned";
 
     private FireProjectileOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
@@ -73,11 +73,12 @@ public final class FireProjectileOp extends ProjectileEntityOp {
     public List<EntityPayload> defaultPayload() {
         return List.of(
                 new ElementVolumeOp(ElementType.FIRE, STORED_MANA_KEY, ELEMENT_EXCHANGE_INTERVAL,
-                        FIRE_VOLUME_LOSS, FIRE_EQUILIBRIUM, MAX_VOLUME_FIRE_LEVEL, MANA_TO_VOLUME));
+                        VOLUME_LOSS, EQUILIBRIUM, MAX_VOLUME_LEVEL, MANA_TO_VOLUME),
+                new FireCrystalOp());
     }
 
     public List<EntityPayload> conditionalPayload() {
-        Set<EntityPayload> payload = new HashSet<>();
+        Set<EntityPayload> payload = new LinkedHashSet<>();
         for (OpInput o : inputs){
             if (o instanceof OpInput.Rune rune){
                 switch (rune.symbolName()){
@@ -104,7 +105,7 @@ public final class FireProjectileOp extends ProjectileEntityOp {
 
     @Override
     protected List<EntityPayload> payloadFor(OpRuntimeContext context) {
-        Set<EntityPayload> payload = new HashSet<>(defaultPayload());
+        Set<EntityPayload> payload = new LinkedHashSet<>(defaultPayload());
         payload.addAll(conditionalPayload());
         return payload(payload.stream().toList(), context);
     }

@@ -192,20 +192,21 @@ public final class WirelessOp implements PersistentOp, OpResolvable {
     @Override
     public OpResolution resolve(OpResolveContext context) {
         if (publishesSource() || context == null
-                || context.phase() != OpResolveContext.Phase.RUNTIME
-                || context.runtimeContext() == null
-                || context.runtimeContext().level() == null) {
+                || context.phase() != OpResolveContext.Phase.RUNTIME) {
             return OpResolution.unchanged(this, context);
+        }
+        if (context.runtimeContext() == null || context.runtimeContext().level() == null) {
+            return unresolved(context);
         }
         ServerLevel level = context.runtimeContext().level();
 
         WirelessRegistry registry = level.getData(ModAttachments.WIRELESS_REGISTRY);
         Optional<WirelessRegistry.Value> value = registry.value(key);
-        if (value.isEmpty()) return OpResolution.unchanged(this, context);
+        if (value.isEmpty()) return unresolved(context);
 
         MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);
         Optional<GroupNode> source = value.get().loadedSource(level, manager);
-        if (source.isEmpty()) return OpResolution.unchanged(this, context);
+        if (source.isEmpty()) return unresolved(context);
 
         GroupNode sourceGroup = source.get();
         ArrayObject sourceArray = value.get().runtimeArray(sourceGroup);
@@ -227,11 +228,24 @@ public final class WirelessOp implements PersistentOp, OpResolvable {
             return new OpResolution(success.value(), sourceGroup, sourceArray, sourceRuntime);
         }
 
-        String detail = compiled instanceof CompileResult.Failure<CompiledOp> failure
-                ? failure.diagnostics().toString() : "unknown compile result";
-        OpRuntimeFailure.terminate(context.runtimeContext(), this, OpRuntimeFailure.Kind.RUNTIME_ERROR,
-                "Wireless key " + key + " could not compile: " + detail);
-        return OpResolution.unchanged(this, context);
+        // A Wireless source is intentionally allowed to be an arbitrary
+        // authored structure.  In particular, a source consisting only of
+        // secret-text runes has no primary operator and therefore cannot be
+        // compiled as an executable array, but it is still a valid raw group
+        // for consumers such as ShapeOp.  Preserve the loaded source instead
+        // of falling back to the consumer's `space{...}` wrapper.
+        return new OpResolution(this, sourceGroup, sourceArray, sourceRuntime);
+    }
+
+    /**
+     * Do not preserve the consumer input as a source when the Wireless key is
+     * unavailable.  Parents can then report the actual missing-source error
+     * instead of trying to parse the `space` wrapper as their own payload.
+     */
+    private OpResolution unresolved(OpResolveContext context) {
+        return new OpResolution(this, null,
+                context == null ? null : context.array(),
+                context == null ? null : context.runtimeContext());
     }
 
     private static List<GroupNode> directSourceGroups(List<OpInput> inputs) {

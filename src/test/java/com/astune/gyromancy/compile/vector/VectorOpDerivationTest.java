@@ -33,6 +33,8 @@ class VectorOpDerivationTest {
         PositionedGlyph drain = glyph("drain", SymbolRole.PARAMETER_RUNE, 3);
         PositionedGlyph engaging = glyph("engaging", SymbolRole.PARAMETER_RUNE, 4);
         PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 5);
+        PositionedGlyph space = glyph("space", SymbolRole.CENTER_SYMBOL, 6);
+        PositionedGlyph revert = glyph("revert", SymbolRole.PARAMETER_RUNE, 7);
 
         VectorCompiler compiler = new VectorCompiler(VectorOpDefinitions.definitions());
 
@@ -44,6 +46,43 @@ class VectorOpDerivationTest {
                 group(circle, new SymbolNode(drain), new SymbolNode(arrow))));
         assertInstanceOf(ArrayNormalVectorOp.class, compile(compiler,
                 group(circle, new SymbolNode(engaging))));
+        assertInstanceOf(GravityVectorOp.class, compile(compiler,
+                group(circle, new SymbolNode(space))));
+        assertInstanceOf(RevertVectorOp.class, compile(compiler,
+                group(circle, new SymbolNode(revert), new SymbolNode(arrow))));
+    }
+
+    @Test
+    void gravityProvidesTheOwningEntityGravityAcceleration() {
+        GravityVectorOp gravity = new GravityVectorOp(
+                GravityVectorDefinition.ID, null, List.of(), 0);
+        VectorContext context = new VectorContext(null, null, null,
+                Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, 0L, 0.08);
+
+        assertVectorEquals(new Vec3(0.0, -0.08, 0.0), gravity.provide(context));
+    }
+
+    @Test
+    void gravityRejectsAdditionalVectorRunes() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph space = glyph("space", SymbolRole.CENTER_SYMBOL, 2);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3);
+        VectorCompiler compiler = new VectorCompiler(VectorOpDefinitions.definitions());
+
+        CompileResult<CompiledOp> result = compiler.compile(new OpInput.RawGroup(
+                group(circle, new SymbolNode(space), new SymbolNode(arrow)), List.of()));
+
+        assertInstanceOf(CompileResult.Failure.class, result);
+    }
+
+    @Test
+    void revertNegatesItsComposedVector() {
+        VectorOp input = vector(ignored -> new Vec3(1.0, -2.0, 3.0));
+        RevertVectorOp revert = new RevertVectorOp(
+                RevertVectorDefinition.ID, null, List.of(), 0,
+                List.of(new VectorComposition.Input(input, VectorComposition.Mode.DIRECT)));
+
+        assertVectorEquals(new Vec3(-1.0, 2.0, -3.0), revert.provide(context(Vec3.ZERO, 0L)));
     }
 
     @Test

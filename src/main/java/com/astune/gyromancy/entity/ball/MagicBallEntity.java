@@ -488,6 +488,11 @@ public abstract class MagicBallEntity extends MagicEntity {
         return MagicBallGeometry.inSphere(position(), target, radius);
     }
 
+    @Override
+    public final List<BlockPos> listInside() {
+        return containedPositions(getBallSize());
+    }
+
     protected List<BlockPos> containedPositions(float size) {
         return MagicBallGeometry.containedPositions(position(), size);
     }
