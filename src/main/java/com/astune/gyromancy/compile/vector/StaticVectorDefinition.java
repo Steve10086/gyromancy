@@ -8,7 +8,6 @@ import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.compile.operator.OpResolveContext;
-import com.astune.gyromancy.symbol.SecretTextSymbol;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
@@ -79,23 +78,10 @@ public final class StaticVectorDefinition {
                         VectorInputCompiler.all(boundary, inputs, VectorDefinitionSupport.compiler(),
                                 effectiveContext),
                         VectorDefinitionSupport.containsRune(inputs, "curl"),
-                        secretScale(inputs)));
+                        VectorOp.secretScale(inputs),
+                        VectorDefinitionSupport.containsRune(inputs, "revert")));
             }
         };
-    }
-
-    private static double secretScale(List<OpInput> inputs) {
-        int mask = 0;
-        for (OpInput input : inputs) {
-            if (!(input instanceof OpInput.Rune rune)) continue;
-            SecretTextSymbol secretText = SecretTextSymbol.fromId(rune.glyph().symbolId());
-            if (secretText == null) continue;
-            mask |= 1 << secretText.type().ordinal();
-        }
-        if (mask == 0) return 1.0;
-        int size = mask >> 1;
-        if (size == 0) return 1.0;
-        return (mask & 1) != 0 ? 1.0 / size : size;
     }
 
     private static StaticVectorOp.Term directionTerm(PositionedGlyph boundary,

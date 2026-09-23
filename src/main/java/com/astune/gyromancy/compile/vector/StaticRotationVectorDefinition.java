@@ -50,7 +50,9 @@ final class StaticRotationVectorDefinition {
                         ID, boundary, inputs, 0,
                         VectorInputCompiler.all(boundary, inputs, VectorDefinitionSupport.compiler(),
                                 effectiveContext),
-                        VectorDefinitionSupport.containsRune(inputs, "curl")));
+                        VectorDefinitionSupport.containsRune(inputs, "curl"),
+                        VectorOp.secretScale(inputs),
+                        VectorDefinitionSupport.containsRune(inputs, "revert")));
             }
     };
 

@@ -9,18 +9,23 @@ import java.util.List;
 
 /** Provides the current array normal, with the available frame as fallback. */
 public final class ArrayNormalVectorOp extends VectorOp {
-    private final double scale;
+    private final double normalScale;
 
     public ArrayNormalVectorOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> inputs,
-                               int color, double scale) {
-        super(id, boundary, inputs, color);
-        this.scale = scale;
+                               int color, double normalScale) {
+        this(id, boundary, inputs, color, normalScale, 1.0, false);
     }
 
-    public double scale() { return scale; }
+    ArrayNormalVectorOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> inputs,
+                        int color, double normalScale, double scale, boolean reverted) {
+        super(id, boundary, inputs, color, scale, reverted);
+        this.normalScale = normalScale;
+    }
+
+    public double normalScale() { return normalScale; }
 
     @Override
-    public Vec3 provide(VectorContext context) {
+    protected Vec3 provideVector(VectorContext context) {
         Vec3 normal = context.liveFrame()
                 .map(frame -> frame.normal())
                 .orElseGet(() -> context.arrayNormal().lengthSqr() > 1.0E-8
@@ -29,6 +34,6 @@ public final class ArrayNormalVectorOp extends VectorOp {
                         .or(() -> context.compileFrame())
                         .map(frame -> frame.normal())
                         .orElse(Vec3.ZERO));
-        return normal.lengthSqr() < 1.0E-8 ? Vec3.ZERO : normal.normalize().scale(scale);
+        return normal.lengthSqr() < 1.0E-8 ? Vec3.ZERO : normal.normalize().scale(normalScale);
     }
 }

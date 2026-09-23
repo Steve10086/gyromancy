@@ -11,11 +11,16 @@ import java.util.List;
 public final class GravityVectorOp extends VectorOp {
     GravityVectorOp(ResourceLocation id, PositionedGlyph boundary,
                      List<OpInput> inputs, int color) {
-        super(id, boundary, inputs, color);
+        this(id, boundary, inputs, color, 1.0, false);
+    }
+
+    GravityVectorOp(ResourceLocation id, PositionedGlyph boundary,
+                    List<OpInput> inputs, int color, double scale, boolean reverted) {
+        super(id, boundary, inputs, color, scale, reverted);
     }
 
     @Override
-    public Vec3 provide(VectorContext context) {
+    protected Vec3 provideVector(VectorContext context) {
         double gravity = context == null ? 0.0 : context.gravity();
         return Double.isFinite(gravity) && gravity != 0.0
                 ? new Vec3(0.0, -gravity, 0.0)

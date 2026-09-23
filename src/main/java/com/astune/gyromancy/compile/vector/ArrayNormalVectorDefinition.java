@@ -28,7 +28,7 @@ final class ArrayNormalVectorDefinition {
 
         @Override
         public List<OpInputMatcher> accepted() {
-            return List.of();
+            return VectorDefinitionSupport.modifiers();
         }
 
         @Override
@@ -36,7 +36,9 @@ final class ArrayNormalVectorDefinition {
                                                  List<OpInput> matchedInputs,
                                                  List<OpInput> inputs) {
             return new CompileResult.Success<>(new ArrayNormalVectorOp(
-                    ID, boundary, inputs, 0, 1));
+                    ID, boundary, inputs, 0, 1,
+                    VectorOp.secretScale(inputs),
+                    VectorDefinitionSupport.containsRune(inputs, "revert")));
         }
     };
 

@@ -16,14 +16,21 @@ public final class RotationVectorOp extends VectorOp {
     RotationVectorOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> rawInputs,
                      int color, List<VectorComposition.Input> axisInputs,
                      List<VectorComposition.Input> vectorInputs, double rotationSpeed) {
-        super(id, boundary, rawInputs, color);
+        this(id, boundary, rawInputs, color, axisInputs, vectorInputs, rotationSpeed, 1.0, false);
+    }
+
+    RotationVectorOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> rawInputs,
+                     int color, List<VectorComposition.Input> axisInputs,
+                     List<VectorComposition.Input> vectorInputs, double rotationSpeed,
+                     double scale, boolean reverted) {
+        super(id, boundary, rawInputs, color, scale, reverted);
         this.axisInputs = List.copyOf(axisInputs);
         this.vectorInputs = List.copyOf(vectorInputs);
         this.rotationSpeed = rotationSpeed;
     }
 
     @Override
-    public Vec3 provide(VectorContext context) {
+    protected Vec3 provideVector(VectorContext context) {
         // Only the authored nested vector may be rotated. Never fall back to
         // the entity's own facing or velocity: that would let the array
         // synthesize motion out of nothing and feed its own state back in.
@@ -34,7 +41,8 @@ public final class RotationVectorOp extends VectorOp {
         if (axis.lengthSqr() < 1.0E-8) axis = VectorFrameMath.movementAxis(context);
         if (axis.lengthSqr() < 1.0E-8) return Vec3.ZERO;
 
-        double radians = Math.toRadians(rotationSpeed * context.tick());
+        double speed = reverted() ? -rotationSpeed : rotationSpeed;
+        double radians = Math.toRadians(speed * context.tick());
         Vec3 rotated = VectorFrameMath.rotateAroundAxis(result, axis, radians);
         if (context.tick() < 12) {
             com.astune.gyromancy.Gyromancy.LOGGER.debug(
@@ -42,6 +50,11 @@ public final class RotationVectorOp extends VectorOp {
                     context.tick(), result, axis, rotationSpeed, rotated);
         }
         return rotated;
+    }
+
+    @Override
+    protected Vec3 applyRevert(Vec3 vector) {
+        return vector;
     }
 
     List<VectorComposition.Input> axisInputs() {

@@ -29,7 +29,7 @@ final class GravityVectorDefinition {
 
         @Override
         public List<OpInputMatcher> accepted() {
-            return List.of();
+            return VectorDefinitionSupport.modifiers();
         }
 
         @Override
@@ -37,7 +37,9 @@ final class GravityVectorDefinition {
                                                   List<OpInput> matchedInputs,
                                                   List<OpInput> inputs) {
             return new CompileResult.Success<>(new GravityVectorOp(
-                    ID, boundary, inputs, 0));
+                    ID, boundary, inputs, 0,
+                    VectorOp.secretScale(inputs),
+                    VectorDefinitionSupport.containsRune(inputs, "revert")));
         }
     };
 

@@ -1,6 +1,7 @@
 package com.astune.gyromancy.compile.vector;
 
 import com.astune.gyromancy.Gyromancy;
+import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -41,18 +42,36 @@ public final class VectorOpSerialization {
             TERM_CODEC.listOf().fieldOf("terms").forGetter(StaticVectorData::terms),
             INPUT_CODEC.listOf().fieldOf("inputs").forGetter(StaticVectorData::inputs),
             Codec.BOOL.fieldOf("curl").forGetter(StaticVectorData::curl),
-            Codec.DOUBLE.optionalFieldOf("scale", 1.0).forGetter(StaticVectorData::scale)
+            Codec.DOUBLE.optionalFieldOf("scale", 1.0).forGetter(StaticVectorData::scale),
+            Codec.BOOL.optionalFieldOf("reverted", false).forGetter(StaticVectorData::reverted)
     ).apply(instance, StaticVectorData::new));
     private static final Codec<RotationVectorData> ROTATION_VECTOR_CODEC = RecordCodecBuilder.create(instance -> instance.group(
             INPUT_CODEC.listOf().fieldOf("axis_inputs").forGetter(RotationVectorData::axisInputs),
             INPUT_CODEC.listOf().fieldOf("vector_inputs").forGetter(RotationVectorData::vectorInputs),
-            Codec.DOUBLE.fieldOf("rotation_speed").forGetter(RotationVectorData::rotationSpeed)
+            Codec.DOUBLE.fieldOf("rotation_speed").forGetter(RotationVectorData::rotationSpeed),
+            Codec.DOUBLE.optionalFieldOf("scale", 1.0).forGetter(RotationVectorData::scale),
+            Codec.BOOL.optionalFieldOf("reverted", false).forGetter(RotationVectorData::reverted)
     ).apply(instance, RotationVectorData::new));
     private static final Codec<StaticRotationVectorData> STATIC_ROTATION_VECTOR_CODEC = RecordCodecBuilder.create(instance -> instance.group(
             INPUT_CODEC.listOf().fieldOf("inputs").forGetter(StaticRotationVectorData::inputs),
-            Codec.BOOL.fieldOf("curl").forGetter(StaticRotationVectorData::curl)
+            Codec.BOOL.fieldOf("curl").forGetter(StaticRotationVectorData::curl),
+            Codec.DOUBLE.optionalFieldOf("scale", 1.0).forGetter(StaticRotationVectorData::scale),
+            Codec.BOOL.optionalFieldOf("reverted", false).forGetter(StaticRotationVectorData::reverted)
     ).apply(instance, StaticRotationVectorData::new));
-    private static final Codec<RevertVectorData> REVERT_VECTOR_CODEC = RecordCodecBuilder.create(instance -> instance.group(
+    private static final Codec<ArrayNormalData> ARRAY_NORMAL_CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.DOUBLE.optionalFieldOf("normal_scale", 1.0).forGetter(ArrayNormalData::normalScale),
+            Codec.DOUBLE.optionalFieldOf("scale", 1.0).forGetter(ArrayNormalData::scale),
+            Codec.BOOL.optionalFieldOf("reverted", false).forGetter(ArrayNormalData::reverted)
+    ).apply(instance, ArrayNormalData::new));
+    private static final Codec<GravityData> GRAVITY_CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.DOUBLE.optionalFieldOf("scale", 1.0).forGetter(GravityData::scale),
+            Codec.BOOL.optionalFieldOf("reverted", false).forGetter(GravityData::reverted)
+    ).apply(instance, GravityData::new));
+    private static final Codec<SpeedData> SPEED_CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.DOUBLE.optionalFieldOf("scale", 1.0).forGetter(SpeedData::scale),
+            Codec.BOOL.optionalFieldOf("reverted", false).forGetter(SpeedData::reverted)
+    ).apply(instance, SpeedData::new));
+    private static final Codec<RevertVectorData> LEGACY_REVERT_CODEC = RecordCodecBuilder.create(instance -> instance.group(
             INPUT_CODEC.listOf().fieldOf("inputs").forGetter(RevertVectorData::inputs)
     ).apply(instance, RevertVectorData::new));
 
@@ -74,9 +93,10 @@ public final class VectorOpSerialization {
             public Codec<StaticVectorOp> codec() {
                 return STATIC_VECTOR_CODEC.xmap(
                         data -> new StaticVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0,
-                                data.terms(), deserializeInputs(data.inputs()), data.curl(), data.scale()),
+                                data.terms(), deserializeInputs(data.inputs()), data.curl(),
+                                data.scale(), data.reverted()),
                         vector -> new StaticVectorData(vector.terms(), serializeInputs(vector.vectorInputs()),
-                                vector.curl(), vector.scale()));
+                                vector.curl(), vector.scale(), vector.reverted()));
             }
         });
         register(new Adapter<RotationVectorOp>() {
@@ -95,9 +115,10 @@ public final class VectorOpSerialization {
                 return ROTATION_VECTOR_CODEC.xmap(
                         data -> new RotationVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0,
                                 deserializeInputs(data.axisInputs()), deserializeInputs(data.vectorInputs()),
-                                data.rotationSpeed()),
+                                data.rotationSpeed(), data.scale(), data.reverted()),
                         vector -> new RotationVectorData(serializeInputs(vector.axisInputs()),
-                                serializeInputs(vector.vectorInputs()), vector.rotationSpeed()));
+                                serializeInputs(vector.vectorInputs()), vector.rotationSpeed(),
+                                vector.scale(), vector.reverted()));
             }
         });
         register(new Adapter<StaticRotationVectorOp>() {
@@ -115,9 +136,9 @@ public final class VectorOpSerialization {
             public Codec<StaticRotationVectorOp> codec() {
                 return STATIC_ROTATION_VECTOR_CODEC.xmap(
                         data -> new StaticRotationVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0,
-                                deserializeInputs(data.inputs()), data.curl()),
+                                deserializeInputs(data.inputs()), data.curl(), data.scale(), data.reverted()),
                         vector -> new StaticRotationVectorData(serializeInputs(vector.vectorInputs()),
-                                vector.curl()));
+                                vector.curl(), vector.scale(), vector.reverted()));
             }
         });
         register(new Adapter<ArrayNormalVectorOp>() {
@@ -133,14 +154,19 @@ public final class VectorOpSerialization {
 
             @Override
             public Codec<ArrayNormalVectorOp> codec() {
-                return Codec.DOUBLE.xmap(
-                        scale -> new ArrayNormalVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0, scale),
-                        ArrayNormalVectorOp::scale);
+                return Codec.either(Codec.DOUBLE, ARRAY_NORMAL_CODEC).xmap(
+                        either -> either.map(
+                                normalScale -> new ArrayNormalVectorOp(VectorOp.RUNTIME_ID, null,
+                                        List.of(), 0, normalScale),
+                                data -> new ArrayNormalVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0,
+                                        data.normalScale(), data.scale(), data.reverted())),
+                        vector -> Either.right(new ArrayNormalData(
+                                vector.normalScale(), vector.scale(), vector.reverted())));
             }
 
             @Override
             public Optional<LegacyData> encodeLegacy(ArrayNormalVectorOp vector) {
-                return Optional.of(LegacyData.scalar(vector.scale(), "array_normal", false));
+                return Optional.of(LegacyData.scalar(vector.normalScale(), "array_normal", false));
             }
         });
         register(new Adapter<GravityVectorOp>() {
@@ -156,7 +182,10 @@ public final class VectorOpSerialization {
 
             @Override
             public Codec<GravityVectorOp> codec() {
-                return Codec.unit(() -> new GravityVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0));
+                return GRAVITY_CODEC.xmap(
+                        data -> new GravityVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0,
+                                data.scale(), data.reverted()),
+                        vector -> new GravityData(vector.scale(), vector.reverted()));
             }
         });
         register(new Adapter<SpeedOp>() {
@@ -172,26 +201,10 @@ public final class VectorOpSerialization {
 
             @Override
             public Codec<SpeedOp> codec() {
-                return Codec.unit(() -> new SpeedOp(VectorOp.RUNTIME_ID, null, List.of(), 0));
-            }
-        });
-        register(new Adapter<RevertVectorOp>() {
-            @Override
-            public ResourceLocation id() {
-                return adapterId("revert_vector");
-            }
-
-            @Override
-            public Class<RevertVectorOp> vectorType() {
-                return RevertVectorOp.class;
-            }
-
-            @Override
-            public Codec<RevertVectorOp> codec() {
-                return REVERT_VECTOR_CODEC.xmap(
-                        data -> new RevertVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0,
-                                deserializeInputs(data.inputs())),
-                        vector -> new RevertVectorData(serializeInputs(vector.vectorInputs())));
+                return SPEED_CODEC.xmap(
+                        data -> new SpeedOp(VectorOp.RUNTIME_ID, null, List.of(), 0,
+                                data.scale(), data.reverted()),
+                        vector -> new SpeedData(vector.scale(), vector.reverted()));
             }
         });
     }
@@ -222,7 +235,7 @@ public final class VectorOpSerialization {
 
     public static Optional<LegacyData> encodeLegacy(VectorOp vector) {
         if (vector instanceof StaticVectorOp staticVector && staticVector.terms().size() == 1
-                && staticVector.scale() == 1.0) {
+                && staticVector.scale() == 1.0 && !staticVector.reverted()) {
             StaticVectorOp.Term term = staticVector.terms().getFirst();
             return switch (term.kind()) {
                 case WORLD -> Optional.of(LegacyData.world(term.value(), "compile_snapshot", false));
@@ -263,6 +276,11 @@ public final class VectorOpSerialization {
                     new Vec3(serialized.data().decode(Codec.DOUBLE).getOrThrow().getFirst(), 0.0, 0.0)));
             case "normal" -> direct(new StaticVectorOp.Term(StaticVectorOp.TermKind.NORMAL,
                     new Vec3(serialized.data().decode(Codec.DOUBLE).getOrThrow().getFirst(), 0.0, 0.0)));
+            case "revert_vector" -> {
+                RevertVectorData data = serialized.data().decode(LEGACY_REVERT_CODEC).getOrThrow().getFirst();
+                yield new StaticVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0,
+                        List.of(), deserializeInputs(data.inputs()), false, 1.0, true);
+            }
             default -> throw new IllegalArgumentException(
                     "Unknown vector op adapter: " + serialized.type());
         };
@@ -364,13 +382,21 @@ public final class VectorOpSerialization {
     private record SerializedInput(SerializedVector vector, VectorComposition.Mode mode) {}
 
     private record StaticVectorData(List<StaticVectorOp.Term> terms,
-                                    List<SerializedInput> inputs, boolean curl, double scale) {}
+                                    List<SerializedInput> inputs, boolean curl,
+                                    double scale, boolean reverted) {}
 
     private record RotationVectorData(List<SerializedInput> axisInputs,
                                       List<SerializedInput> vectorInputs,
-                                      double rotationSpeed) {}
+                                      double rotationSpeed, double scale, boolean reverted) {}
 
-    private record StaticRotationVectorData(List<SerializedInput> inputs, boolean curl) {}
+    private record StaticRotationVectorData(List<SerializedInput> inputs, boolean curl,
+                                            double scale, boolean reverted) {}
+
+    private record ArrayNormalData(double normalScale, double scale, boolean reverted) {}
+
+    private record GravityData(double scale, boolean reverted) {}
+
+    private record SpeedData(double scale, boolean reverted) {}
 
     private record RevertVectorData(List<SerializedInput> inputs) {}
 

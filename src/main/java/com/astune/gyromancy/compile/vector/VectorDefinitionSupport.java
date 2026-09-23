@@ -19,8 +19,10 @@ final class VectorDefinitionSupport {
         List<OpInputMatcher> accepted = new ArrayList<>(List.of(
                 OpInputMatcher.rune("arrow"),
                 OpInputMatcher.rune("arrow_up"),
+                OpInputMatcher.rune("revert"),
                 OpInputMatcher.boundary(SymbolRole.OUTER_CIRCLE),
-                OpInputMatcher.rawGroup(SymbolRole.OUTER_CIRCLE)));
+                OpInputMatcher.rawGroup(SymbolRole.OUTER_CIRCLE),
+                OpInputMatcher.secretText()));
         if (acceptsCurl) accepted.add(OpInputMatcher.rune("curl"));
         return List.copyOf(accepted);
     }
@@ -30,6 +32,7 @@ final class VectorDefinitionSupport {
         return List.of(
                 OpInputMatcher.rune("arrow"),
                 OpInputMatcher.rune("arrow_up"),
+                OpInputMatcher.rune("revert"),
                 OpInputMatcher.rune("curl"),
                 OpInputMatcher.boundary(SymbolRole.OUTER_CIRCLE),
                 OpInputMatcher.rawGroup(SymbolRole.OUTER_CIRCLE),
@@ -40,8 +43,16 @@ final class VectorDefinitionSupport {
     static List<OpInputMatcher> rawGroupAccepted() {
         return List.of(
                 OpInputMatcher.rawGroup(),
+                OpInputMatcher.rune("revert"),
                 OpInputMatcher.rune("curl"),
                 OpInputMatcher.boundary(SymbolRole.OUTER_CIRCLE),
+                OpInputMatcher.secretText());
+    }
+
+    /** The shared revert and scaler runes every vector op consumes. */
+    static List<OpInputMatcher> modifiers() {
+        return List.of(
+                OpInputMatcher.rune("revert"),
                 OpInputMatcher.secretText());
     }
 

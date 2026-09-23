@@ -52,7 +52,9 @@ final class RotationVectorDefinition {
                         ID, boundary, inputs, 0,
                     VectorInputCompiler.groups(inputs, VectorDefinitionSupport.compiler(), effectiveContext),
                         VectorInputCompiler.direct(boundary, inputs),
-                        loop.length() * ROTATION_SPEED_SCALE));
+                        loop.length() * ROTATION_SPEED_SCALE,
+                        VectorOp.secretScale(inputs),
+                        VectorDefinitionSupport.containsRune(inputs, "revert")));
             }
     };
 

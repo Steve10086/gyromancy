@@ -9,11 +9,16 @@ import java.util.List;
 
 public final class SpeedOp extends VectorOp {
     SpeedOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> inputs, int color) {
-        super(id, boundary, inputs, color);
+        this(id, boundary, inputs, color, 1.0, false);
+    }
+
+    SpeedOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> inputs, int color,
+            double scale, boolean reverted) {
+        super(id, boundary, inputs, color, scale, reverted);
     }
 
     @Override
-    public Vec3 provide(VectorContext context) {
+    protected Vec3 provideVector(VectorContext context) {
         return context == null ? Vec3.ZERO : context.velocity();
     }
 }

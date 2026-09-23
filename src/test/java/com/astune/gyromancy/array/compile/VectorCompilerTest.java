@@ -177,7 +177,7 @@ class VectorCompilerTest {
     private static VectorOp vector(Function<VectorContext, Vec3> function) {
         return new VectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0) {
             @Override
-            public Vec3 provide(VectorContext context) {
+            protected Vec3 provideVector(VectorContext context) {
                 return function.apply(context);
             }
         };

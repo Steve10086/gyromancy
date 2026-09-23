@@ -28,14 +28,16 @@ final class SpeedVectorDefinition {
 
         @Override
         public List<OpInputMatcher> accepted() {
-            return List.of();
+            return VectorDefinitionSupport.modifiers();
         }
 
         @Override
         public CompileResult<CompiledOp> compile(PositionedGlyph boundary,
                                                   List<OpInput> matchedInputs,
                                                   List<OpInput> inputs) {
-            return new CompileResult.Success<>(new SpeedOp(ID, boundary, inputs, 0));
+            return new CompileResult.Success<>(new SpeedOp(ID, boundary, inputs, 0,
+                    VectorOp.secretScale(inputs),
+                    VectorDefinitionSupport.containsRune(inputs, "revert")));
         }
     };
 

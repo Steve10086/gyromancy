@@ -319,7 +319,7 @@ class MomentumOpTest {
     private static VectorOp vector(Function<VectorContext, Vec3> function) {
         return new VectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0) {
             @Override
-            public Vec3 provide(VectorContext context) {
+            protected Vec3 provideVector(VectorContext context) {
                 return function.apply(context);
             }
         };
@@ -366,7 +366,7 @@ class MomentumOpTest {
         }
 
         @Override
-        public Vec3 provide(VectorContext context) {
+        protected Vec3 provideVector(VectorContext context) {
             calls++;
             return calls == 1 ? new Vec3(1.0, 0.0, 0.0) : new Vec3(0.0, 1.0, 0.0);
         }

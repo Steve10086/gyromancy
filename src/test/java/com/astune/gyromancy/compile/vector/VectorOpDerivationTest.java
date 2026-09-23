@@ -50,7 +50,7 @@ class VectorOpDerivationTest {
                 group(circle, new SymbolNode(engaging))));
         assertInstanceOf(GravityVectorOp.class, compile(compiler,
                 group(circle, new SymbolNode(space))));
-        assertInstanceOf(RevertVectorOp.class, compile(compiler,
+        assertInstanceOf(StaticVectorOp.class, compile(compiler,
                 group(circle, new SymbolNode(revert), new SymbolNode(arrow))));
     }
 
@@ -157,13 +157,38 @@ class VectorOpDerivationTest {
     }
 
     @Test
-    void revertNegatesItsComposedVector() {
-        VectorOp input = vector(ignored -> new Vec3(1.0, -2.0, 3.0));
-        RevertVectorOp revert = new RevertVectorOp(
-                RevertVectorDefinition.ID, null, List.of(), 0,
-                List.of(new VectorComposition.Input(input, VectorComposition.Mode.DIRECT)));
+    void revertNegatesTheVectorItIsAttachedTo() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph revert = glyph("revert", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
+        PositionedGlyph space = glyph("space", SymbolRole.CENTER_SYMBOL, 4);
+        VectorCompiler compiler = new VectorCompiler(VectorOpDefinitions.definitions());
+        VectorContext context = new VectorContext(null, null, null,
+                Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, 0L, 0.08);
 
-        assertVectorEquals(new Vec3(-1.0, 2.0, -3.0), revert.provide(context(Vec3.ZERO, 0L)));
+        VectorOp wrapped = assertInstanceOf(StaticVectorOp.class, compile(compiler,
+                group(circle, new SymbolNode(revert), group(inner, new SymbolNode(space)))));
+        assertVectorEquals(new Vec3(0.0, 0.08, 0.0), wrapped.provide(context));
+
+        GravityVectorOp direct = new GravityVectorOp(
+                GravityVectorDefinition.ID, null, List.of(), 0, 1.0, true);
+        assertVectorEquals(new Vec3(0.0, 0.08, 0.0), direct.provide(context));
+    }
+
+    @Test
+    void modifiersApplyToLeafVectorOps() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph space = glyph("space", SymbolRole.CENTER_SYMBOL, 2);
+        PositionedGlyph revert = glyph("revert", SymbolRole.PARAMETER_RUNE, 3);
+        PositionedGlyph secret = glyph("secret_text_3", SymbolRole.PARAMETER_RUNE, 4);
+        VectorCompiler compiler = new VectorCompiler(VectorOpDefinitions.definitions());
+        VectorContext context = new VectorContext(null, null, null,
+                Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, 0L, 0.08);
+
+        VectorOp gravity = assertInstanceOf(GravityVectorOp.class, compile(compiler,
+                group(circle, new SymbolNode(space), new SymbolNode(revert), new SymbolNode(secret))));
+
+        assertVectorEquals(new Vec3(0.0, 0.16, 0.0), gravity.provide(context));
     }
 
     @Test
@@ -180,6 +205,41 @@ class VectorOpDerivationTest {
 
         assertVectorEquals(new Vec3(0.0, 1.0, 0.0), rotation.provide(firstTick));
         assertVectorEquals(new Vec3(-1.0, 0.0, 0.0), rotation.provide(secondTick));
+    }
+
+    @Test
+    void rotationInterpretsRevertAsAReversedRotation() {
+        VectorOp input = vector(ignored -> new Vec3(1.0, 0.0, 0.0));
+        RotationVectorOp forward = new RotationVectorOp(
+                RotationVectorDefinition.ID, null, List.of(), 0,
+                List.of(),
+                List.of(new VectorComposition.Input(input, VectorComposition.Mode.DIRECT)),
+                60.0);
+        RotationVectorOp reversed = new RotationVectorOp(
+                RotationVectorDefinition.ID, null, List.of(), 0,
+                List.of(),
+                List.of(new VectorComposition.Input(input, VectorComposition.Mode.DIRECT)),
+                60.0, 1.0, true);
+        VectorContext tick = context(new Vec3(0.0, 0.0, 1.0), 1L);
+
+        assertVectorEquals(new Vec3(0.5, Math.sqrt(3.0) / 2.0, 0.0), forward.provide(tick));
+        assertVectorEquals(new Vec3(0.5, -Math.sqrt(3.0) / 2.0, 0.0), reversed.provide(tick));
+    }
+
+    @Test
+    void staticRotationInterpretsRevertAsAReversedTarget() {
+        VectorOp input = vector(ignored -> new Vec3(0.0, 1.0, 1.0));
+        StaticRotationVectorOp forward = new StaticRotationVectorOp(
+                StaticRotationVectorDefinition.ID, null, List.of(), 0,
+                List.of(new VectorComposition.Input(input, VectorComposition.Mode.DIRECT)), false);
+        StaticRotationVectorOp reversed = new StaticRotationVectorOp(
+                StaticRotationVectorDefinition.ID, null, List.of(), 0,
+                List.of(new VectorComposition.Input(input, VectorComposition.Mode.DIRECT)), false,
+                1.0, true);
+        VectorContext context = context(Vec3.ZERO, 0L);
+
+        assertVectorEquals(new Vec3(Math.PI / 4.0, 0.0, 0.0), forward.provide(context));
+        assertVectorEquals(new Vec3(-3.0 * Math.PI / 4.0, 0.0, 0.0), reversed.provide(context));
     }
 
     @Test
@@ -259,7 +319,7 @@ class VectorOpDerivationTest {
     private static VectorOp vector(Function<VectorContext, Vec3> function) {
         return new VectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0) {
             @Override
-            public Vec3 provide(VectorContext context) {
+            protected Vec3 provideVector(VectorContext context) {
                 return function.apply(context);
             }
         };

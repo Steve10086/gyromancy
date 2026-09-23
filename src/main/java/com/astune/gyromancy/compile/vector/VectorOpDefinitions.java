@@ -17,7 +17,6 @@ public final class VectorOpDefinitions {
                 ArrayNormalVectorDefinition.DEFINITION,
                 SpeedVectorDefinition.DEFINITION,
                 GravityVectorDefinition.DEFINITION,
-                RevertVectorDefinition.DEFINITION,
                 StaticVectorDefinition.RAW_GROUP);
     }
 

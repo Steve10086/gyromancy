@@ -14,16 +14,28 @@ public final class StaticRotationVectorOp extends VectorOp {
 
     StaticRotationVectorOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> rawInputs,
                            int color, List<VectorComposition.Input> inputs, boolean curl) {
-        super(id, boundary, rawInputs, color);
+        this(id, boundary, rawInputs, color, inputs, curl, 1.0, false);
+    }
+
+    StaticRotationVectorOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> rawInputs,
+                           int color, List<VectorComposition.Input> inputs, boolean curl,
+                           double scale, boolean reverted) {
+        super(id, boundary, rawInputs, color, scale, reverted);
         this.inputs = List.copyOf(inputs);
         this.curl = curl;
     }
 
     @Override
-    public Vec3 provide(VectorContext context) {
+    protected Vec3 provideVector(VectorContext context) {
         Vec3 target = VectorComposition.compose(context, inputs);
         if (curl) target = VectorFrameMath.orientByMovement(target, context);
+        if (reverted()) target = target.scale(-1.0);
         return VectorFrameMath.worldYRotationTo(target);
+    }
+
+    @Override
+    protected Vec3 applyRevert(Vec3 vector) {
+        return vector;
     }
 
     List<VectorComposition.Input> vectorInputs() {
