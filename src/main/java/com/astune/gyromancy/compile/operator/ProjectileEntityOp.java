@@ -20,6 +20,7 @@ import java.util.*;
 
 public abstract class ProjectileEntityOp  extends EntityEffectOp {
     private static final String SHAPE_UNSUPPORTED = "projectile_rejects_shape";
+    private static final double PROJECTILE_GRAVITY = 0.04 * 0.5;
 
     protected ProjectileEntityOp(ResourceLocation id, ElementType element, PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
         super(id, element, boundary, matchedInputs, inputs);
@@ -37,11 +38,17 @@ public abstract class ProjectileEntityOp  extends EntityEffectOp {
         for (EmitOp.Emission emission : emissions(ctx)) {
             float size = Math.max(0.1F, scale(ctx) * emission.sizeScale());
             Vec3 pos = center.add(normal.scale(size * 2.0));
-            Vec3 acceleration = emission.hasMotion() ? new Vec3(0.0, -0.04 * 0.5, 0.0) : Vec3.ZERO;
+            Vec3 acceleration = Vec3.ZERO;
             MagicBallEntity entity = create(level, pos, emission.velocity(), acceleration, size);
-            entity.setParentBindingAllowed(ctx.assignParent());
+            if (emission.hasMotion() || emission.velocity().lengthSqr() > 0.0
+                    || acceleration.lengthSqr() > 0.0) {
+                entity.setGravity(PROJECTILE_GRAVITY);
+            }            entity.setParentBindingAllowed(ctx.assignParent());
             if (ctx.assignParent()) entity.setParent(ctx.parent());
             List<EntityPayload> entityPayload = new ArrayList<>(payloadFor(ctx));
+            com.astune.gyromancy.Gyromancy.LOGGER.debug(
+                    "[Projectile] {} payloads={}", getId(),
+                    entityPayload.stream().map(ProjectileEntityOp::describePayload).toList());
             entity.setPayload(entityPayload);
             EntityEmitter.INSTANCE.emit(level, getId(), entity, result);
         }
@@ -64,6 +71,17 @@ public abstract class ProjectileEntityOp  extends EntityEffectOp {
     }
 
     public abstract MagicBallEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size);
+
+    private static String describePayload(EntityPayload payload) {
+        if (!(payload instanceof MomentumOp momentum)) {
+            return payload.getClass().getSimpleName();
+        }
+        return "Momentum(" + momentum.phase()
+                + " accel=" + momentum.accelerationInputs().size()
+                + " modes=" + momentum.accelerationInputs().stream()
+                .map(input -> input.updateMode().name())
+                .toList() + ")";
+    }
 
     /** A field shape has no projectile meaning and is rejected during compilation. */
     protected static <T extends CompiledOp> CompileResult<T> rejectUnsupportedInputs(

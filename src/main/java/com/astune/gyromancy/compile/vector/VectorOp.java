@@ -2,8 +2,6 @@ package com.astune.gyromancy.compile.vector;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.compile.operator.CompiledOp;
-import com.astune.gyromancy.compile.operator.EmitOp;
-import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
@@ -62,13 +60,4 @@ public abstract class VectorOp implements CompiledOp {
         return color;
     }
 
-    @Override
-    public final EmitOp.Emission modifyEntityEmission(EmitOp.Emission emission,
-                                                      com.astune.gyromancy.array.runtime.OpRuntimeContext context) {
-        return emission;
-    }
-
-    @Override
-    public final void contributeEntityPayloads(List<EntityPayload> payloads,
-                                               com.astune.gyromancy.array.runtime.OpRuntimeContext context) {}
 }

@@ -3,6 +3,8 @@ package com.astune.gyromancy.compile.operator;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.CompileResult;
+import com.astune.gyromancy.array.compile.LocalCompileContext;
+import com.astune.gyromancy.array.compile.LocalCompileResult;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
@@ -19,7 +21,7 @@ import java.util.List;
 import java.util.Optional;
 
 @RegisteredOp
-public final class SplitEmitOp extends EmitOp {
+public final class SplitEmitOp extends EmitOp implements LocalCompilable {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "split_emit");
     private static final ResourceLocation SPLIT_SYMBOL =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "split");
@@ -56,6 +58,15 @@ public final class SplitEmitOp extends EmitOp {
     }
 
     @Override
+    public LocalCompileResult localCompile(LocalCompileContext context) {
+        List<OpInput> materialized = inputs().stream()
+                .map(context::materialize)
+                .toList();
+        return LocalCompileResult.success(new SplitEmitOp(
+                boundary(), matchedInputs(), materialized));
+    }
+
+    @Override
     public List<Emission> emissions() {
         return emissions(OpRuntimeContext.empty());
     }
@@ -72,21 +83,16 @@ public final class SplitEmitOp extends EmitOp {
                         .map(SplitEmitOp::emission)
                         .ifPresent(emissions::add);
             } else if (input instanceof OpInput.Op) {
-                OpRuntimeContext runtime = context == null ? OpRuntimeContext.empty() : context;
-                OpResolution resolved = OpResolver.resolve(input,
-                        OpResolveContext.forRuntime(this,
-                                OpResolveContext.UseSite.ENTITY_EMISSION,
-                                runtime, boundary()));
-                if (!OpInputMatcher.anyMatches(MOMENTUM_MATCHERS, resolved)
-                        || !(resolved.operator() instanceof MomentumOp momentum)) {
-                    OpRuntimeFailure.terminate(resolved.runtimeContextOr(runtime), this,
+                OpInput.Op child = (OpInput.Op) input;
+                if (!(child.operator() instanceof MomentumOp momentum)) {
+                    OpRuntimeFailure.terminate(context, this,
                             OpRuntimeFailure.Kind.RUNTIME_ERROR,
-                            "Split requires a MomentumOp after dynamic resolution");
+                            "Split requires a MomentumOp after static compilation");
                     return List.of();
                 }
                 emissions.add(momentum.modifyEntityEmission(
                         new Emission(Vec3.ZERO, 0.0, 1.0F, false),
-                        resolved.runtimeContextOr(runtime)));
+                        context));
             }
         }
         if (emissions.isEmpty()) return List.of();

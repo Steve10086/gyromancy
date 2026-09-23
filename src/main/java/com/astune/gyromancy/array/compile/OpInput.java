@@ -12,9 +12,23 @@ public sealed interface OpInput permits OpInput.Rune, OpInput.Op, OpInput.RawGro
         }
     }
 
-    record Op(CompiledOp operator, GroupNode sourceGroup) implements OpInput {
+    record Op(CompiledOp operator, GroupNode sourceGroup, boolean deferred) implements OpInput {
         public Op(CompiledOp operator) {
-            this(operator, null);
+            this(operator, null, false);
+        }
+
+        public Op(CompiledOp operator, GroupNode sourceGroup) {
+            this(operator, sourceGroup, false);
+        }
+
+        /**
+         * Whether this child still carries a dynamically preserved structure
+         * (for example a Wireless publisher placeholder). A deferred child is
+         * accepted by any matcher so the parent can be built now and resolved
+         * by the dynamic structure pass later.
+         */
+        public Op asDeferred() {
+            return deferred ? this : new Op(operator, sourceGroup, true);
         }
     }
 

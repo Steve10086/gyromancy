@@ -10,10 +10,11 @@ import com.astune.gyromancy.api.symbol.SymbolMatch;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.MagicArrayDetector;
 import com.astune.gyromancy.array.compile.ArrayAstBuilder;
-import com.astune.gyromancy.array.compile.ArrayNodeCompiler;
 import com.astune.gyromancy.array.compile.GroupNode;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.CompiledArray;
+import com.astune.gyromancy.array.compile.StaticCompiler;
+import com.astune.gyromancy.array.compile.StaticResolveContext;
 import com.astune.gyromancy.array.runtime.ArrayEffectLifecycle;
 import com.astune.gyromancy.compile.operator.PersistentOp;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
@@ -144,8 +145,10 @@ public final class CanvasCompileService {
                             "[PortableCompiler] circle uuid={} glyphId={} directChildren={} ast={}",
                             circle.glyphUuid(), circle.glyphId(), directChildren.size(),
                             describeAst(ast));
-                    CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(
-                            ast, manager.opDefinitions());
+                    CompileResult<CompiledArray> result = new StaticCompiler(
+                            manager.opDefinitions()).compile(ast,
+                            new StaticResolveContext(null, manager,
+                                    manager.opDefinitions(), circle, List.of()));
                     if (!(result instanceof CompileResult.Success<CompiledArray> success)) {
                         if (result instanceof CompileResult.Failure<CompiledArray> failure) {
                             Gyromancy.LOGGER.warn(
@@ -518,8 +521,11 @@ public final class CanvasCompileService {
                 .sorted(Comparator.comparingDouble((PositionedGlyph glyph) -> glyph.bounds().area())
                         .thenComparingInt(PositionedGlyph::glyphId))
                 .forEach(circle -> {
-                    CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(
-                            ArrayAstBuilder.build(circle, manager), manager.opDefinitions());
+                    CompileResult<CompiledArray> result = new StaticCompiler(
+                            manager.opDefinitions()).compile(
+                            ArrayAstBuilder.build(circle, manager),
+                            new StaticResolveContext(null, manager,
+                                    manager.opDefinitions(), circle, List.of()));
                     if (!(result instanceof CompileResult.Success<CompiledArray> success)
                             || !(success.value().root() instanceof PersistentOp)) {
                         return;

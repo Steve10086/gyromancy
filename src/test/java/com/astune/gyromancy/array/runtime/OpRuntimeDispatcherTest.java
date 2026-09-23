@@ -5,6 +5,8 @@ import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
+import com.astune.gyromancy.array.compile.ArrayCompilePipeline;
+import com.astune.gyromancy.array.compile.RuntimeModel;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.CompiledArray;
 import com.astune.gyromancy.array.compile.OpDefinition;
@@ -103,8 +105,10 @@ class OpRuntimeDispatcherTest {
                 List.of(circle, fire),
                 Map.of("__runtime", runtimeId.toString()));
 
-        PersistentOp recovered =
-                OpRuntimeDispatcher.recoverPersistentOp(persisted, manager);
+        CompileResult<RuntimeModel> rebuilt =
+                ArrayCompilePipeline.rebuildForTeardown(persisted, manager);
+        PersistentOp recovered = ((CompileResult.Success<RuntimeModel>) rebuilt)
+                .value().root() instanceof PersistentOp persistent ? persistent : null;
 
         assertNotNull(recovered);
         assertEquals(runtimeId, recovered.id());

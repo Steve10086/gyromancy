@@ -34,6 +34,8 @@ public final class WirelessRegistry {
     private final Map<String, Value> values = new HashMap<>();
     private final Map<String, Set<UUID>> subscribersByKey = new HashMap<>();
     private final Map<UUID, Set<String>> keysBySubscriber = new HashMap<>();
+    private final Map<String, Set<UUID>> pendingByKey = new HashMap<>();
+    private final Map<UUID, Set<String>> keysByPending = new HashMap<>();
 
     public WirelessRegistry() {}
 
@@ -72,6 +74,13 @@ public final class WirelessRegistry {
         return subscribers(key);
     }
 
+    /** Removes a value only when it still matches the publisher's snapshot. */
+    public Set<UUID> unpublish(String key, Value expected) {
+        if (!Objects.equals(values.get(key), expected)) return Set.of();
+        values.remove(key);
+        return subscribers(key);
+    }
+
     /** Registers an active array as a dependent of a previously published key. */
     public void subscribe(String key, UUID arrayId) {
         if (key == null || arrayId == null || !values.containsKey(key)) return;
@@ -89,6 +98,30 @@ public final class WirelessRegistry {
             if (subscribers == null) continue;
             subscribers.remove(arrayId);
             if (subscribers.isEmpty()) subscribersByKey.remove(key);
+        }
+    }
+
+    /** Records a root which could not compile until this key becomes available. */
+    public void addPending(String key, UUID rootGlyphId) {
+        if (key == null || rootGlyphId == null) return;
+        pendingByKey.computeIfAbsent(key, ignored -> new LinkedHashSet<>()).add(rootGlyphId);
+        keysByPending.computeIfAbsent(rootGlyphId, ignored -> new LinkedHashSet<>()).add(key);
+    }
+
+    public Set<UUID> pending(String key) {
+        Set<UUID> pending = pendingByKey.get(key);
+        return pending == null ? Set.of() : Set.copyOf(pending);
+    }
+
+    public void cancelPending(UUID rootGlyphId) {
+        if (rootGlyphId == null) return;
+        Set<String> keys = keysByPending.remove(rootGlyphId);
+        if (keys == null) return;
+        for (String key : keys) {
+            Set<UUID> roots = pendingByKey.get(key);
+            if (roots == null) continue;
+            roots.remove(rootGlyphId);
+            if (roots.isEmpty()) pendingByKey.remove(key);
         }
     }
 

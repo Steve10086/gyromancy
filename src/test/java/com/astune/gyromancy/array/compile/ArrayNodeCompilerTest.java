@@ -9,6 +9,7 @@ import com.astune.gyromancy.compile.operator.ElementOp;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.compile.operator.EntityEffectOp;
 import com.astune.gyromancy.compile.operator.EntityPayload;
+import com.astune.gyromancy.compile.operator.EntityPayloadContributor;
 import com.astune.gyromancy.compile.operator.MomentumOp;
 import com.astune.gyromancy.compile.operator.LoopOp;
 import com.astune.gyromancy.compile.operator.OnEntityTickOp;
@@ -52,7 +53,8 @@ class ArrayNodeCompilerTest {
         assertInstanceOf(OnEntityTickOp.class, success.value().root());
 
         List<EntityPayload> payloads = new ArrayList<>();
-        success.value().root().contributeEntityPayloads(payloads, OpRuntimeContext.empty());
+        assertInstanceOf(EntityPayloadContributor.class, success.value().root())
+                .contributeEntityPayloads(payloads, OpRuntimeContext.empty());
         assertEquals(List.of(success.value().root()), payloads);
     }
 
@@ -399,7 +401,7 @@ class ArrayNodeCompilerTest {
         var failure = (CompileResult.Failure<CompiledArray>) assertInstanceOf(CompileResult.Failure.class,
                 ArrayNodeCompiler.compile(ast));
 
-        assertEquals("missing_primary_element", failure.diagnostics().getFirst().code());
+        assertEquals("definition_rejected", failure.diagnostics().getFirst().code());
     }
 
     @Test
@@ -509,7 +511,7 @@ class ArrayNodeCompilerTest {
         var failure = (CompileResult.Failure<CompiledArray>) assertInstanceOf(CompileResult.Failure.class,
                 ArrayNodeCompiler.compile(ast, List.of(runeOp("plain", "star"))));
 
-        assertEquals("missing_primary_element", failure.diagnostics().getFirst().code());
+        assertEquals("definition_rejected", failure.diagnostics().getFirst().code());
     }
 
     @Test

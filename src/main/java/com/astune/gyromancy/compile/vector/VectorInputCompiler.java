@@ -59,9 +59,21 @@ final class VectorInputCompiler {
             } else if (input instanceof OpInput.Op op
                     && op.operator() instanceof VectorOp vector) {
                 result.add(new VectorComposition.Input(vector, VectorComposition.Mode.DIRECT));
+            } else {
+                com.astune.gyromancy.Gyromancy.LOGGER.debug(
+                        "[Vector] group dropped input={} result={}", describe(input), compiled);
             }
         }
         return result;
+    }
+
+    private static String describe(OpInput input) {
+        return switch (input) {
+            case OpInput.RawGroup raw -> "RawGroup(" + raw.boundary().symbolId().getPath()
+                    + "#" + raw.boundary().glyphId() + ")";
+            case OpInput.Op op -> "Op(" + op.operator().getClass().getSimpleName() + ")";
+            case OpInput.Rune rune -> "Rune(" + rune.symbolName() + ")";
+        };
     }
 
     private static VectorComposition.Mode mode(String runeName) {

@@ -40,7 +40,8 @@ public final class VectorOpSerialization {
     private static final Codec<StaticVectorData> STATIC_VECTOR_CODEC = RecordCodecBuilder.create(instance -> instance.group(
             TERM_CODEC.listOf().fieldOf("terms").forGetter(StaticVectorData::terms),
             INPUT_CODEC.listOf().fieldOf("inputs").forGetter(StaticVectorData::inputs),
-            Codec.BOOL.fieldOf("curl").forGetter(StaticVectorData::curl)
+            Codec.BOOL.fieldOf("curl").forGetter(StaticVectorData::curl),
+            Codec.DOUBLE.optionalFieldOf("scale", 1.0).forGetter(StaticVectorData::scale)
     ).apply(instance, StaticVectorData::new));
     private static final Codec<RotationVectorData> ROTATION_VECTOR_CODEC = RecordCodecBuilder.create(instance -> instance.group(
             INPUT_CODEC.listOf().fieldOf("axis_inputs").forGetter(RotationVectorData::axisInputs),
@@ -73,9 +74,9 @@ public final class VectorOpSerialization {
             public Codec<StaticVectorOp> codec() {
                 return STATIC_VECTOR_CODEC.xmap(
                         data -> new StaticVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0,
-                                data.terms(), deserializeInputs(data.inputs()), data.curl()),
+                                data.terms(), deserializeInputs(data.inputs()), data.curl(), data.scale()),
                         vector -> new StaticVectorData(vector.terms(), serializeInputs(vector.vectorInputs()),
-                                vector.curl()));
+                                vector.curl(), vector.scale()));
             }
         });
         register(new Adapter<RotationVectorOp>() {
@@ -158,6 +159,22 @@ public final class VectorOpSerialization {
                 return Codec.unit(() -> new GravityVectorOp(VectorOp.RUNTIME_ID, null, List.of(), 0));
             }
         });
+        register(new Adapter<SpeedOp>() {
+            @Override
+            public ResourceLocation id() {
+                return adapterId("speed_vector");
+            }
+
+            @Override
+            public Class<SpeedOp> vectorType() {
+                return SpeedOp.class;
+            }
+
+            @Override
+            public Codec<SpeedOp> codec() {
+                return Codec.unit(() -> new SpeedOp(VectorOp.RUNTIME_ID, null, List.of(), 0));
+            }
+        });
         register(new Adapter<RevertVectorOp>() {
             @Override
             public ResourceLocation id() {
@@ -204,7 +221,8 @@ public final class VectorOpSerialization {
     }
 
     public static Optional<LegacyData> encodeLegacy(VectorOp vector) {
-        if (vector instanceof StaticVectorOp staticVector && staticVector.terms().size() == 1) {
+        if (vector instanceof StaticVectorOp staticVector && staticVector.terms().size() == 1
+                && staticVector.scale() == 1.0) {
             StaticVectorOp.Term term = staticVector.terms().getFirst();
             return switch (term.kind()) {
                 case WORLD -> Optional.of(LegacyData.world(term.value(), "compile_snapshot", false));
@@ -346,7 +364,7 @@ public final class VectorOpSerialization {
     private record SerializedInput(SerializedVector vector, VectorComposition.Mode mode) {}
 
     private record StaticVectorData(List<StaticVectorOp.Term> terms,
-                                    List<SerializedInput> inputs, boolean curl) {}
+                                    List<SerializedInput> inputs, boolean curl, double scale) {}
 
     private record RotationVectorData(List<SerializedInput> axisInputs,
                                       List<SerializedInput> vectorInputs,

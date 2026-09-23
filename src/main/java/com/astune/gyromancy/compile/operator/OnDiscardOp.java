@@ -3,6 +3,8 @@ package com.astune.gyromancy.compile.operator;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.CompileResult;
+import com.astune.gyromancy.array.compile.LocalCompileContext;
+import com.astune.gyromancy.array.compile.LocalCompileResult;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
@@ -15,7 +17,7 @@ import java.util.List;
 
 /** Attaches entity effects which are emitted when the owning effect is discarded. */
 @RegisteredOp
-public final class OnDiscardOp implements CompiledOp {
+public final class OnDiscardOp implements CompiledOp, LocalCompilable, EntityPayloadContributor {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "on_discard");
     private static final ResourceLocation CROSS_SYMBOL =
@@ -56,6 +58,15 @@ public final class OnDiscardOp implements CompiledOp {
         this.discardInputs = this.inputs.stream()
                 .filter(OpInput.Op.class::isInstance)
                 .toList();
+    }
+
+    @Override
+    public LocalCompileResult localCompile(LocalCompileContext context) {
+        List<OpInput> materialized = inputs.stream()
+                .map(context::materialize)
+                .toList();
+        return LocalCompileResult.success(new OnDiscardOp(
+                boundary, matchedInputs, materialized));
     }
 
     /** Static child structure, resolved only when this handler is triggered. */

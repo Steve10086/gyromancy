@@ -40,6 +40,17 @@ final class MomentumInputResolver {
                 continue;
             }
 
+            // A dynamically replaced child (for example a resolved Wireless
+            // source) carries its authored source group. Interpret that source
+            // as a vector first, matching the historical VECTOR use-site path.
+            // A nested MomentumOp group also carries a source group, but its
+            // direct `motion` rune never matches the vector definitions, so it
+            // still falls through to the acceleration branch below.
+            if (input instanceof OpInput.Op op && op.sourceGroup() != null
+                    && addCompiledVector(velocityInputs, vectorCompiler.compile(input, context))) {
+                continue;
+            }
+
             if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp momentum) {
                 addMomentumAcceleration(accelerationInputs, momentum, context);
                 continue;
@@ -48,8 +59,13 @@ final class MomentumInputResolver {
             addVectorGroup(velocityInputs, input, context);
         }
 
-        return new ResolvedInputs(List.copyOf(velocityInputs),
+        ResolvedInputs resolved = new ResolvedInputs(List.copyOf(velocityInputs),
                 List.copyOf(accelerationInputs), dynamic);
+        com.astune.gyromancy.Gyromancy.LOGGER.debug(
+                "[Momentum] resolve boundary={} dynamic={} velocity={} acceleration={}",
+                boundary == null ? "none" : boundary.glyphId(), dynamic,
+                resolved.velocityInputs().size(), resolved.accelerationInputs().size());
+        return resolved;
     }
 
     double drainRotationSpeed(List<OpInput> inputs) {
@@ -75,9 +91,13 @@ final class MomentumInputResolver {
         if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp) return;
 
         if (input instanceof OpInput.RawGroup
-                || input instanceof OpInput.Op op
-                && (op.sourceGroup() != null || op.operator() instanceof OpResolvable)) {
-            if (addCompiledVector(result, vectorCompiler.compile(input, context))) return;
+                || input instanceof OpInput.Op op && op.sourceGroup() != null) {
+            CompileResult<CompiledOp> compiled = vectorCompiler.compile(input, context);
+            if (addCompiledVector(result, compiled)) return;
+            com.astune.gyromancy.Gyromancy.LOGGER.debug(
+                    "[Momentum] vector group dropped input={} result={}",
+                    describe(input), compiled instanceof CompileResult.Failure<CompiledOp> failure
+                            ? failure.diagnostics() : compiled);
         }
 
         if (input instanceof OpInput.Op op && op.operator() instanceof VectorOp vector) {
@@ -85,14 +105,20 @@ final class MomentumInputResolver {
         }
     }
 
+    private static String describe(OpInput input) {
+        return switch (input) {
+            case OpInput.RawGroup raw -> "RawGroup(" + raw.boundary().symbolId().getPath()
+                    + "#" + raw.boundary().glyphId() + ")";
+            case OpInput.Op op -> "Op(" + op.operator().getClass().getSimpleName() + ")";
+            case OpInput.Rune rune -> "Rune(" + rune.symbolName() + ")";
+        };
+    }
+
     private static void addMomentumAcceleration(
             List<MomentumOp.AccelerationInput> result, MomentumOp momentum,
             OpResolveContext context) {
-        ResolvedInputs resolved = context != null
-                && context.phase() == OpResolveContext.Phase.RUNTIME
-                ? momentum.resolvedInputsFor(context.runtimeContext())
-                : new ResolvedInputs(momentum.velocityInputs(), momentum.accelerationInputs(),
-                momentum.dynamic());
+        ResolvedInputs resolved = new ResolvedInputs(momentum.velocityInputs(),
+                momentum.accelerationInputs(), momentum.dynamic());
         MomentumOp.UpdateMode updateMode = resolved.dynamic()
                 ? MomentumOp.UpdateMode.DYNAMIC
                 : MomentumOp.UpdateMode.SNAPSHOT;

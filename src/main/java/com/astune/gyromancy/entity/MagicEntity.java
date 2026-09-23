@@ -43,9 +43,24 @@ public abstract class MagicEntity extends Entity {
     private UUID savedParentArrayId;
     private UUID savedParentEntityId;
     protected Vec3 velocityThisTick = Vec3.ZERO;
+    private double gravity;
 
     protected MagicEntity(EntityType<?> type, Level level) {
         super(type, level);
+    }
+
+    public final double gravity() {
+        return gravity;
+    }
+
+    public final void setGravity(double gravity) {
+        this.gravity = Double.isFinite(gravity) ? gravity : 0.0;
+    }
+
+    protected final void applyGravity() {
+        if (gravity != 0.0) {
+            setDeltaMovement(getDeltaMovement().add(0.0, -gravity, 0.0));
+        }
     }
 
     @Override
@@ -157,6 +172,9 @@ public abstract class MagicEntity extends Entity {
             savedParentEntityId = tag.hasUUID("ParentEntityId")
                     ? tag.getUUID("ParentEntityId") : null;
         }
+        if (tag.contains("Gravity")) {
+            setGravity(tag.getDouble("Gravity"));
+        }
         setPayload(EntityPayload.loadPayloadList(tag, PAYLOAD_KEY, defaultPayload()));
     }
 
@@ -168,6 +186,7 @@ public abstract class MagicEntity extends Entity {
             if (savedParentArrayId != null) tag.putUUID("ParentArrayId", savedParentArrayId);
             if (savedParentEntityId != null) tag.putUUID("ParentEntityId", savedParentEntityId);
         }
+        tag.putDouble("Gravity", gravity);
         initializeDefaultPayload();
         tag.put(PAYLOAD_KEY, EntityPayload.savePayloadList(payload));
     }
@@ -208,7 +227,11 @@ public abstract class MagicEntity extends Entity {
 
     public void bindPayloadToArray(UUID arrayId) {
         initializeDefaultPayload();
-        payload.forEach(op -> op.bindToArray(arrayId));
+        if (level() instanceof ServerLevel server) {
+            payload.forEach(op -> op.bindToArray(server, arrayId));
+        } else {
+            payload.forEach(op -> op.bindToArray(arrayId));
+        }
     }
 
     private static CompoundTag payloadTag(List<? extends EntityPayload> payload) {

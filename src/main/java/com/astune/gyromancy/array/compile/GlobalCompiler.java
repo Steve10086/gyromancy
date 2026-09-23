@@ -7,4 +7,9 @@ public final class GlobalCompiler extends GroupCompiler {
     public GlobalCompiler(Collection<? extends OpDefinition> definitions) {
         super(definitions, Integer.MAX_VALUE);
     }
+
+    public GlobalCompiler(Collection<? extends OpDefinition> definitions,
+                          ChildNormalizer childNormalizer) {
+        super(definitions, Integer.MAX_VALUE, childNormalizer);
+    }
 }

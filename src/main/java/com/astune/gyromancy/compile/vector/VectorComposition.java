@@ -23,25 +23,31 @@ final class VectorComposition {
         }
     }
 
+    /**
+     * Adds every input vector, projecting {@link Mode#TANGENTIAL} inputs onto
+     * the array plane first. Opposing vectors simply sum to their remainder.
+     */
     static Vec3 compose(VectorContext context, List<Input> inputs) {
-        Vec3 reference = directionOrZero(context.velocity());
-        if (reference.lengthSqr() < EPSILON) reference = directionOrZero(context.facing());
-        if (reference.lengthSqr() < EPSILON) reference = directionOrZero(context.arrayNormal());
+        // The tangential projection uses the array plane. Never use the
+        // entity's velocity/facing as the primary reference: the array output
+        // must not depend on or feed back into the entity's own motion.
+        Vec3 axis = directionOrZero(context.arrayNormal());
+        if (axis.lengthSqr() < EPSILON) axis = directionOrZero(context.velocity());
+        if (axis.lengthSqr() < EPSILON) axis = directionOrZero(context.facing());
 
-        Vec3 result = Vec3.ZERO;
+        Vec3 sum = Vec3.ZERO;
         for (Input input : inputs) {
             Vec3 vector = input.vector().provide(context);
             if (vector == null || vector.lengthSqr() < EPSILON) continue;
 
-            double magnitude = vector.length();
             if (input.mode() == Mode.TANGENTIAL) {
-                if (reference.lengthSqr() < EPSILON) continue;
-                vector = vector.subtract(reference.scale(vector.dot(reference)));
+                if (axis.lengthSqr() < EPSILON) continue;
+                vector = vector.subtract(axis.scale(vector.dot(axis)));
                 if (vector.lengthSqr() < EPSILON) continue;
             }
-            result = result.add(vector.normalize().scale(magnitude));
+            sum = sum.add(vector);
         }
-        return result;
+        return sum;
     }
 
     static Vec3 directionOrZero(Vec3 vector) {

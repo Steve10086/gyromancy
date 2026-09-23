@@ -33,9 +33,8 @@ public final class ManaSymbol extends CenterSymbol {
         if (runes.stream().anyMatch(rune -> !"arrow".equals(rune.symbolId().getPath()))) return Map.of();
 
         LaunchData launch = launchData(level, circleGlyph, centerGlyph, runes);
-        Vec3 acceleration = runes.isEmpty() ? Vec3.ZERO : new Vec3(0.0, -0.04 * 0.5, 0.0);
         ManaballEntity manaball = new ManaballEntity(level, launch.position(), launch.velocity(),
-                launch.arrowSizeSum(), launch.liftDirection(), acceleration, launch.size());
+                launch.arrowSizeSum(), launch.liftDirection(), Vec3.ZERO, launch.size());
         level.addFreshEntity(manaball);
         return Map.of(MANABALL_KEY, ArrayObject.EntityRef.of(manaball));
     }

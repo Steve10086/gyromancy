@@ -195,7 +195,7 @@ class MagicArrayManagerHierarchyTest {
     }
 
     @Test
-    void removingCircleStartsANewCompilationLifecycleButRemovingArrayDoesNot() {
+    void removingCircleOrArrayStartsANewCompilationLifecycle() {
         MagicArrayManager manager = new MagicArrayManager();
         PositionedGlyph circle =
                 glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2, 1.0, 4.0);
@@ -207,7 +207,7 @@ class MagicArrayManagerHierarchyTest {
                 circle, List.of(circle), Map.of());
         manager.registerArrayObj(array);
         manager.unregisterArrayObj(array.arrayId());
-        assertFalse(manager.claimCircleCompilation(circle.glyphUuid()));
+        assertTrue(manager.claimCircleCompilation(circle.glyphUuid()));
 
         manager.unregisterGlyph(circle.glyphUuid());
         manager.registerGlyph(circle);

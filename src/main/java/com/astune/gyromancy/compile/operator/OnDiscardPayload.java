@@ -61,6 +61,13 @@ public final class OnDiscardPayload extends EntityPayload {
     }
 
     @Override
+    public void bindToArray(ServerLevel level, UUID arrayId) {
+        bindToArray(arrayId);
+        // The persisted content is rebuilt once the owning array is available.
+        // The actual pipeline lookup is kept at the lifecycle boundary.
+    }
+
+    @Override
     public void onOwnerRemoved(Level level, Entity owner) {
         if (triggered || !(level instanceof ServerLevel server)) return;
         triggered = true;
@@ -68,17 +75,18 @@ public final class OnDiscardPayload extends EntityPayload {
         EmitResult result = new EmitResult();
         OpRuntimeContext runtime = runtimeContext(server, owner);
         for (OpInput input : content.inputs()) {
-            OpResolution resolution = OpResolver.resolve(input, OpResolveContext.forRuntime(
-                    parentOp, OpResolveContext.UseSite.DISCARD, runtime,
-                    parentOp == null ? null : parentOp.boundary()));
-            if (!OpInputMatcher.anyMatches(EFFECT_MATCHERS, resolution)
-                    || !(resolution.operator() instanceof EntityEffectOp effect)) {
+            if (!(input instanceof OpInput.Op child)) {
                 OpRuntimeFailure.terminate(runtime, parentOp, OpRuntimeFailure.Kind.RUNTIME_ERROR,
-                        "OnDiscard requires an EntityEffectOp after dynamic resolution");
+                        "OnDiscard requires a compiled EntityEffectOp child");
+                return;
+            }
+            if (!(child.operator() instanceof EntityEffectOp effect)) {
+                OpRuntimeFailure.terminate(runtime, parentOp, OpRuntimeFailure.Kind.RUNTIME_ERROR,
+                        "OnDiscard requires an EntityEffectOp after static compilation");
                 return;
             }
             RuntimeHandle handle = effect.activateAt(
-                    resolution.runtimeContextOr(runtime).forOp(effect).withoutParent(), owner.position());
+                    runtime.forOp(effect).withoutParent(), owner.position());
             for (EmittedObject emitted : EmitResult.emissions(handle.scratchData())) {
                 result.add(emitted);
             }

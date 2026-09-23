@@ -109,6 +109,8 @@ public final class SymbolRecognizer {
         }
 
         int[][] rawMatrix = FloodFillExtractor.rawGlyphMatrix(glyph);
+        int maxDirectionX = Math.max(0, rawMatrix[0].length - 1);
+        int maxDirectionY = Math.max(0, rawMatrix.length - 1);
         int glyphArea = glyph.pixels().size();
 
         LOGGER.debug("[SymbolRecognizer] Matching glyph: {} pixels across {} blocks raw={}x{} (bbox: {},{} -> {},{})",
@@ -128,7 +130,7 @@ public final class SymbolRecognizer {
             List<SymbolMatch> exactMatches = new ArrayList<>();
             for (SecretTextMatcher.Match result : secretTextResults) {
                 exactMatches.add(toSymbolMatch(result.symbol(), 1.0f,
-                        result.rotationDegrees(), glyph));
+                        result.rotationDegrees(), glyph, maxDirectionX, maxDirectionY));
             }
             return new RecognitionResult(exactMatches, secretTextResults);
         }
@@ -148,7 +150,7 @@ public final class SymbolRecognizer {
             if (template == null) continue;
 
             matches.add(toSymbolMatch(template, result.confidence(),
-                    result.rotationDegrees(), glyph));
+                    result.rotationDegrees(), glyph, maxDirectionX, maxDirectionY));
         }
 
         if (!matches.isEmpty()) {
@@ -163,24 +165,27 @@ public final class SymbolRecognizer {
     }
 
     private static SymbolMatch toSymbolMatch(SymbolTemplate template, float confidence,
-                                             float rotationDegrees, ExtractedGlyph glyph) {
+                                             float rotationDegrees, ExtractedGlyph glyph,
+                                             int maxDirectionX, int maxDirectionY) {
         return toSymbolMatch(template.id(), template.defaultRole(), confidence,
-                rotationDegrees, glyph);
+                rotationDegrees, glyph, maxDirectionX, maxDirectionY);
     }
 
     private static SymbolMatch toSymbolMatch(SecretTextSymbol symbol, float confidence,
-                                             float rotationDegrees, ExtractedGlyph glyph) {
+                                             float rotationDegrees, ExtractedGlyph glyph,
+                                             int maxDirectionX, int maxDirectionY) {
         return toSymbolMatch(symbol.id(), symbol.role(), confidence,
-                rotationDegrees, glyph);
+                rotationDegrees, glyph, maxDirectionX, maxDirectionY);
     }
 
     private static SymbolMatch toSymbolMatch(net.minecraft.resources.ResourceLocation symbolId,
                                              SymbolRole role,
                                              float confidence, float rotationDegrees,
-                                             ExtractedGlyph glyph) {
+                                             ExtractedGlyph glyph,
+                                             int maxDirectionX, int maxDirectionY) {
         float centerX = (float) ((glyph.minWorldX() + glyph.maxWorldX()) / 2.0);
         float centerY = (float) ((glyph.minWorldY() + glyph.maxWorldY()) / 2.0);
-        Pose pose = computePose(glyph, rotationDegrees);
+        Pose pose = computePose(glyph, rotationDegrees, maxDirectionX, maxDirectionY);
         return new SymbolMatch(
                 symbolId, confidence, rotationDegrees, false, 1f,
                 pose.front(), pose.length(), pose.width(),
@@ -189,18 +194,45 @@ public final class SymbolRecognizer {
 
     private record Pose(Vec3 front, double length, double width) {}
 
-    private static Pose computePose(ExtractedGlyph glyph, float rotationDegrees) {
-        PixelBasis basis = pixelBasis(rotationDegrees);
+    private static Pose computePose(ExtractedGlyph glyph, float rotationDegrees,
+                                    int maxDirectionX, int maxDirectionY) {
+        PixelBasis basis = snapBasis(
+                pixelBasis(rotationDegrees), maxDirectionX, maxDirectionY);
         Vec3 front = worldFront(glyph, basis.frontX(), basis.frontY());
         double[] size = projectedSize(glyph, basis.frontX(), basis.frontY());
         return new Pose(front, size[0], size[1]);
     }
 
-    private record PixelBasis(double frontX, double frontY) {}
+    record PixelBasis(double frontX, double frontY) {}
 
     private static PixelBasis pixelBasis(float rotationDegrees) {
         double radians = Math.toRadians(rotationDegrees - 90.0);
         return new PixelBasis(Math.cos(radians), Math.sin(radians));
+    }
+
+    static PixelBasis snapBasis(PixelBasis basis, int maxDx, int maxDy) {
+        double magnitude = Math.hypot(basis.frontX(), basis.frontY());
+        if (magnitude < 1.0E-9 || (maxDx <= 0 && maxDy <= 0)) return basis;
+        double unitX = basis.frontX() / magnitude;
+        double unitY = basis.frontY() / magnitude;
+        int bestDx = 0;
+        int bestDy = 0;
+        double bestDot = Double.NEGATIVE_INFINITY;
+        for (int dx = -maxDx; dx <= maxDx; dx++) {
+            for (int dy = -maxDy; dy <= maxDy; dy++) {
+                if (dx == 0 && dy == 0) continue;
+                double inverse = 1.0 / Math.hypot(dx, dy);
+                double dot = (dx * unitX + dy * unitY) * inverse;
+                if (dot > bestDot) {
+                    bestDot = dot;
+                    bestDx = dx;
+                    bestDy = dy;
+                }
+            }
+        }
+        if (bestDx == 0 && bestDy == 0) return basis;
+        double inverse = 1.0 / Math.hypot(bestDx, bestDy);
+        return new PixelBasis(bestDx * inverse, bestDy * inverse);
     }
 
     private static Vec3 worldFront(ExtractedGlyph glyph, double fx, double fy) {

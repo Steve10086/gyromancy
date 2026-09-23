@@ -49,23 +49,19 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
         List<EmitOp.Emission> emissions = new ArrayList<>();
         boolean hasEmitOp = false;
         for (OpInput input : inputs) {
-            if (!(input instanceof OpInput.Op)) continue;
-            OpResolution resolved = resolveChild(input, OpResolveContext.UseSite.ENTITY_EMISSION,
-                    context);
-            if (resolved.operator() instanceof EmitOp emitOp) {
+            if (!(input instanceof OpInput.Op op)) continue;
+            if (op.operator() instanceof EmitOp emitOp) {
                 hasEmitOp = true;
-                emissions.addAll(emitOp.emissions(resolved.runtimeContextOr(context)));
+                emissions.addAll(emitOp.emissions(context));
             }
         }
         List<EmitOp.Emission> resolved = hasEmitOp
                 ? List.copyOf(emissions) : List.of(defaultEmission(context));
         for (OpInput input : inputs) {
-            if (!(input instanceof OpInput.Op op)) continue;
-            OpResolution forwarded = resolveChild(input, OpResolveContext.UseSite.ENTITY_EMISSION,
-                    context);
-            OpRuntimeContext childContext = forwarded.runtimeContextOr(context);
+            if (!(input instanceof OpInput.Op op)
+                    || !(op.operator() instanceof EntityEmissionModifier modifier)) continue;
             resolved = resolved.stream()
-                    .map(emission -> forwarded.operator().modifyEntityEmission(emission, childContext))
+                    .map(emission -> modifier.modifyEntityEmission(emission, context))
                     .toList();
         }
         return resolved;
@@ -79,21 +75,12 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
                                           OpRuntimeContext context) {
         List<EntityPayload> payload = new ArrayList<>(defaults);
         for (OpInput input : inputs) {
-            if (input instanceof OpInput.Op op) {
-                OpResolution forwarded = resolveChild(input, OpResolveContext.UseSite.ENTITY_PAYLOAD,
-                        context);
-                forwarded.operator().contributeEntityPayloads(
-                        payload, forwarded.runtimeContextOr(context));
+            if (input instanceof OpInput.Op op
+                    && op.operator() instanceof EntityPayloadContributor contributor) {
+                contributor.contributeEntityPayloads(payload, context);
             }
         }
         return List.copyOf(payload);
-    }
-
-    private OpResolution resolveChild(OpInput input, OpResolveContext.UseSite useSite,
-                                      OpRuntimeContext context) {
-        OpRuntimeContext runtime = context == null ? OpRuntimeContext.empty() : context;
-        return OpResolver.resolve(input,
-                OpResolveContext.forRuntime(this, useSite, runtime, boundary));
     }
 
     private EmitOp.Emission defaultEmission(OpRuntimeContext context) {
@@ -143,7 +130,7 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
     @Override
     public int color() {
         return SymbolCatalog.glyphColorFor(ResourceLocation.fromNamespaceAndPath("gyromancy",
-                ArrayNodeCompilerCompat.symbolName(element)));
+                ElementSymbolNames.symbolName(element)));
     }
 
     private static float scaleFor(PositionedGlyph circle) {
@@ -151,7 +138,7 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
         return (float)Math.max(0.1F, Math.sqrt(area) * 0.5);
     }
 
-    private static final class ArrayNodeCompilerCompat {
+    private static final class ElementSymbolNames {
         private static String symbolName(ElementType element) {
             return switch (element) {
                 case FIRE -> "fire";

@@ -62,6 +62,8 @@ public final class MagicArrayDetector {
     private static final Map<ServerLevel, Map<BlockPos, Integer>> RETRY_PLACED_CANVASES = new WeakHashMap<>();
     private static final Map<ServerLevel, Map<BlockPos, PendingCanvasFlood>> PENDING_CANVAS_FLOODS =
             new WeakHashMap<>();
+    private static final Set<ServerLevel> REBUILT_LEVELS =
+            java.util.Collections.newSetFromMap(new WeakHashMap<>());
 
     private MagicArrayDetector() {}
 
@@ -121,6 +123,9 @@ public final class MagicArrayDetector {
 
     public static void onServerTick(ServerTickEvent.Post event) {
         for (ServerLevel level : event.getServer().getAllLevels()) {
+            if (REBUILT_LEVELS.add(level)) {
+                ArrayEffectLifecycle.rebuildAll(level);
+            }
             Map<BlockPos, Integer> retries = RETRY_PLACED_CANVASES.get(level);
             if (retries == null || retries.isEmpty()) continue;
 

@@ -16,7 +16,7 @@ import java.util.List;
 final class RotationVectorDefinition {
     static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(
             Gyromancy.MODID, "vector_rotation");
-
+    public static final double ROTATION_SPEED_SCALE = 10;
     static final OpDefinition DEFINITION = new OpDefinition() {
         @Override
         public ResourceLocation id() {
@@ -50,9 +50,9 @@ final class RotationVectorDefinition {
                 PositionedGlyph loop = ((OpInput.Rune) matchedInputs.getFirst()).glyph();
                 return new CompileResult.Success<>(new RotationVectorOp(
                         ID, boundary, inputs, 0,
-                    VectorInputCompiler.direct(boundary, inputs),
                     VectorInputCompiler.groups(inputs, VectorDefinitionSupport.compiler(), effectiveContext),
-                    loop.length() * RotationOp.ROTATION_SPEED_SCALE));
+                        VectorInputCompiler.direct(boundary, inputs),
+                        loop.length() * ROTATION_SPEED_SCALE));
             }
     };
 

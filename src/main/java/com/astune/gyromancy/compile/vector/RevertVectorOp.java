@@ -19,7 +19,16 @@ public final class RevertVectorOp extends VectorOp {
 
     @Override
     public Vec3 provide(VectorContext context) {
-        return VectorComposition.compose(context, vectorInputs).scale(-1.0);
+        Vec3 composed = VectorComposition.compose(context, vectorInputs);
+        if (context != null && context.tick() < 12) {
+            com.astune.gyromancy.Gyromancy.LOGGER.debug(
+                    "[Revert] tick={} composed={} parts={}", context.tick(), composed,
+                    vectorInputs.stream()
+                            .map(input -> input.vector().getClass().getSimpleName()
+                                    + ":" + input.mode())
+                            .toList());
+        }
+        return composed.scale(-1.0);
     }
 
     List<VectorComposition.Input> vectorInputs() {

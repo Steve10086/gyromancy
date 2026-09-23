@@ -5,9 +5,12 @@ import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
+import com.astune.gyromancy.array.compile.LocalCompileContext;
+import com.astune.gyromancy.array.compile.LocalCompileResult;
 import com.astune.gyromancy.compile.vector.VectorContext;
 import com.astune.gyromancy.compile.vector.VectorOp;
 import com.astune.gyromancy.compile.vector.VectorOpSerialization;
+import com.astune.gyromancy.entity.MagicEntity;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -25,11 +28,11 @@ import java.util.Optional;
  * Consumes VectorOps and applies them as movement. Vector construction and
  * matching remain outside this class.
  */
-public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
+public final class MomentumOp extends OnEntityTickOp implements CompiledOp, LocalCompilable,
+        EntityEmissionModifier, EntityPayloadContributor {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "momentum");
 
-    static final int ACTIVE_TICKS = 100;
     private static final double MOMENTUM_SCALE = 1.0 / 10;
     private static final double DIRECTION_EPSILON = 1.0E-8;
 
@@ -112,9 +115,6 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
     private final Optional<SurfaceFrame> activationFrame;
     private final ApplicationPhase phase;
     private final boolean dynamic;
-    /** Present only on a source op whose structural inputs can be deferred. */
-    private final MomentumInputResolver inputResolver;
-    private final boolean hasDeferredInputs;
     private final double drainRotationSpeed;
     private Vec3 acceleration;
     private int elapsedTicks;
@@ -138,7 +138,21 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
         return new MomentumOp(boundary, matchedInputs, inputs, compileFrame,
                 resolved.velocityInputs(), resolved.accelerationInputs(), Vec3.ZERO, 0,
                 resolver.drainRotationSpeed(inputs), ApplicationPhase.SPAWN,
-                resolved.dynamic(), Optional.empty(), resolver);
+                resolved.dynamic(), Optional.empty());
+    }
+
+    @Override
+    public LocalCompileResult localCompile(LocalCompileContext context) {
+        try {
+            MomentumInputResolver.ResolvedInputs resolved = resolvedInputs(null);
+            return LocalCompileResult.success(new MomentumOp(
+                    boundary, matchedInputs, inputs, compileFrame,
+                    resolved.velocityInputs(), resolved.accelerationInputs(),
+                    acceleration, elapsedTicks, drainRotationSpeed, phase,
+                    resolved.dynamic(), activationFrame));
+        } catch (RuntimeException exception) {
+            return LocalCompileResult.failure("invalid_momentum_inputs", exception.getMessage());
+        }
     }
 
     private MomentumOp(List<AccelerationInput> accelerationInputs, Vec3 acceleration,
@@ -150,7 +164,7 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
                         .toList()
                         : List.of(),
                 phase == ApplicationPhase.TICK ? accelerationInputs : List.of(),
-                acceleration, elapsedTicks, drainRotationSpeed, phase, false, activationFrame, null);
+                acceleration, elapsedTicks, drainRotationSpeed, phase, false, activationFrame);
     }
 
     MomentumOp(List<AccelerationInput> accelerationInputs) {
@@ -165,10 +179,9 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
     private MomentumOp(PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs,
                        Optional<SurfaceFrame> compileFrame, List<VectorInput> velocityInputs,
                        List<AccelerationInput> accelerationInputs,
-                       Vec3 acceleration, int elapsedTicks, double drainRotationSpeed,
-                       ApplicationPhase phase, boolean dynamic,
-                       Optional<SurfaceFrame> activationFrame,
-                       MomentumInputResolver inputResolver) {
+                        Vec3 acceleration, int elapsedTicks, double drainRotationSpeed,
+                        ApplicationPhase phase, boolean dynamic,
+                        Optional<SurfaceFrame> activationFrame) {
         this.boundary = boundary;
         this.matchedInputs = List.copyOf(matchedInputs);
         this.inputs = List.copyOf(inputs);
@@ -178,11 +191,9 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
         this.activationFrame = activationFrame == null ? Optional.empty() : activationFrame;
         this.phase = Objects.requireNonNull(phase, "phase");
         this.dynamic = dynamic;
-        this.inputResolver = inputResolver;
-        this.hasDeferredInputs = inputResolver != null && hasDeferredInputs(this.inputs);
         this.drainRotationSpeed = drainRotationSpeed;
         this.acceleration = acceleration == null ? Vec3.ZERO : acceleration;
-        this.elapsedTicks = Math.max(0, Math.min(ACTIVE_TICKS, elapsedTicks));
+        this.elapsedTicks = Math.max(0, elapsedTicks);
     }
 
     private static MomentumOp fromCodec(List<PersistedInput> inputs,
@@ -199,7 +210,7 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
                 .toList();
         return new MomentumOp(null, List.of(), List.of(), compileFrame, runtimeVelocityInputs,
                 runtimeInputs, acceleration, elapsedTicks, drainRotationSpeed, phase,
-                false, activationFrame, null);
+                false, activationFrame);
     }
 
     @Override
@@ -295,6 +306,12 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
                                          OpRuntimeContext context) {
         if (phase != ApplicationPhase.SPAWN) return;
         List<AccelerationInput> runtimeAccelerationInputs = resolvedInputs(context).accelerationInputs();
+        Gyromancy.LOGGER.debug("[Momentum] payload contribution boundary={} accel={} modes={}",
+                boundary == null ? "none" : boundary.glyphId(),
+                runtimeAccelerationInputs.size(),
+                runtimeAccelerationInputs.stream()
+                        .map(input -> input.updateMode() + ":" + input.vector().getClass().getSimpleName())
+                        .toList());
         if (!runtimeAccelerationInputs.isEmpty()) {
             payloads.add(runtimePayload(context, runtimeAccelerationInputs));
         }
@@ -303,21 +320,25 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
     @Override
     public void onEntityTick(EntityTickContext ctx) {
         if (ctx.isClientSide() || phase != ApplicationPhase.TICK) return;
-        if (elapsedTicks >= ACTIVE_TICKS) return;
 
         SurfaceFrame arrayFrame = ctx.arrayFrame();
         Vec3 arrayNormal = arrayFrame == null
                 ? compileFrame.map(SurfaceFrame::normal).orElse(Vec3.ZERO)
                 : arrayFrame.normal();
         VectorContext vectorContext = vectorContext(null, ctx.velocity(), ctx.facing(),
-                arrayFrame, arrayNormal,
-                ctx.owner() == null ? 0.0 : ctx.owner().getGravity());
+                arrayFrame, arrayNormal, gravityFor(ctx.owner()));
         List<Vec3> sampled = accelerationVectors(vectorContext);
         acceleration = solveVector(ctx.velocity(), ctx.facing(), vectorContext,
                 accelerationInputs, sampled);
         Vec3 result = acceleration.scale(MOMENTUM_SCALE);
+        if (elapsedTicks < 12) {
+            Gyromancy.LOGGER.debug(
+                    "[Momentum] tick={} boundary={} sampled={} acceleration={} velocity={} facing={} normal={} gravity={}",
+                    elapsedTicks, boundary == null ? "none" : boundary.glyphId(), sampled,
+                    acceleration, ctx.velocity(), ctx.facing(), arrayNormal,
+                    gravityFor(ctx.owner()));
+        }
         elapsedTicks++;
-        if (elapsedTicks >= ACTIVE_TICKS) acceleration = Vec3.ZERO;
         ctx.owner().addDeltaMovement(result);
     }
 
@@ -326,7 +347,6 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
     }
 
     Vec3 accelerationForTick(Vec3 velocityDirection, Vec3 entityFacing) {
-        if (elapsedTicks >= ACTIVE_TICKS) return Vec3.ZERO;
         VectorContext vectorContext = vectorContext(null, velocityDirection, entityFacing,
                 null, compileFrame.map(SurfaceFrame::normal).orElse(Vec3.ZERO));
         List<Vec3> sampled = accelerationVectors(vectorContext);
@@ -334,7 +354,6 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
                 accelerationInputs, sampled);
         Vec3 result = acceleration.scale(MOMENTUM_SCALE);
         elapsedTicks++;
-        if (elapsedTicks >= ACTIVE_TICKS) acceleration = Vec3.ZERO;
         return result;
     }
 
@@ -393,27 +412,14 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
     }
 
     private MomentumInputResolver.ResolvedInputs resolvedInputs(OpRuntimeContext context) {
-        if (!hasDeferredInputs) {
-            return new MomentumInputResolver.ResolvedInputs(
-                    velocityInputs, accelerationInputs, dynamic);
-        }
-        return inputResolver.resolve(boundary, inputs, OpResolveContext.forRuntime(
-                this, OpResolveContext.UseSite.VECTOR, context, boundary));
-    }
-
-    /**
-     * Lets a parent MomentumOp re-resolve this operator's deferred vector
-     * inputs when the parent is itself consumed as a vector source.
-     */
-    MomentumInputResolver.ResolvedInputs resolvedInputsFor(OpRuntimeContext context) {
-        return resolvedInputs(context);
+        return new MomentumInputResolver.ResolvedInputs(
+                velocityInputs, accelerationInputs, dynamic);
     }
 
     private List<Vec3> spawnVectorSnapshots(VectorContext context,
                                             List<VectorInput> runtimeVelocityInputs) {
         if (spawnVectorSnapshots == null
-                || spawnVectorSnapshots.size() != runtimeVelocityInputs.size()
-                || hasDeferredInputs) {
+                || spawnVectorSnapshots.size() != runtimeVelocityInputs.size()) {
             List<Vec3> snapshots = new ArrayList<>(runtimeVelocityInputs.size());
             for (VectorInput input : runtimeVelocityInputs) {
                 snapshots.add(input.vector().provide(context));
@@ -468,18 +474,7 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
                 : Optional.ofNullable(context.activationFrame());
         return new MomentumOp(null, List.of(), List.of(), compileFrame, List.of(),
                 runtimeAccelerationInputs, Vec3.ZERO, 0, drainRotationSpeed,
-                ApplicationPhase.TICK, false, activation, null);
-    }
-
-    private static boolean hasDeferredInputs(List<OpInput> inputs) {
-        for (OpInput input : inputs) {
-            if (input instanceof OpInput.RawGroup) return true;
-            if (!(input instanceof OpInput.Op op)) continue;
-            if (op.operator() instanceof OpResolvable || hasDeferredInputs(op.operator().inputs())) {
-                return true;
-            }
-        }
-        return false;
+                ApplicationPhase.TICK, false, activation);
     }
 
     private static List<PersistedInput> serializedInputs(MomentumOp op) {
@@ -550,7 +545,12 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp {
 
     private static double gravityFor(OpRuntimeContext context) {
         if (context == null || !(context.parent() instanceof Entity entity)) return 0.0;
-        return entity.getGravity();
+        return gravityFor(entity);
+    }
+
+    private static double gravityFor(Entity entity) {
+        if (entity instanceof MagicEntity magic) return magic.gravity();
+        return entity == null ? 0.0 : entity.getGravity();
     }
 
     private static Vec3 directionOrZero(Vec3 direction) {

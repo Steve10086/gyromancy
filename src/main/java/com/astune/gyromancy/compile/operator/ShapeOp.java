@@ -10,6 +10,8 @@ import com.astune.gyromancy.array.compile.ArrayNode;
 import com.astune.gyromancy.array.compile.CompileDiagnostic;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.GroupNode;
+import com.astune.gyromancy.array.compile.LocalCompileContext;
+import com.astune.gyromancy.array.compile.LocalCompileResult;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
@@ -37,7 +39,7 @@ import java.util.Optional;
  * contain at most one nested group for the following dimension.</p>
  */
 @RegisteredOp
-public final class ShapeOp implements CompiledOp {
+public final class ShapeOp implements CompiledOp, LocalCompilable {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "field_shape");
     private static final int RECTANGULAR_DIMENSIONS = 3;
@@ -78,13 +80,22 @@ public final class ShapeOp implements CompiledOp {
     private final List<OpInput> matchedInputs;
     private final List<OpInput> inputs;
     private final Kind kind;
+    private final Optional<MagicFieldShape> materializedShape;
 
     private ShapeOp(PositionedGlyph boundary, List<OpInput> matchedInputs,
-                    List<OpInput> inputs, Kind kind) {
+                     List<OpInput> inputs, Kind kind) {
+        this(boundary, matchedInputs, inputs, kind, Optional.empty());
+    }
+
+    private ShapeOp(PositionedGlyph boundary, List<OpInput> matchedInputs,
+                    List<OpInput> inputs, Kind kind,
+                    Optional<MagicFieldShape> materializedShape) {
         this.boundary = boundary;
         this.matchedInputs = List.copyOf(matchedInputs);
         this.inputs = List.copyOf(inputs);
         this.kind = kind;
+        this.materializedShape = materializedShape == null
+                ? Optional.empty() : materializedShape;
     }
 
     public static CompileResult<CompiledOp> create(PositionedGlyph boundary,
@@ -92,17 +103,13 @@ public final class ShapeOp implements CompiledOp {
                                                     List<OpInput> inputs) {
         int splitCount = 0;
         List<OpInput.RawGroup> rawGroups = new ArrayList<>();
-        int deferredCount = 0;
         for (OpInput input : inputs) {
             if (input instanceof OpInput.Rune rune && "split".equals(rune.symbolName())) {
                 splitCount++;
             } else if (input instanceof OpInput.RawGroup raw) {
                 rawGroups.add(raw);
-            } else if (input instanceof OpInput.Op op && op.operator() instanceof OpResolvable) {
-                // rawGroup() already admits deferred inputs during static
-                // matching. Preserve the generic input here and resolve its
-                // source only when the field is activated.
-                deferredCount++;
+            } else if (input instanceof OpInput.Op op && op.sourceGroup() != null) {
+                rawGroups.add(new OpInput.RawGroup(op.sourceGroup(), List.of()));
             } else if (!(input instanceof OpInput.Rune rune && "fix".equals(rune.symbolName()))) {
                 return invalidConfiguration();
             }
@@ -119,12 +126,6 @@ public final class ShapeOp implements CompiledOp {
             // An empty outer-circle child is the circular-shape selector. Any
             // additional raw groups remain available as its size layers.
             if (emptyOuterCircles == 1) {
-                return new CompileResult.Success<>(new ShapeOp(boundary, matchedInputs, inputs,
-                        Kind.CIRCULAR));
-            }
-            if (emptyOuterCircles == 0 && deferredCount == 1) {
-                // A deferred outer-circle source (for example Wireless) is
-                // classified after its source group is forwarded at runtime.
                 return new CompileResult.Success<>(new ShapeOp(boundary, matchedInputs, inputs,
                         Kind.CIRCULAR));
             }
@@ -151,6 +152,20 @@ public final class ShapeOp implements CompiledOp {
         return matchedInputs;
     }
 
+    public Optional<MagicFieldShape> materializedShape() {
+        return materializedShape;
+    }
+
+    @Override
+    public LocalCompileResult localCompile(LocalCompileContext context) {
+        try {
+            return LocalCompileResult.success(new ShapeOp(
+                    boundary, matchedInputs, inputs, kind, Optional.of(resolveStaticShape())));
+        } catch (IllegalArgumentException exception) {
+            return LocalCompileResult.failure("invalid_field_shape", exception.getMessage());
+        }
+    }
+
     @Override
     public int color() {
         return SymbolCatalog.glyphColorFor(ResourceLocation.fromNamespaceAndPath(
@@ -162,6 +177,7 @@ public final class ShapeOp implements CompiledOp {
      * stop the owning array and also return an empty optional.
      */
     public Optional<MagicFieldShape> resolveShape(OpRuntimeContext context) {
+        if (materializedShape.isPresent()) return materializedShape;
         try {
             List<Float> dimensions = new ArrayList<>();
             boolean circularSelectorFound = kind != Kind.CIRCULAR;
@@ -200,6 +216,47 @@ public final class ShapeOp implements CompiledOp {
         }
     }
 
+    private MagicFieldShape resolveStaticShape() {
+        List<Float> dimensions = new ArrayList<>();
+        boolean circularSelectorFound = kind != Kind.CIRCULAR;
+        for (OpInput input : inputs) {
+            GroupNode parameterGroup = staticParameterGroup(input);
+            if (parameterGroup == null) continue;
+            if (kind == Kind.CIRCULAR && isEmptyOuterCircle(parameterGroup)) {
+                circularSelectorFound = true;
+                continue;
+            }
+            decodeLayers(parameterGroup, dimensions);
+        }
+        if (kind == Kind.CIRCULAR && !circularSelectorFound) {
+            throw new ShapeParameterException(
+                    "A circular field shape requires an empty outer-circle selector");
+        }
+        if (dimensions.size() > RECTANGULAR_DIMENSIONS) {
+            throw new ShapeParameterException("Rectangular fields allow at most "
+                    + RECTANGULAR_DIMENSIONS + " nested size layers");
+        }
+        while (dimensions.size() < RECTANGULAR_DIMENSIONS) {
+            dimensions.add(RectangularFieldShape.DEFAULT_SIZE);
+        }
+        if (kind == Kind.CIRCULAR) {
+            return new CircularFieldShape(dimensions.get(0), dimensions.get(1), dimensions.get(2));
+        }
+        return new RectangularFieldShape(dimensions.get(0), dimensions.get(1), dimensions.get(2));
+    }
+
+    private static GroupNode staticParameterGroup(OpInput input) {
+        if (input instanceof OpInput.RawGroup raw) return raw.group();
+        if (input instanceof OpInput.Op op) {
+            if (op.sourceGroup() == null) {
+                throw new ShapeParameterException(
+                        "A field shape child has no statically available source group");
+            }
+            return op.sourceGroup();
+        }
+        return null;
+    }
+
     /**
      * Retains ordinary raw groups, while deferred inputs follow the same
      * runtime forwarding path as every other dynamic parent parameter. This
@@ -207,17 +264,12 @@ public final class ShapeOp implements CompiledOp {
      */
     private GroupNode parameterGroup(OpInput input, OpRuntimeContext context) {
         if (input instanceof OpInput.RawGroup raw) return raw.group();
-        if (!(input instanceof OpInput.Op)) return null;
-
-        OpResolution resolution = OpResolver.resolve(input, OpResolveContext.forRuntime(
-                this, OpResolveContext.UseSite.GROUP_INPUT, context, boundary));
-        if (resolution.sourceGroup() == null) {
-            if (input instanceof OpInput.Op op && op.operator() instanceof WirelessOp) {
-                throw new ShapeParameterException("Wireless field shape source was not found");
-            }
-            throw new ShapeParameterException("A deferred field shape parameter did not resolve to a source group");
+        if (input instanceof OpInput.Op op && op.sourceGroup() != null) {
+            return op.sourceGroup();
         }
-        return resolution.sourceGroup();
+        if (!(input instanceof OpInput.Op)) return null;
+        throw new ShapeParameterException(
+                "A field shape child has no statically available source group");
     }
 
     private static void decodeLayers(GroupNode group, List<Float> dimensions) {

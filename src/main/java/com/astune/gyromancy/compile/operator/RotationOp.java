@@ -18,7 +18,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 
 @RegisteredOp
-public final class RotationOp extends OnEntityTickOp implements CompiledOp {
+public final class RotationOp extends OnEntityTickOp implements CompiledOp,
+        EntityPayloadContributor {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "rotation");
     private static final ResourceLocation DRAIN_SYMBOL =

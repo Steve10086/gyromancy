@@ -25,6 +25,26 @@ final class VectorDefinitionSupport {
         return List.copyOf(accepted);
     }
 
+    /** Accepted inputs for the arrow and arrow_up static vectors. */
+    static List<OpInputMatcher> staticAccepted() {
+        return List.of(
+                OpInputMatcher.rune("arrow"),
+                OpInputMatcher.rune("arrow_up"),
+                OpInputMatcher.rune("curl"),
+                OpInputMatcher.boundary(SymbolRole.OUTER_CIRCLE),
+                OpInputMatcher.rawGroup(SymbolRole.OUTER_CIRCLE),
+                OpInputMatcher.secretText());
+    }
+
+    /** Accepted inputs for the generic raw-group static vector, which adds no vector of its own. */
+    static List<OpInputMatcher> rawGroupAccepted() {
+        return List.of(
+                OpInputMatcher.rawGroup(),
+                OpInputMatcher.rune("curl"),
+                OpInputMatcher.boundary(SymbolRole.OUTER_CIRCLE),
+                OpInputMatcher.secretText());
+    }
+
     static boolean containsRune(List<OpInput> inputs, String name) {
         return inputs.stream()
                 .filter(OpInput.Rune.class::isInstance)

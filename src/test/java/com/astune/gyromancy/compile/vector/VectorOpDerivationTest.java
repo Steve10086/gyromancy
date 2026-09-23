@@ -4,6 +4,7 @@ import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
+import com.astune.gyromancy.array.compile.ArrayNode;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.GroupNode;
 import com.astune.gyromancy.array.compile.OpInput;
@@ -17,6 +18,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -60,6 +62,85 @@ class VectorOpDerivationTest {
                 Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, 0L, 0.08);
 
         assertVectorEquals(new Vec3(0.0, -0.08, 0.0), gravity.provide(context));
+    }
+
+    @Test
+    void speedVectorIsBoundToTheEngagingCurlCombination() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph engaging = glyph("engaging", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph curl = glyph("curl", SymbolRole.PARAMETER_RUNE, 3);
+        VectorCompiler compiler = new VectorCompiler(VectorOpDefinitions.definitions());
+
+        VectorOp speed = assertInstanceOf(SpeedOp.class, compile(compiler,
+                group(circle, new SymbolNode(engaging), new SymbolNode(curl))));
+
+        assertVectorEquals(new Vec3(0.25, -0.5, 0.75),
+                speed.provide(context(new Vec3(0.25, -0.5, 0.75), 0L)));
+    }
+
+    @Test
+    void speedVectorPersistsThroughItsAdapter() {
+        SpeedOp speed = new SpeedOp(SpeedVectorDefinition.ID, null, List.of(), 0);
+
+        VectorOp loaded = VectorOpSerialization.decode(
+                VectorOpSerialization.encode(speed).orElseThrow());
+
+        assertVectorEquals(new Vec3(0.5, 0.0, -0.25),
+                loaded.provide(context(new Vec3(0.5, 0.0, -0.25), 0L)));
+    }
+
+    @Test
+    void rawGroupMatchesStaticVectorWithoutAddingAVector() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 2);
+        PositionedGlyph space = glyph("space", SymbolRole.CENTER_SYMBOL, 3);
+        VectorCompiler compiler = new VectorCompiler(VectorOpDefinitions.definitions());
+
+        VectorOp groupVector = assertInstanceOf(StaticVectorOp.class, compile(compiler,
+                group(circle, group(inner, new SymbolNode(space)))));
+        VectorContext context = new VectorContext(null, null, null,
+                Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, 0L, 0.08);
+
+        assertVectorEquals(new Vec3(0.0, -0.08, 0.0), groupVector.provide(context));
+    }
+
+    @Test
+    void secretTextsDecodeToConsecutiveIntegerScales() {
+        VectorCompiler compiler = new VectorCompiler(VectorOpDefinitions.definitions());
+        VectorContext context = new VectorContext(null, null, null,
+                Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, 0L, 0.08);
+
+        assertVectorEquals(new Vec3(0.0, -0.08, 0.0),
+                scaledSpace(compiler, context, 1, "secret_text_2"));
+        assertVectorEquals(new Vec3(0.0, -0.16, 0.0),
+                scaledSpace(compiler, context, 4, "secret_text_3"));
+        assertVectorEquals(new Vec3(0.0, -0.24, 0.0),
+                scaledSpace(compiler, context, 7, "secret_text_2", "secret_text_3", "secret_text_3"));
+        assertVectorEquals(new Vec3(0.0, -0.32, 0.0),
+                scaledSpace(compiler, context, 11, "secret_text_4"));
+        assertVectorEquals(new Vec3(0.0, -0.04, 0.0),
+                scaledSpace(compiler, context, 14, "secret_text_1", "secret_text_3"));
+        assertVectorEquals(new Vec3(0.0, -0.016, 0.0),
+                scaledSpace(compiler, context, 17, "secret_text_1", "secret_text_2", "secret_text_4"));
+        assertVectorEquals(new Vec3(0.0, -0.08, 0.0),
+                scaledSpace(compiler, context, 21, "secret_text_1"));
+    }
+
+    private static Vec3 scaledSpace(VectorCompiler compiler, VectorContext context,
+                                    int baseId, String... secrets) {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, baseId);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, baseId + 1);
+        List<ArrayNode> children = new ArrayList<>();
+        for (int index = 0; index < secrets.length; index++) {
+            children.add(new SymbolNode(glyph(secrets[index], SymbolRole.PARAMETER_RUNE,
+                    baseId + 2 + index)));
+        }
+        children.add(group(inner, new SymbolNode(glyph("space", SymbolRole.CENTER_SYMBOL,
+                baseId + 2 + secrets.length))));
+
+        VectorOp op = assertInstanceOf(StaticVectorOp.class,
+                compile(compiler, group(circle, children.toArray(new ArrayNode[0]))));
+        return op.provide(context);
     }
 
     @Test
@@ -131,6 +212,20 @@ class VectorOpDerivationTest {
         ArrayNormalVectorOp normal = new ArrayNormalVectorOp(
                 ArrayNormalVectorDefinition.ID, null, List.of(), 0, 2.0);
         assertVectorEquals(new Vec3(0.0, 0.0, 2.0), normal.provide(context));
+    }
+
+    @Test
+    void compositionSumsOpposingVectorsWithoutRestoringTheirLength() {
+        VectorOp right = StaticVectorOp.literal(new Vec3(2.0, 0.0, 0.0));
+        VectorOp left = StaticVectorOp.literal(new Vec3(-2.0, 0.0, 0.0));
+        VectorContext context = new VectorContext(null, null, null,
+                Vec3.ZERO, Vec3.ZERO, new Vec3(0.0, 1.0, 0.0), 0L, 0.0);
+
+        Vec3 composed = VectorComposition.compose(context, List.of(
+                new VectorComposition.Input(right, VectorComposition.Mode.DIRECT),
+                new VectorComposition.Input(left, VectorComposition.Mode.DIRECT)));
+
+        assertVectorEquals(Vec3.ZERO, composed);
     }
 
     @Test

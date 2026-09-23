@@ -21,7 +21,7 @@ import java.util.Optional;
 
 import static java.lang.Math.max;
 
-public final class ElementOp extends OnEntityTickOp implements CompiledOp {
+public final class ElementOp extends OnEntityTickOp implements CompiledOp, EntityPayloadContributor {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "element");
     private static final ResourceLocation ENGAGING_SYMBOL =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "engaging");

@@ -12,19 +12,32 @@ public final class StaticVectorOp extends VectorOp {
     private final List<VectorComposition.Input> inputs;
     private final List<Term> terms;
     private final boolean curl;
+    private final double scale;
 
     StaticVectorOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> rawInputs,
                    int color, List<VectorComposition.Input> inputs, boolean curl) {
-        this(id, boundary, rawInputs, color, List.of(), inputs, curl);
+        this(id, boundary, rawInputs, color, List.of(), inputs, curl, 1.0);
+    }
+
+    StaticVectorOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> rawInputs,
+                   int color, List<VectorComposition.Input> inputs, boolean curl, double scale) {
+        this(id, boundary, rawInputs, color, List.of(), inputs, curl, scale);
     }
 
     StaticVectorOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> rawInputs,
                    int color, List<Term> terms, List<VectorComposition.Input> inputs,
                    boolean curl) {
+        this(id, boundary, rawInputs, color, terms, inputs, curl, 1.0);
+    }
+
+    StaticVectorOp(ResourceLocation id, PositionedGlyph boundary, List<OpInput> rawInputs,
+                   int color, List<Term> terms, List<VectorComposition.Input> inputs,
+                   boolean curl, double scale) {
         super(id, boundary, rawInputs, color);
         this.terms = List.copyOf(terms);
         this.inputs = List.copyOf(inputs);
         this.curl = curl;
+        this.scale = Double.isFinite(scale) ? scale : 1.0;
     }
 
     static StaticVectorOp direct(ResourceLocation id, Term term) {
@@ -43,6 +56,7 @@ public final class StaticVectorOp extends VectorOp {
                 : terms.stream()
                 .map(term -> term.resolve(context))
                 .reduce(Vec3.ZERO, Vec3::add);
+        if (scale != 1.0) result = result.scale(scale);
         return curl ? VectorFrameMath.orientByMovement(result, context) : result;
     }
 
@@ -56,6 +70,10 @@ public final class StaticVectorOp extends VectorOp {
 
     boolean curl() {
         return curl;
+    }
+
+    double scale() {
+        return scale;
     }
 
     enum TermKind {

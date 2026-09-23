@@ -3,9 +3,7 @@ package com.astune.gyromancy.array.compile;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.compile.operator.CompiledOp;
-import com.astune.gyromancy.compile.operator.OpResolution;
 import com.astune.gyromancy.compile.operator.OpResolveContext;
-import com.astune.gyromancy.compile.operator.OpResolver;
 import com.astune.gyromancy.compile.vector.VectorOp;
 
 import java.util.Collection;
@@ -55,21 +53,11 @@ public final class VectorCompiler extends GroupCompiler {
      */
     public CompileResult<CompiledOp> compile(OpInput input, OpResolveContext context) {
         if (input instanceof OpInput.Op op) {
-            OpResolveContext effectiveContext = context == null
-                    ? OpResolveContext.forVector(op.operator().boundary()) : context;
-            OpResolution resolution = OpResolver.resolve(input, effectiveContext);
-            OpResolveContext forwardedContext = resolution.forwardedContext(effectiveContext);
-            if (resolution.sourceGroup() != null) {
-                return compile(new OpInput.RawGroup(resolution.sourceGroup(), List.of()),
-                        forwardedContext);
+            if (op.sourceGroup() != null) {
+                return compile(new OpInput.RawGroup(op.sourceGroup(), List.of()), context);
             }
-            if (resolution.operator() != op.operator()) {
-                if (resolution.operator() instanceof VectorOp) {
-                    return new CompileResult.Success<>(resolution.operator());
-                }
-                return new CompileResult.Failure<>(List.of(new CompileDiagnostic(
-                        "missing_vector_source_group",
-                        "Resolved vector input did not provide a vector or source group")));
+            if (op.operator() instanceof VectorOp vector) {
+                return new CompileResult.Success<>(vector);
             }
         }
 

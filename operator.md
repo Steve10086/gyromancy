@@ -2,10 +2,11 @@
 
 本文档描述当前法阵 Operator 系统的编译、注册、调用和生命周期管线，并约定后续新增各级 Op 时允许修改的范围。
 
-当前系统采用隐性结构：
+当前系统采用固定的静态编译、局部编译、执行三段管线：
 
 - 编译后的节点统一是 `CompiledOp`。
-- 只有同时实现 `PersistentOp` 的 `CompiledOp` 才会被法阵生命周期执行。
+- 阶段1的 `CompiledOp` 只描述已匹配的结构；只有阶段3 Dispatcher 才会调用 `PersistentOp` 的生命周期方法。
+- `DynamicStructure` 在父 Definition 匹配前替换最终结构；`LocalCompilable` 只在阶段2处理需要局部物化的 Op。
 - `EmitOp` 是 child 发射协议；实体 payload 贡献通过 `CompiledOp` 的 direct child 方法完成。它们作为 root 被编译出来时，不会产生有意义的 runtime effect。
 - 新 Op 通过类内部的 `@RegisteredOp + DEFINITION` 进入匹配系统；需要多个互斥入口时，可由注解显式列出多个 definition 字段。
 
@@ -15,7 +16,8 @@
 flowchart TD
     Glyphs["MagicArrayManager 中的 PositionedGlyph"]
     Ast["ArrayAstBuilder -> GroupNode / SequenceNode"]
-    Compile["ArrayNodeCompiler"]
+    Static["StaticCompiler / GlobalCompiler"]
+    Local["LocalCompiler"]
     Defs["OpDefinitionRegistry.definitions()"]
     Root["CompiledArray(root: CompiledOp)"]
     Lifecycle["ArrayEffectLifecycle"]
@@ -26,9 +28,10 @@ flowchart TD
     PayloadContribution["entity payload contribution"]
 
     Glyphs --> Ast
-    Ast --> Compile
-    Defs --> Compile
-    Compile --> Root
+    Ast --> Static
+    Defs --> Static
+    Static --> Local
+    Local --> Root
     Root --> Lifecycle
     Lifecycle --> Dispatcher
     Dispatcher -->|"root instanceof PersistentOp"| Persistent
@@ -49,7 +52,9 @@ flowchart TD
 | `OpDefinitionRegistry` | `array/compile/OpDefinitionRegistry.java` | 发现 `@RegisteredOp`，读取注解声明的 definition 字段（默认 `DEFINITION`），并保留手动注册扩展入口。 |
 | `OpInput` | `array/compile/OpInput.java` | Op 的输入：直接 rune 或已编译 child Op。 |
 | `OpInputMatcher` | `array/compile/OpInputMatcher.java` | `OpDefinition.match()` 使用的 rune / child Op matcher。 |
-| `CompiledArray` | `array/compile/CompiledArray.java` | root Op、绑定 glyph 和显示颜色。 |
+| `CompiledArray` | `array/compile/CompiledArray.java` | 阶段1 root Op、绑定 glyph、显示颜色和 Wireless 依赖。 |
+| `ArrayCompilePipeline` | `array/compile/ArrayCompilePipeline.java` | 固定执行 StaticCompiler → LocalCompiler 顺序。 |
+| `RuntimeModel` | `array/compile/RuntimeModel.java` | 阶段2产生、供 Dispatcher 执行的 root Op 和依赖。 |
 | `ArrayEffectLifecycle` | `array/runtime/ArrayEffectLifecycle.java` | 法阵 effect 生命周期的唯一入口。 |
 | `OpRuntimeDispatcher` | `array/runtime/OpRuntimeDispatcher.java` | 编译结果到 runtime 执行的边界。 |
 
@@ -57,19 +62,19 @@ flowchart TD
 
 1. `MagicArrayDetector` 响应 glyph/canvas 变化，把法阵激活委托给 `ArrayEffectLifecycle`。
 2. `ArrayEffectLifecycle.activateOrReplace` 调用 `ArrayAstBuilder.build(circleGlyph, manager)` 构建 AST。
-3. `ArrayNodeCompiler.compile(ast, mgr.opDefinitions())` 编译每个 group：
+3. `StaticCompiler` 通过 `GlobalCompiler` 编译每个 group：
    - 直接符号节点变成 `OpInput.Rune`；
    - 嵌套 group 递归编译后变成 `OpInput.Op`；
    - 当前 group 的本地 direct inputs 用注册的 `OpDefinition` 做匹配。
-4. `ArrayNodeCompiler` 只保留满足以下条件的候选：
+4. `GlobalCompiler` 只保留满足以下条件的候选：
    - `match()` 中的 matcher 全部消费到不同的 direct input；
    - 所有未被消费的 direct input 都至少匹配 `accepted()` 中的一个 matcher。
-5. 在这些能接受全部 direct inputs 的候选中选择 `match()` 最长者。`CompileResult` 只表达已选 Definition 的编译成功或失败，不参与识别。
+5. 在这些能接受全部 direct inputs 的候选中选择 `match()` 最长者；无候选的嵌套组才可降级为 RawGroup，Definition 已接管后的失败不可降级。
 6. 胜出的 `OpDefinition` 会收到：
    - `boundary`：当前 group 的边界 glyph；
    - `matchedInputs`：只包含 match pattern 消耗掉的 inputs；
    - `inputs`：当前 group 的全部 direct runes 和已编译 child Ops。
-7. 最终产物是一个 `CompiledArray`，它持有唯一 root `CompiledOp`。
+7. `CompiledArray` 是阶段1产物；`LocalCompiler` 再将其转换为 `RuntimeModel`。
 
 匹配是 group-local 的。父 Op 看不到 child group 内部的 direct runes，只能看到一个 `OpInput.Op`。
 
@@ -77,9 +82,9 @@ flowchart TD
 
 `ArrayEffectLifecycle` 是 effect 生命周期的唯一拥有者：
 
-- 编译 AST 为 `CompiledArray`；
+- 通过 `ArrayCompilePipeline` 完成 StaticCompiler → LocalCompiler；
 - 替换前先 deactivate 同 root glyph 的旧法阵；
-- 调用 `OpRuntimeDispatcher.activate`；
+- 只有 `RuntimeModel` 可以传给 `OpRuntimeDispatcher.activate`；
 - 注册生成的 `ArrayObject`；
 - 将 emitted persistent entities 绑定回 array id；
 - glyph 失效时调用 `OpRuntimeDispatcher.deactivate`。
@@ -95,7 +100,7 @@ flowchart TD
 
 ## 当前处理模式
 
-当前系统不再有 `EntityPayloadProvider` 这种统一管理协议，也不新增独立 `Context` DTO。处理关系保持在 Op 树内部：
+当前系统不再有 `EntityPayloadProvider` 这种统一管理协议。阶段2通过 `LocalCompileContext` 提供固定的 child 物化入口，阶段3使用 `OpRuntimeContext` 执行；处理关系保持在 Op 树内部：
 
 ```text
 root Op
@@ -108,10 +113,10 @@ child Op
   -> 不要求 root 认识 deep leaf
 ```
 
-现有贡献请求是 `CompiledOp.contributeEntityPayloads(List<EntityPayload> payloads)`。它是默认 no-op 方法，不是 provider 接口：
+实体 payload 贡献通过 `EntityPayloadContributor` capability 完成，emission 修改通过 `EntityEmissionModifier` capability 完成；它们不是 `CompiledOp` 的默认方法：
 
 ```java
-default void contributeEntityPayloads(List<EntityPayload> payloads) {}
+void contributeEntityPayloads(List<EntityPayload> payloads, OpRuntimeContext context);
 ```
 
 `EntityEffectOp.payload(...)` 的职责是创建 payload 列表并把请求发给 direct child：
@@ -120,17 +125,17 @@ default void contributeEntityPayloads(List<EntityPayload> payloads) {}
 EntityEffectOp.payload(defaults)
   -> payload = defaults
   -> for each direct child:
-       child.contributeEntityPayloads(payload)
+       child.contributeEntityPayloads(payload, context)
   -> return payload copy
 ```
 
 如果某个 child 需要继续组合自己的附属 child，它应该在自己的 override 中递归处理：
 
 ```text
-SomeChildOp.contributeEntityPayloads(payloads)
+SomeChildOp.contributeEntityPayloads(payloads, context)
   -> payloads.add(自己的 runtime payload)
-  -> for each direct child of SomeChildOp:
-       child.contributeEntityPayloads(payloads)
+   -> for each direct child of SomeChildOp:
+       child.contributeEntityPayloads(payloads, context)
 ```
 
 这个递归不是由 root 或全局 registry 做的。root 只负责自己的一层 child；每一层 child 自己决定是否继续传递、传递什么请求，以及附属 child 的结果如何参与自己的语义。
@@ -240,9 +245,9 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 - 在 Definition 的 `accepted()` 中声明允许但不参与主匹配的 direct rune / child Op；默认空列表表示不接受任何额外输入；
 - 在 Op class 上标注 `@RegisteredOp`；
 - 如需测试或外部动态扩展，仍可通过 `OpDefinitionRegistry.register(...)` 手动注入；
-- 在 `ArrayNodeCompilerTest` 或相邻 focused test 中补编译测试。
+- 在 `StaticCompilerTest` 或相邻 focused test 中补编译测试。
 
-普通新增 Op 不应该修改 `ArrayNodeCompiler`。编译器应该只知道 `OpDefinition`、`OpInput` 和 `OpInputMatcher`。
+普通新增 Op 不应该修改 `StaticCompiler`。编译器应该只知道 `OpDefinition`、`OpInput` 和 `OpInputMatcher`。
 普通新增 Op 也不应该修改 `OpDefinitionRegistry` 的内置列表；registry 只负责发现和校验。
 
 `OpDefinitionRegistry` 的发现顺序：
@@ -267,7 +272,7 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 
 不允许：
 
-- 修改 `ArrayNodeCompiler`；
+- 修改 `StaticCompiler`；
 - 修改所有 root Ops；
 - 修改 `PersistentOp` 或生命周期类。
 
@@ -357,7 +362,7 @@ Entity runtime payload Op 是挂在实体上的序列化行为。当前例子：
 
 ## 维护规则
 
-- `ArrayNodeCompiler` 必须保持 compile-only，不理解 projectile、emit、payload 或 entity 行为。
+- `StaticCompiler`/`GlobalCompiler` 必须保持 compile-only，不理解 projectile、emit、payload 或 entity 行为。
 - `MagicArrayDetector` 必须保持事件入口角色，把 effect activate/deactivate 委托给 `ArrayEffectLifecycle`。
 - `OpRuntimeDispatcher` 是 compiled data 到 runtime execution 的边界。
 - Root Op 可以消费直接 child 的贡献，例如 emission 或 entity payload，但应避免识别 deep leaf。

@@ -4,6 +4,8 @@ import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.array.compile.CompileResult;
+import com.astune.gyromancy.array.compile.LocalCompileContext;
+import com.astune.gyromancy.array.compile.LocalCompileResult;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
@@ -34,7 +36,8 @@ import java.util.WeakHashMap;
  * attached as an entity payload, on a distance-adjusted fixed interval.
  */
 @RegisteredOp
-public final class LoopOp extends OnEntityTickOp implements PersistentOp {
+public final class LoopOp extends OnEntityTickOp implements PersistentOp, LocalCompilable,
+        EntityPayloadContributor {
     private static final int CHECK_INTERVAL = 10;
     private static final int MIN_PAYLOAD_INTERVAL = 5;
     private static final Map<ServerLevel, Set<LoopOp>> ACTIVE = new WeakHashMap<>();
@@ -134,6 +137,26 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
     }
 
     @Override
+    public LocalCompileResult localCompile(LocalCompileContext context) {
+        if (childInput == null) {
+            return LocalCompileResult.failure("missing_loop_effect",
+                    "Loop requires exactly one nested persistent effect");
+        }
+        OpInput materialized = context.materialize(childInput);
+        if (!(materialized instanceof OpInput.Op child)
+                || !(child.operator() instanceof PersistentOp)) {
+            return LocalCompileResult.failure("loop_child_not_persistent",
+                    "Loop requires a PersistentOp after local compilation");
+        }
+
+        List<OpInput> materializedInputs = inputs.stream()
+                .map(input -> input == childInput ? materialized : context.materialize(input))
+                .toList();
+        return LocalCompileResult.success(new LoopOp(
+                boundary, matchedInputs, materializedInputs, materialized));
+    }
+
+    @Override
     public int color() {
         return SymbolCatalog.glyphColorFor(LOOP_SYMBOL);
     }
@@ -182,11 +205,9 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
             return;
         }
         if (childInput == null) return;
-        OpResolution resolved = resolveChild(context);
-        if (isPersistent(resolved) && resolved.operator() instanceof PersistentOp persistent) {
-            persistent.deactivate(
-                    resolved.runtimeContextOr(childContext(context)).forOp(persistent),
-                    scratchData);
+        if (childInput instanceof OpInput.Op child
+                && child.operator() instanceof PersistentOp persistent) {
+            persistent.deactivate(childContext(context).forOp(persistent), scratchData);
         }
     }
 
@@ -249,30 +270,20 @@ public final class LoopOp extends OnEntityTickOp implements PersistentOp {
 
     private RuntimeHandle activateChild(OpRuntimeContext context) {
         if (childInput == null) return new RuntimeHandle(Map.of());
-        OpResolution resolved = resolveChild(context);
-        OpRuntimeContext runtime = resolved.runtimeContextOr(childContext(context));
-        if (!isPersistent(resolved) || !(resolved.operator() instanceof PersistentOp persistent)) {
+        if (!(childInput instanceof OpInput.Op child)
+                || !(child.operator() instanceof PersistentOp persistent)) {
             childScratchKeys = Set.of();
-            OpRuntimeFailure.terminate(runtime, this, OpRuntimeFailure.Kind.RUNTIME_ERROR,
-                    "Loop requires a PersistentOp after dynamic resolution");
+            OpRuntimeFailure.terminate(childContext(context), this,
+                    OpRuntimeFailure.Kind.RUNTIME_ERROR,
+                    "Loop requires a PersistentOp after static compilation");
             return new RuntimeHandle(Map.of());
         }
-        OpRuntimeContext persistentContext = runtime.forOp(persistent);
+        OpRuntimeContext persistentContext = childContext(context).forOp(persistent);
         RuntimeHandle handle = persistent.activate(persistentContext);
         activeChild = persistent;
         activeChildContext = persistentContext;
         childScratchKeys = Set.copyOf(handle.scratchData().keySet());
         return handle;
-    }
-
-    private OpResolution resolveChild(OpRuntimeContext context) {
-        OpRuntimeContext runtime = childContext(context);
-        return OpResolver.resolve(childInput, OpResolveContext.forRuntime(
-                this, OpResolveContext.UseSite.PERSISTENT_CHILD, runtime, boundary));
-    }
-
-    private static boolean isPersistent(OpResolution resolution) {
-        return OpInputMatcher.anyMatches(CHILD_MATCHERS, resolution);
     }
 
     private OpRuntimeContext childContext(OpRuntimeContext context) {

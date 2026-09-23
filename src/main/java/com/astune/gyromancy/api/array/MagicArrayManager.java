@@ -262,6 +262,11 @@ public class MagicArrayManager {
         return claimedCircleCompilations.contains(circleGlyphId);
     }
 
+    /** Releases a failed or deactivated circle compilation opportunity. */
+    public void releaseCircleCompilation(UUID circleGlyphId) {
+        claimedCircleCompilations.remove(circleGlyphId);
+    }
+
     public Collection<PositionedGlyph> getAllGlyphs() {
         return Collections.unmodifiableCollection(glyphIndex.values());
     }
@@ -410,6 +415,7 @@ public class MagicArrayManager {
             for (PositionedGlyph pg : arr.allBoundGlyphs()) {
                 glyphToArray.remove(pg.glyphUuid(), arrayId);
             }
+            releaseCircleCompilation(arr.rootCircleGlyph().glyphUuid());
         }
     }
 

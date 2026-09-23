@@ -135,7 +135,7 @@ class ShapeOpTest {
         GroupNode source = group(glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 4),
                 new SymbolNode(glyph("secret_text_1", SymbolRole.PARAMETER_RUNE, 5)),
                 new SymbolNode(glyph("secret_text_3", SymbolRole.PARAMETER_RUNE, 6)));
-        OpInput.Op deferred = new OpInput.Op(new DeferredShapeParameter(boundary, source), null);
+        OpInput.Op deferred = new OpInput.Op(new DeferredShapeParameter(boundary, source), source);
 
         ShapeOp shape = shape(ShapeOp.create(boundary, List.of(new OpInput.Rune(fix)),
                 List.of(new OpInput.Rune(fix), new OpInput.Rune(split), deferred)));
@@ -151,7 +151,7 @@ class ShapeOpTest {
         PositionedGlyph boundary = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph fix = glyph("fix", SymbolRole.PARAMETER_RUNE, 2);
         GroupNode source = group(glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3));
-        OpInput.Op deferred = new OpInput.Op(new DeferredShapeParameter(boundary, source), null);
+        OpInput.Op deferred = new OpInput.Op(new DeferredShapeParameter(boundary, source), source);
 
         ShapeOp shape = shape(ShapeOp.create(boundary, List.of(new OpInput.Rune(fix)),
                 List.of(new OpInput.Rune(fix), deferred)));
@@ -224,7 +224,7 @@ class ShapeOpTest {
     }
 
     private record DeferredShapeParameter(PositionedGlyph boundary, GroupNode source)
-            implements CompiledOp, OpResolvable {
+            implements CompiledOp {
         @Override
         public ResourceLocation id() {
             return ResourceLocation.fromNamespaceAndPath("gyromancy", "deferred_shape_parameter");
@@ -240,9 +240,5 @@ class ShapeOpTest {
             return 0;
         }
 
-        @Override
-        public OpResolution resolve(OpResolveContext context) {
-            return new OpResolution(this, source, null, null);
-        }
     }
 }

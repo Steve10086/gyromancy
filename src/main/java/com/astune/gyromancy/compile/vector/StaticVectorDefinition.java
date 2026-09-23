@@ -8,6 +8,7 @@ import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.compile.operator.OpResolveContext;
+import com.astune.gyromancy.symbol.SecretTextSymbol;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
@@ -17,9 +18,14 @@ import java.util.Optional;
 public final class StaticVectorDefinition {
     static final ResourceLocation DIRECTION_ID = id("vector_direction");
     static final ResourceLocation VELOCITY_ID = id("vector_velocity");
+    static final ResourceLocation RAW_GROUP_ID = id("vector_raw_group");
 
-    static final OpDefinition DIRECTION = definition(DIRECTION_ID, "arrow");
-    static final OpDefinition VELOCITY = definition(VELOCITY_ID, "arrow_up");
+    static final OpDefinition DIRECTION = definition(DIRECTION_ID,
+            OpInputMatcher.rune("arrow"), VectorDefinitionSupport.staticAccepted());
+    static final OpDefinition VELOCITY = definition(VELOCITY_ID,
+            OpInputMatcher.rune("arrow_up"), VectorDefinitionSupport.staticAccepted());
+    static final OpDefinition RAW_GROUP = definition(RAW_GROUP_ID,
+            OpInputMatcher.rawGroup(), VectorDefinitionSupport.rawGroupAccepted());
 
     private StaticVectorDefinition() {}
 
@@ -36,7 +42,8 @@ public final class StaticVectorDefinition {
         };
     }
 
-    private static OpDefinition definition(ResourceLocation id, String runeName) {
+    private static OpDefinition definition(ResourceLocation id, OpInputMatcher requiredInput,
+                                           List<OpInputMatcher> accepted) {
         return new OpDefinition() {
             @Override
             public ResourceLocation id() {
@@ -45,12 +52,12 @@ public final class StaticVectorDefinition {
 
             @Override
             public List<OpInputMatcher> match() {
-                return List.of(OpInputMatcher.rune(runeName));
+                return List.of(requiredInput);
             }
 
             @Override
             public List<OpInputMatcher> accepted() {
-                return VectorDefinitionSupport.accepted(true);
+                return accepted;
             }
 
             @Override
@@ -71,9 +78,24 @@ public final class StaticVectorDefinition {
                         id, boundary, inputs, 0,
                         VectorInputCompiler.all(boundary, inputs, VectorDefinitionSupport.compiler(),
                                 effectiveContext),
-                        VectorDefinitionSupport.containsRune(inputs, "curl")));
+                        VectorDefinitionSupport.containsRune(inputs, "curl"),
+                        secretScale(inputs)));
             }
         };
+    }
+
+    private static double secretScale(List<OpInput> inputs) {
+        int mask = 0;
+        for (OpInput input : inputs) {
+            if (!(input instanceof OpInput.Rune rune)) continue;
+            SecretTextSymbol secretText = SecretTextSymbol.fromId(rune.glyph().symbolId());
+            if (secretText == null) continue;
+            mask |= 1 << secretText.type().ordinal();
+        }
+        if (mask == 0) return 1.0;
+        int size = mask >> 1;
+        if (size == 0) return 1.0;
+        return (mask & 1) != 0 ? 1.0 / size : size;
     }
 
     private static StaticVectorOp.Term directionTerm(PositionedGlyph boundary,

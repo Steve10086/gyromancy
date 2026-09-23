@@ -104,6 +104,7 @@ public abstract class MagicBallEntity extends MagicEntity {
         impactThisTick = blockImpactThisTick || hitLivingEntity(velocityThisTick);
 
         addDeltaMovement(acceleration);
+        applyGravity();
 
         return true;
     }

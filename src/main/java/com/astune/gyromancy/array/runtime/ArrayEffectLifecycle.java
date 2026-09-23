@@ -7,13 +7,17 @@ import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.compile.ArrayAstBuilder;
 import com.astune.gyromancy.array.compile.ArrayCompileDebug;
-import com.astune.gyromancy.array.compile.ArrayNodeCompiler;
+import com.astune.gyromancy.array.compile.ArrayCompilePipeline;
+import com.astune.gyromancy.array.compile.CompileDiagnostic;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.CompiledArray;
 import com.astune.gyromancy.array.compile.GroupNode;
+import com.astune.gyromancy.array.compile.StaticResolveContext;
+import com.astune.gyromancy.array.compile.RuntimeModel;
 import com.astune.gyromancy.compile.operator.PersistentOp;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.runtime.emit.EmittedObject;
+import com.astune.gyromancy.array.runtime.wireless.WirelessDependencyCoordinator;
 import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import com.astune.gyromancy.entity.field.MagicFieldEntity;
 import com.astune.gyromancy.registry.ModAttachments;
@@ -60,20 +64,33 @@ public final class ArrayEffectLifecycle {
         GroupNode ast = ArrayAstBuilder.build(circleGlyph, mgr, isValidStroke);
         ArrayCompileDebug.printAst(level, ast);
 
-        CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(ast, mgr.opDefinitions());
-        if (!(result instanceof CompileResult.Success<CompiledArray> success)) {
-            if (result instanceof CompileResult.Failure<CompiledArray> failure) {
+        CompileResult<ArrayCompilePipeline.Result> result = new ArrayCompilePipeline(
+                mgr.opDefinitions()).compileDetailed(ast,
+                new StaticResolveContext(level, mgr, mgr.opDefinitions(),
+                        circleGlyph, List.of()));
+        if (!(result instanceof CompileResult.Success<ArrayCompilePipeline.Result> success)) {
+            if (result instanceof CompileResult.Failure<ArrayCompilePipeline.Result> failure) {
                 Gyromancy.LOGGER.debug("[MagicArrayDetector] Compile failed for glyph #{}: {}",
                         circleGlyph.glyphId(), failure.diagnostics());
                 ArrayCompileDebug.printFailure(level, failure);
             }
+            mgr.releaseCircleCompilation(circleGlyph.glyphUuid());
+            registerMissingDependencies(level, circleGlyph, failureOrEmpty(result));
             return Optional.empty();
         }
 
-        CompiledArray compiled = success.value();
-        if (!(compiled.root() instanceof PersistentOp)) return Optional.empty();
+        CompiledArray compiled = success.value().staticModel();
+        RuntimeModel runtime = success.value().runtimeModel();
+        ArrayCompileDebug.printRuntime(level, runtime);
+        ArrayCompileDebug.logRuntime(runtime);
+        if (!(runtime.root() instanceof PersistentOp)) {
+            mgr.releaseCircleCompilation(circleGlyph.glyphUuid());
+            return Optional.empty();
+        }
 
-        return activateCompiled(level, mgr, compiled);
+        WirelessDependencyCoordinator.cancelPending(level, circleGlyph.glyphUuid());
+
+        return activateCompiled(level, mgr, compiled, runtime);
     }
 
     /**
@@ -97,20 +114,25 @@ public final class ArrayEffectLifecycle {
 
         GroupNode ast = ArrayAstBuilder.build(root, mgr,
                 glyph -> GlyphStrokeValidator.isValidForCollection(glyph, mgr, level));
-        CompileResult<CompiledArray> result = ArrayNodeCompiler.compile(ast, mgr.opDefinitions());
-        if (!(result instanceof CompileResult.Success<CompiledArray> success)
-                || !(success.value().root() instanceof PersistentOp)) {
+        CompileResult<ArrayCompilePipeline.Result> result = new ArrayCompilePipeline(
+                mgr.opDefinitions()).compileDetailed(ast,
+                new StaticResolveContext(level, mgr, mgr.opDefinitions(),
+                        root, List.of()));
+        if (!(result instanceof CompileResult.Success<ArrayCompilePipeline.Result> success)
+                || !(success.value().runtimeModel().root() instanceof PersistentOp)) {
             deactivate(level, current);
-            if (result instanceof CompileResult.Failure<CompiledArray> failure) {
+            if (result instanceof CompileResult.Failure<ArrayCompilePipeline.Result> failure) {
                 Gyromancy.LOGGER.debug("[MagicArrayRuntime] Recompose failed for glyph #{}: {}",
                         root.glyphId(), failure.diagnostics());
                 ArrayCompileDebug.printFailure(level, failure);
+                registerMissingDependencies(level, root, failure);
             }
             return Optional.empty();
         }
 
         deactivate(level, current);
-        return activateCompiled(level, mgr, success.value());
+        return activateCompiled(level, mgr, success.value().staticModel(),
+                success.value().runtimeModel());
     }
 
     /**
@@ -194,17 +216,62 @@ public final class ArrayEffectLifecycle {
         return parentedRoots.size();
     }
 
+    /** Rebuilds live runtime models for arrays restored from level persistence. */
+    public static int rebuildAll(ServerLevel level) {
+        MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);
+        int rebuilt = 0;
+        for (ArrayObject array : List.copyOf(manager.getAllArrayObjs())) {
+            if (RuntimeModelRegistry.get(level, array.arrayId()) != null) continue;
+            PositionedGlyph root = manager.getGlyph(array.rootCircleGlyph().glyphUuid());
+            if (root == null || root.role() != SymbolRole.OUTER_CIRCLE) continue;
+
+            GroupNode ast = ArrayAstBuilder.build(root, manager,
+                    glyph -> GlyphStrokeValidator.isValidForCollection(glyph, manager, level));
+            CompileResult<ArrayCompilePipeline.Result> result = new ArrayCompilePipeline(
+                    manager.opDefinitions()).compileDetailed(ast,
+                    new StaticResolveContext(level, manager, manager.opDefinitions(),
+                            root, List.of()));
+            if (!(result instanceof CompileResult.Success<ArrayCompilePipeline.Result> success)
+                    || !(success.value().runtimeModel().root() instanceof PersistentOp)) {
+                if (result instanceof CompileResult.Failure<ArrayCompilePipeline.Result> failure) {
+                    registerMissingDependencies(level, root, failure);
+                }
+                continue;
+            }
+
+            CompiledArray compiled = success.value().staticModel();
+            RuntimeModel runtime = success.value().runtimeModel();
+            RuntimeModelRegistry.put(level, array.arrayId(), runtime);
+            for (String key : compiled.wirelessDependencyKeys()) {
+                level.getData(ModAttachments.WIRELESS_REGISTRY)
+                        .subscribe(key, array.arrayId());
+            }
+            RuntimeHandle handle = OpRuntimeDispatcher.activate(runtime, level, array);
+            Map<String, Object> scratch = new HashMap<>(array.scratchData());
+            scratch.putAll(handle.scratchData());
+            manager.setArrayScratchData(array.arrayId(), scratch);
+            bindPersistentEntities(level, array.arrayId(), scratch);
+            rebuilt++;
+        }
+        return rebuilt;
+    }
+
     public static void deactivate(ServerLevel level, ArrayObject array) {
-        OpRuntimeDispatcher.deactivate(level, array);
+        RuntimeModel model = RuntimeModelRegistry.get(level, array.arrayId());
+        if (model == null) OpRuntimeDispatcher.deactivate(level, array);
+        else OpRuntimeDispatcher.deactivate(level, array, model);
+        RuntimeModelRegistry.remove(level, array.arrayId());
         discardNonProjectileEmittedEntities(level, array.arrayId());
         level.getData(ModAttachments.WIRELESS_REGISTRY).unsubscribe(array.arrayId());
+        WirelessDependencyCoordinator.cancelPending(level, array.rootCircleGlyph().glyphUuid());
         level.getData(ModAttachments.ARRAY_MANAGER).unregisterArrayObj(array.arrayId());
         Gyromancy.LOGGER.info("[MagicArrayDetector] Array deactivated: root={}",
                 array.rootCircleGlyph().symbolId());
     }
 
     private static Optional<ArrayObject> activateCompiled(
-            ServerLevel level, MagicArrayManager manager, CompiledArray compiled) {
+            ServerLevel level, MagicArrayManager manager, CompiledArray compiled,
+            RuntimeModel runtimeModel) {
         UUID arrayId = UUID.randomUUID();
         long compilationEffectEndTick =
                 level.getGameTime() + ArrayObject.COMPILATION_EFFECT_TICKS;
@@ -214,9 +281,11 @@ public final class ArrayEffectLifecycle {
                 compiled.boundGlyphs(),
                 compilationEffectEndTick,
                 Map.of("__array_color", compiled.color()));
-        RuntimeHandle handle = OpRuntimeDispatcher.activate(compiled, level, activationArray);
+        RuntimeHandle handle = OpRuntimeDispatcher.activate(
+                runtimeModel, level, activationArray);
         if (OpRuntimeFailure.consumePendingTermination(activationArray)) {
             EmitResult.discardEmittedEntities(level, handle.scratchData());
+            manager.releaseCircleCompilation(compiled.rootCircleGlyph().glyphUuid());
             return Optional.empty();
         }
         Map<String, Object> scratchData = new HashMap<>(handle.scratchData());
@@ -229,10 +298,31 @@ public final class ArrayEffectLifecycle {
                 compilationEffectEndTick,
                 Map.copyOf(scratchData));
         manager.registerArrayObj(array);
+        RuntimeModelRegistry.put(level, arrayId, runtimeModel);
+        for (String key : compiled.wirelessDependencyKeys()) {
+            level.getData(ModAttachments.WIRELESS_REGISTRY).subscribe(key, arrayId);
+        }
         bindPersistentEntities(level, array.arrayId(), array.scratchData());
         Gyromancy.LOGGER.info("[MagicArrayDetector] Array activated: root={}, bound={}",
                 compiled.rootCircleGlyph().symbolId(), compiled.boundGlyphs().size());
         return Optional.of(array);
+    }
+
+    private static void registerMissingDependencies(
+            ServerLevel level, PositionedGlyph root, CompileResult.Failure<?> failure) {
+        List<String> keys = failure.diagnostics().stream()
+                .filter(diagnostic -> "missing_wireless_source".equals(diagnostic.code()))
+                .map(CompileDiagnostic::message)
+                .distinct()
+                .toList();
+        if (!keys.isEmpty()) {
+            WirelessDependencyCoordinator.registerPending(level, root.glyphUuid(), keys);
+        }
+    }
+
+    private static CompileResult.Failure<?> failureOrEmpty(CompileResult<?> result) {
+        return result instanceof CompileResult.Failure<?> failure
+                ? failure : new CompileResult.Failure<>(List.of());
     }
 
     /**

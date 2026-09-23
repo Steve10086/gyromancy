@@ -7,6 +7,8 @@ import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.compile.CompileResult;
+import com.astune.gyromancy.array.compile.LocalCompileContext;
+import com.astune.gyromancy.array.compile.LocalCompileResult;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
@@ -37,7 +39,7 @@ import static java.lang.Math.max;
 
 /** Projects the glyphs enclosed by a canvas outer circle onto a fixed parallel plane. */
 @RegisteredOp
-public final class ProjectionOp implements CompiledOp, PersistentOp {
+public final class ProjectionOp implements CompiledOp, PersistentOp, LocalCompilable {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "projection");
     private static final List<OpInputMatcher> SOURCE_MATCHERS = List.of(
@@ -84,6 +86,15 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
         this.boundary = boundary;
         this.matchedInputs = List.copyOf(matchedInputs);
         this.inputs = List.copyOf(inputs);
+    }
+
+    @Override
+    public LocalCompileResult localCompile(LocalCompileContext context) {
+        List<OpInput> materialized = inputs.stream()
+                .map(context::materialize)
+                .toList();
+        return LocalCompileResult.success(new ProjectionOp(
+                boundary, matchedInputs, materialized));
     }
 
     @Override
@@ -234,7 +245,6 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
     private static boolean hasStaticSourceCircle(List<OpInput> inputs) {
         for (OpInput input : inputs) {
             if (input instanceof OpInput.Op op) {
-                if (op.operator() instanceof OpResolvable) return true;
                 PositionedGlyph circle = op.operator().boundary();
                 if (circle != null && circle.role() == SymbolRole.OUTER_CIRCLE) return true;
             } else if (input instanceof OpInput.RawGroup raw) {
@@ -255,20 +265,21 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
             }
             if (!(input instanceof OpInput.Op)) continue;
 
-            OpResolution resolution = OpResolver.resolve(input, OpResolveContext.forRuntime(
-                    this, OpResolveContext.UseSite.GROUP_INPUT, context, boundary));
-            OpRuntimeContext sourceContext = resolution.runtimeContextOr(context);
-            if (!OpInputMatcher.anyMatches(SOURCE_MATCHERS, resolution)) {
-                OpRuntimeFailure.terminate(sourceContext, this, OpRuntimeFailure.Kind.RUNTIME_ERROR,
-                        "Projection requires an outer-circle source after dynamic resolution");
-                return Optional.empty();
+            OpInput.Op staticInput = (OpInput.Op) input;
+            if (staticInput.sourceGroup() != null
+                    && staticInput.sourceGroup().boundary() != null
+                    && staticInput.sourceGroup().boundary().role() == SymbolRole.OUTER_CIRCLE) {
+                return Optional.of(new SourceCircle(
+                        context.liveGlyph(staticInput.sourceGroup().boundary()), null));
             }
 
-            PositionedGlyph circle = resolution.sourceGroup() == null
-                    ? resolution.operator().boundary() : resolution.sourceGroup().boundary();
+            OpInput.Op child = (OpInput.Op) input;
+            PositionedGlyph circle = child.operator().boundary();
             if (circle != null && circle.role() == SymbolRole.OUTER_CIRCLE) {
-                return Optional.of(new SourceCircle(sourceContext.liveGlyph(circle), null));
+                return Optional.of(new SourceCircle(context.liveGlyph(circle), null));
             }
+            OpRuntimeFailure.terminate(context, this, OpRuntimeFailure.Kind.RUNTIME_ERROR,
+                    "Projection requires a statically resolved outer-circle source");
         }
         return Optional.empty();
     }

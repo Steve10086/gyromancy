@@ -1,22 +1,24 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.Gyromancy;
-import com.astune.gyromancy.api.array.ArrayObject;
-import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.compile.CompileDiagnostic;
 import com.astune.gyromancy.array.compile.CompileResult;
-import com.astune.gyromancy.array.compile.GlobalCompiler;
 import com.astune.gyromancy.array.compile.GroupNode;
+import com.astune.gyromancy.array.compile.MissingDependency;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.RegisteredOp;
+import com.astune.gyromancy.array.compile.SourceFrameRef;
+import com.astune.gyromancy.array.compile.StaticResolveContext;
+import com.astune.gyromancy.array.compile.StructureResolution;
 import com.astune.gyromancy.array.runtime.ArrayEffectLifecycle;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.OpRuntimeFailure;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
+import com.astune.gyromancy.array.runtime.wireless.WirelessDependencyCoordinator;
 import com.astune.gyromancy.array.runtime.wireless.WirelessRegistry;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.symbol.SecretText;
@@ -37,7 +39,7 @@ import java.util.UUID;
  * replaces itself with the already-published source when consumed by a parent.
  */
 @RegisteredOp
-public final class WirelessOp implements PersistentOp, OpResolvable {
+public final class WirelessOp implements PersistentOp, DynamicStructure {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "wireless");
 
@@ -88,9 +90,6 @@ public final class WirelessOp implements PersistentOp, OpResolvable {
     private final List<OpInput> inputs;
     private final String key;
     private final GroupNode publishedSource;
-    private PersistentOp activeDelegate;
-    private OpRuntimeContext activeDelegateContext;
-
     private WirelessOp(PositionedGlyph boundary, List<OpInput> matchedInputs,
                        List<OpInput> inputs, String key, GroupNode publishedSource) {
         this.boundary = boundary;
@@ -133,6 +132,37 @@ public final class WirelessOp implements PersistentOp, OpResolvable {
     }
 
     @Override
+    public StructureResolution resolveStructure(StaticResolveContext context) {
+        if (publishesSource()) return new StructureResolution.Preserved(Set.of());
+        if (context == null || context.level() == null || context.manager() == null) {
+            return new StructureResolution.Preserved(Set.of());
+        }
+        if (context.contains(key)) {
+            return new StructureResolution.FatalFailure(List.of(new CompileDiagnostic(
+                    "wireless_cycle", "Wireless dependency cycle at " + key)));
+        }
+
+        WirelessRegistry registry = context.level().getData(ModAttachments.WIRELESS_REGISTRY);
+        Optional<WirelessRegistry.Value> value = registry.value(key);
+        if (value.isEmpty()) {
+            return new StructureResolution.RetryableDependency(List.of(
+                    new MissingDependency(key, boundary.glyphUuid())));
+        }
+
+        Optional<GroupNode> source = value.get().loadedSource(context.level(), context.manager());
+        if (source.isEmpty()) {
+            return new StructureResolution.RetryableDependency(List.of(
+                    new MissingDependency(key, boundary.glyphUuid())));
+        }
+
+        GroupNode sourceGroup = source.get();
+        return new StructureResolution.Found(
+                sourceGroup,
+                SourceFrameRef.fromGroup(sourceGroup),
+                Set.of(key));
+    }
+
+    @Override
     public int color() {
         return SymbolCatalog.glyphColorFor(ResourceLocation.fromNamespaceAndPath(
                 Gyromancy.MODID, "space"));
@@ -156,96 +186,24 @@ public final class WirelessOp implements PersistentOp, OpResolvable {
             for (UUID dependent : dependents) {
                 ArrayEffectLifecycle.recompose(level, dependent);
             }
+            WirelessDependencyCoordinator.retry(level, key);
             return new RuntimeHandle(Map.of());
         }
 
-        OpResolution resolved = resolve(OpResolveContext.forRuntime(
-                this, OpResolveContext.UseSite.GROUP_INPUT, context, boundary));
-        if (!(resolved.operator() instanceof PersistentOp persistent) || resolved.operator() == this) {
-            OpRuntimeFailure.terminate(context, this, OpRuntimeFailure.Kind.RUNTIME_ERROR,
-                    "Wireless key " + key + " is not available as a persistent source");
-            return new RuntimeHandle(Map.of());
-        }
-
-        OpRuntimeContext delegateContext = resolved.runtimeContextOr(context).forOp(persistent);
-        RuntimeHandle handle = persistent.activate(delegateContext);
-        activeDelegate = persistent;
-        activeDelegateContext = delegateContext;
-        return handle;
+        OpRuntimeFailure.terminate(context, this, OpRuntimeFailure.Kind.RUNTIME_ERROR,
+                "Wireless consumer reached runtime without static structure replacement");
+        return new RuntimeHandle(java.util.Map.of());
     }
 
     @Override
     public void deactivate(OpRuntimeContext context, Map<String, Object> scratchData) {
-        if (activeDelegate == null) return;
-        OpRuntimeContext delegateContext = activeDelegateContext == null
-                ? context.forOp(activeDelegate) : activeDelegateContext;
-        activeDelegate.deactivate(delegateContext, scratchData);
-        activeDelegate = null;
-        activeDelegateContext = null;
-    }
-
-    /**
-     * Runtime lookup keeps static compilation independent of the level map.
-     * Vector consumers receive the source group for their own second compiler;
-     * all other consumers receive the result of the normal global compiler.
-     */
-    @Override
-    public OpResolution resolve(OpResolveContext context) {
-        if (publishesSource() || context == null
-                || context.phase() != OpResolveContext.Phase.RUNTIME) {
-            return OpResolution.unchanged(this, context);
+        if (context == null || context.level() == null || !publishesSource()) return;
+        WirelessRegistry registry = context.level().getData(ModAttachments.WIRELESS_REGISTRY);
+        Set<UUID> dependents = registry.unpublish(
+                key, WirelessRegistry.Value.fromSource(publishedSource));
+        for (UUID dependent : dependents) {
+            ArrayEffectLifecycle.recompose(context.level(), dependent);
         }
-        if (context.runtimeContext() == null || context.runtimeContext().level() == null) {
-            return unresolved(context);
-        }
-        ServerLevel level = context.runtimeContext().level();
-
-        WirelessRegistry registry = level.getData(ModAttachments.WIRELESS_REGISTRY);
-        Optional<WirelessRegistry.Value> value = registry.value(key);
-        if (value.isEmpty()) return unresolved(context);
-
-        MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);
-        Optional<GroupNode> source = value.get().loadedSource(level, manager);
-        if (source.isEmpty()) return unresolved(context);
-
-        GroupNode sourceGroup = source.get();
-        ArrayObject sourceArray = value.get().runtimeArray(sourceGroup);
-        OpRuntimeContext sourceRuntime = context.runtimeContext()
-                .withArray(sourceArray, sourceGroup.boundary());
-        OpResolveContext sourceContext = context.withArray(sourceArray)
-                .withRuntimeContext(sourceRuntime)
-                .withTargetBoundary(sourceGroup.boundary())
-                .withSourceGroup(sourceGroup);
-
-        if (context.array() != null) registry.subscribe(key, context.array().arrayId());
-        if (context.useSite() == OpResolveContext.UseSite.VECTOR) {
-            return new OpResolution(this, sourceGroup, sourceArray, sourceRuntime);
-        }
-
-        CompileResult<CompiledOp> compiled = new GlobalCompiler(manager.opDefinitions())
-                .compile(sourceGroup, sourceContext);
-        if (compiled instanceof CompileResult.Success<CompiledOp> success) {
-            return new OpResolution(success.value(), sourceGroup, sourceArray, sourceRuntime);
-        }
-
-        // A Wireless source is intentionally allowed to be an arbitrary
-        // authored structure.  In particular, a source consisting only of
-        // secret-text runes has no primary operator and therefore cannot be
-        // compiled as an executable array, but it is still a valid raw group
-        // for consumers such as ShapeOp.  Preserve the loaded source instead
-        // of falling back to the consumer's `space{...}` wrapper.
-        return new OpResolution(this, sourceGroup, sourceArray, sourceRuntime);
-    }
-
-    /**
-     * Do not preserve the consumer input as a source when the Wireless key is
-     * unavailable.  Parents can then report the actual missing-source error
-     * instead of trying to parse the `space` wrapper as their own payload.
-     */
-    private OpResolution unresolved(OpResolveContext context) {
-        return new OpResolution(this, null,
-                context == null ? null : context.array(),
-                context == null ? null : context.runtimeContext());
     }
 
     private static List<GroupNode> directSourceGroups(List<OpInput> inputs) {

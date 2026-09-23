@@ -127,21 +127,6 @@ class MomentumOpTest {
     }
 
     @Test
-    void appliesAccelerationForExactlyOneHundredTicksThenClearsIt() {
-        MomentumOp op = new MomentumOp(List.of(
-                staticInput(new Vec3(1.0, 0.0, 0.0), 1.0, false)));
-
-        for (int tick = 0; tick < MomentumOp.ACTIVE_TICKS; tick++) {
-            assertVectorEquals(new Vec3(0.1, 0.0, 0.0),
-                    op.accelerationForTick(new Vec3(0.0, 0.0, 1.0)));
-        }
-
-        assertEquals(MomentumOp.ACTIVE_TICKS, op.elapsedTicks());
-        assertVectorEquals(Vec3.ZERO, op.currentAcceleration());
-        assertVectorEquals(Vec3.ZERO, op.accelerationForTick(new Vec3(0.0, 0.0, 1.0)));
-    }
-
-    @Test
     void codecPreservesCurrentAccelerationAndElapsedTicks() {
         MomentumOp op = new MomentumOp(List.of(
                 staticInput(new Vec3(1.0, 0.0, 0.0), 2.0, false)));

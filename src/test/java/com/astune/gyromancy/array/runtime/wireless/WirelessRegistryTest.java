@@ -63,6 +63,34 @@ class WirelessRegistryTest {
                 .contains(UUID.fromString("00000000-0000-0000-0000-000000000022")));
     }
 
+    @Test
+    void tracksPendingRootsSeparatelyFromActiveSubscribers() {
+        WirelessRegistry registry = new WirelessRegistry();
+        String key = WirelessRegistry.keyFor(List.of(SecretText.SECRET_1));
+        UUID root = UUID.fromString("00000000-0000-0000-0000-000000000023");
+
+        registry.addPending(key, root);
+        assertEquals(Set.of(root), registry.pending(key));
+        registry.cancelPending(root);
+        assertTrue(registry.pending(key).isEmpty());
+    }
+
+    @Test
+    void unpublishOnlyRemovesTheExpectedSourceSnapshot() {
+        WirelessRegistry registry = new WirelessRegistry();
+        String key = WirelessRegistry.keyFor(List.of(SecretText.SECRET_2));
+        WirelessRegistry.Value first = new WirelessRegistry.Value(
+                glyph(2, 2.0), List.of(glyph(2, 2.0)));
+        WirelessRegistry.Value changed = new WirelessRegistry.Value(
+                glyph(2, 3.0), List.of(glyph(2, 3.0)));
+
+        registry.publish(key, first);
+        assertTrue(registry.unpublish(key, changed).isEmpty());
+        assertTrue(registry.contains(key));
+        registry.unpublish(key, first);
+        assertFalse(registry.contains(key));
+    }
+
     private static PositionedGlyph glyph(int id, double length) {
         BlockPos pos = new BlockPos(0, 64, 0);
         return new PositionedGlyph(

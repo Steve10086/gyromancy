@@ -71,6 +71,11 @@ public final class WindFieldOp extends FieldOp {
         this.inputs = List.copyOf(inputs);
     }
 
+    @Override
+    protected FieldOp copyWithInputs(List<OpInput> inputs) {
+        return new WindFieldOp(boundary, matchedInputs, inputs);
+    }
+
     public static CompileResult<CompiledOp> create(PositionedGlyph boundary,
                                                     List<OpInput> matchedInputs,
                                                     List<OpInput> inputs) {

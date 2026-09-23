@@ -9,6 +9,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.server.level.ServerLevel;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -77,6 +78,11 @@ public abstract class EntityPayload {
     }
 
     public void bindToArray(UUID arrayId) {}
+
+    /** Server-aware binding hook for payloads which need to rebuild structure. */
+    public void bindToArray(ServerLevel level, UUID arrayId) {
+        bindToArray(arrayId);
+    }
 
     public CompoundTag savePayload() {
         CompoundTag tag = new CompoundTag();
