@@ -9,6 +9,7 @@ import com.astune.gyromancy.wand.WandContents;
 import com.astune.gyromancy.wand.WandSlotSnapshots;
 import com.astune.painter.api.CanvasFace;
 import com.mojang.serialization.Codec;
+import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -79,6 +80,19 @@ public final class ModDataComponents {
                     DataComponentType.<CanvasDocument>builder()
                             .persistent(CanvasDocument.CODEC)
                             .networkSynchronized(ByteBufCodecs.fromCodec(CanvasDocument.CODEC))
+                            .build()
+            );
+
+    /**
+     * The document's local +V direction captured when a canvas is broken. The
+     * bottom edge faces the breaker, so placing it again keeps the drawing
+     * readable from the placing side.
+     */
+    public static final Supplier<DataComponentType<Direction>> CANVAS_ORIENTATION =
+            DATA_COMPONENTS.register("canvas_orientation", () ->
+                    DataComponentType.<Direction>builder()
+                            .persistent(Direction.CODEC)
+                            .networkSynchronized(ByteBufCodecs.fromCodec(Direction.CODEC))
                             .build()
             );
 

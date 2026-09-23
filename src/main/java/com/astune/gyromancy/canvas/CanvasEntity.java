@@ -51,7 +51,7 @@ import java.util.Objects;
  * dimensions; collapsed canvases use the bounds of their scroll model.
  */
 public class CanvasEntity extends BlockAttachedEntity {
-    public static final float DEPTH = 1.0F / 16.0F;
+    public static final float DEPTH = CanvasPlacementGeometry.DEPTH;
     private static final String DOCUMENT_TAG = "CanvasDocument";
     private static final String COLLAPSED_TAG = "Collapsed";
 
@@ -69,6 +69,9 @@ public class CanvasEntity extends BlockAttachedEntity {
      */
     private static final EntityDataAccessor<Boolean> DATA_COLLAPSED =
             SynchedEntityData.defineId(CanvasEntity.class, EntityDataSerializers.BOOLEAN);
+    /** The document's local +V direction (its top edge) for in-plane placement. */
+    private static final EntityDataAccessor<Integer> DATA_ORIENTATION =
+            SynchedEntityData.defineId(CanvasEntity.class, EntityDataSerializers.INT);
 
     private CanvasDocument document = CanvasDocument.blank(1, 1);
     private int revision;
@@ -92,10 +95,18 @@ public class CanvasEntity extends BlockAttachedEntity {
 
     public static CanvasEntity create(Level level, BlockPos pos, Direction direction,
                                       CanvasDocument document, boolean collapsed) {
+        return create(level, pos, direction, CanvasOrientation.defaultTop(direction),
+                document, collapsed);
+    }
+
+    public static CanvasEntity create(Level level, BlockPos pos, Direction direction,
+                                      Direction orientation, CanvasDocument document,
+                                      boolean collapsed) {
         CanvasEntity canvas = new CanvasEntity(ModEntities.CANVAS.get(), level, pos);
         canvas.setDocumentInternal(document, false);
         canvas.entityData.set(DATA_COLLAPSED, collapsed);
         canvas.setDirection(direction);
+        canvas.setOrientation(orientation);
         return canvas;
     }
 
@@ -110,7 +121,24 @@ public class CanvasEntity extends BlockAttachedEntity {
             setYRot(0.0F);
         }
         yRotO = getYRot();
+        applyOrientation(CanvasOrientation.defaultTop(direction));
         recalculateBoundingBox();
+    }
+
+    /** The document's local +V direction, i.e. the direction its top edge points at. */
+    public Direction orientation() {
+        return Direction.from3DDataValue(entityData.get(DATA_ORIENTATION));
+    }
+
+    /** Sets the in-plane rotation. Candidates parallel to the support are ignored. */
+    public void setOrientation(Direction orientation) {
+        applyOrientation(orientation);
+        recalculateBoundingBox();
+    }
+
+    private void applyOrientation(Direction candidate) {
+        Direction resolved = CanvasOrientation.compatibleTop(direction, candidate);
+        entityData.set(DATA_ORIENTATION, resolved.get3DDataValue());
     }
 
     /** Sets an arbitrary orthonormal plane for projection canvases. */
@@ -136,12 +164,12 @@ public class CanvasEntity extends BlockAttachedEntity {
 
     public Vec3 surfaceWidthAxis() {
         return surfaceWidthAxisOverride != null
-                ? surfaceWidthAxisOverride : CanvasOrientation.widthAxis(direction);
+                ? surfaceWidthAxisOverride : CanvasOrientation.rightAxis(orientation(), direction);
     }
 
     public Vec3 surfaceHeightAxis() {
         return surfaceHeightAxisOverride != null
-                ? surfaceHeightAxisOverride : CanvasOrientation.heightAxis(direction);
+                ? surfaceHeightAxisOverride : CanvasOrientation.topAxis(orientation());
     }
 
     /** The compiler and renderer share this exact world-space plane definition. */
@@ -162,11 +190,13 @@ public class CanvasEntity extends BlockAttachedEntity {
         builder.define(DATA_SCALE, 1);
         builder.define(DATA_REVISION, 0);
         builder.define(DATA_COLLAPSED, false);
+        builder.define(DATA_ORIENTATION, Direction.UP.get3DDataValue());
     }
 
     @Override
     public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
-        if (DATA_WIDTH.equals(key) || DATA_HEIGHT.equals(key) || DATA_COLLAPSED.equals(key)) {
+        if (DATA_WIDTH.equals(key) || DATA_HEIGHT.equals(key) || DATA_COLLAPSED.equals(key)
+                || DATA_ORIENTATION.equals(key)) {
             recalculateBoundingBox();
         }
         super.onSyncedDataUpdated(key);
@@ -180,37 +210,20 @@ public class CanvasEntity extends BlockAttachedEntity {
         // Keep that origin for the collapsed renderer instead of implicitly
         // recentering its geometry at the entity position.
         Vec3 renderOrigin = isCollapsed()
-                ? CanvasScrollGeometry.origin(pos, direction) : bounds.getCenter();
+                ? CanvasScrollGeometry.origin(pos, direction,
+                        surfaceWidthAxis(), surfaceHeightAxis())
+                : bounds.getCenter();
         setPosRaw(renderOrigin.x, renderOrigin.y, renderOrigin.z);
         setBoundingBox(bounds);
     }
 
     private AABB calculateBoundingBox(BlockPos pos, Direction facing) {
         if (isCollapsed()) {
-            return CanvasScrollGeometry.bounds(pos, facing, syncedHeight());
+            return CanvasScrollGeometry.bounds(pos, facing,
+                    surfaceWidthAxis(), surfaceHeightAxis(), syncedHeight());
         }
-        return calculateUnfurledBoundingBox(pos, facing);
-    }
-
-    /** Calculates the active canvas bounds without changing the current scroll state. */
-    private AABB calculateUnfurledBoundingBox(BlockPos pos, Direction facing) {
-        double width = syncedWidth();
-        double height = syncedHeight();
-        Vec3 base = Vec3.atCenterOf(pos).relative(facing, -0.46875);
-        double horizontalOffset = ((int) width & 1) == 0 ? 0.5 : 0.0;
-        double verticalOffset = ((int) height & 1) == 0 ? 0.5 : 0.0;
-        Vec3 widthAxis = surfaceWidthAxis();
-        Vec3 heightAxis = surfaceHeightAxis();
-        Vec3 normal = surfaceNormal();
-        Vec3 center = base.add(widthAxis.scale(horizontalOffset))
-                .add(heightAxis.scale(verticalOffset));
-        double sizeX = Math.abs(widthAxis.x) * width
-                + Math.abs(heightAxis.x) * height + Math.abs(normal.x) * DEPTH;
-        double sizeY = Math.abs(widthAxis.y) * width
-                + Math.abs(heightAxis.y) * height + Math.abs(normal.y) * DEPTH;
-        double sizeZ = Math.abs(widthAxis.z) * width
-                + Math.abs(heightAxis.z) * height + Math.abs(normal.z) * DEPTH;
-        return AABB.ofSize(center, sizeX, sizeY, sizeZ);
+        return CanvasPlacementGeometry.unfurledBounds(
+                pos, facing, orientation(), syncedWidth(), syncedHeight());
     }
 
     @Override
@@ -238,7 +251,8 @@ public class CanvasEntity extends BlockAttachedEntity {
         // The unfolded canvas is centred near its support plane, while the
         // normal canvas uses a half-block shift to inspect its full support
         // plane rather than its own thin render plane.
-        AABB supportBox = calculateUnfurledBoundingBox(pos, direction)
+        AABB supportBox = CanvasPlacementGeometry.unfurledBounds(
+                        pos, direction, orientation(), syncedWidth(), syncedHeight())
                 .move(Vec3.atLowerCornerOf(direction.getNormal()).scale(-0.5))
                 .deflate(1.0E-7);
         boolean supported = BlockPos.betweenClosedStream(supportBox).allMatch(this::isValidSupport);
@@ -480,6 +494,7 @@ public class CanvasEntity extends BlockAttachedEntity {
     public void addAdditionalSaveData(CompoundTag compound) {
         super.addAdditionalSaveData(compound);
         compound.putByte("facing_3d", (byte) direction.get3DDataValue());
+        compound.putByte("orientation", (byte) orientation().get3DDataValue());
         compound.putInt("revision", revision);
         compound.putBoolean(COLLAPSED_TAG, isCollapsed());
         DataResult<net.minecraft.nbt.Tag> encoded =
@@ -502,6 +517,9 @@ public class CanvasEntity extends BlockAttachedEntity {
                 : Direction.from2DDataValue(compound.getByte("facing"));
         setDocumentInternal(document, false);
         setDirection(direction);
+        setOrientation(compound.contains("orientation")
+                ? Direction.from3DDataValue(compound.getByte("orientation"))
+                : CanvasOrientation.defaultTop(direction));
     }
 
     @Override
@@ -509,9 +527,35 @@ public class CanvasEntity extends BlockAttachedEntity {
         if (!level().getGameRules().getBoolean(GameRules.RULE_DOENTITYDROPS)) return;
         playSound(SoundEvents.PAINTING_BREAK, 1.0F, 1.0F);
         if (brokenEntity instanceof Player player && player.hasInfiniteMaterials()) return;
+        spawnAtLocation(itemForDocument(brokenEntity));
+    }
+
+    /**
+     * The item form of this canvas. It carries the raster and the recognized
+     * structure, but no runtime glyph identities: placing it mints new ones so
+     * copies can never share array state. Blank canvases also stay
+     * component-identical so they keep stacking.
+     */
+    private ItemStack itemForDocument(@Nullable Entity brokenEntity) {
         ItemStack stack = new ItemStack(ModItems.CANVAS.get());
-        stack.set(ModDataComponents.CANVAS_DOCUMENT.get(), document);
-        spawnAtLocation(stack);
+        stack.set(ModDataComponents.CANVAS_DOCUMENT.get(), document.withoutRuntimeIdentities());
+        if (!document.isEmpty()) {
+            stack.set(ModDataComponents.CANVAS_ORIENTATION.get(), orientationForBreak(brokenEntity));
+        }
+        return stack;
+    }
+
+    /**
+     * The orientation carried by the dropped item: the bottom edge faces the
+     * breaker, so the drawing stays readable when it is placed again.
+     */
+    private Direction orientationForBreak(@Nullable Entity brokenEntity) {
+        if (brokenEntity != null && direction.getAxis().isVertical()) {
+            Direction side = CanvasOrientation.horizontalSide(
+                    position(), brokenEntity.position());
+            if (side != null) return side.getOpposite();
+        }
+        return orientation();
     }
 
     @Override
@@ -540,20 +584,26 @@ public class CanvasEntity extends BlockAttachedEntity {
 
     @Override
     public Packet<ClientGamePacketListener> getAddEntityPacket(ServerEntity entity) {
-        return new ClientboundAddEntityPacket(this, direction.get3DDataValue(), getPos());
+        return new ClientboundAddEntityPacket(
+                this, attachmentData(direction, orientation()), getPos());
+    }
+
+    /** Packs the support face and the in-plane orientation into the spawn packet data. */
+    public static int attachmentData(Direction direction, Direction orientation) {
+        return (direction.get3DDataValue() & 7) | ((orientation.get3DDataValue() & 7) << 3);
     }
 
     @Override
     public void recreateFromPacket(ClientboundAddEntityPacket packet) {
         super.recreateFromPacket(packet);
-        setDirection(Direction.from3DDataValue(packet.getData()));
+        int data = packet.getData();
+        setDirection(Direction.from3DDataValue(data & 7));
+        setOrientation(Direction.from3DDataValue((data >> 3) & 7));
     }
 
     @Override
     public ItemStack getPickResult() {
-        ItemStack stack = new ItemStack(ModItems.CANVAS.get());
-        stack.set(ModDataComponents.CANVAS_DOCUMENT.get(), document);
-        return stack;
+        return itemForDocument(null);
     }
 
     /** Hanging canvases are anchored surfaces and ignore external forces such as tornado attraction. */

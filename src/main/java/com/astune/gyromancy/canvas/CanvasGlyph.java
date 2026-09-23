@@ -64,6 +64,12 @@ public record CanvasGlyph(
         return cells;
     }
 
+    /** Returns an equivalent glyph carrying a different identity. */
+    public CanvasGlyph withGlyphUuid(UUID uuid) {
+        return new CanvasGlyph(uuid, symbolId, confidence, role, frontX, frontY,
+                length, width, minX, maxX, minY, maxY, cells);
+    }
+
     public CanvasGlyph resampleCells(int oldWidth, int oldHeight, int newWidth, int newHeight) {
         boolean[] owned = new boolean[oldWidth * oldHeight];
         for (int cell : cells) {

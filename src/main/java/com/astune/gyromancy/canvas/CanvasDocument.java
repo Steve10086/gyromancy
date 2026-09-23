@@ -3,6 +3,7 @@ package com.astune.gyromancy.canvas;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -176,30 +177,59 @@ public record CanvasDocument(
      * registrations.
      */
     public CanvasDocument duplicateAsSingleBlock() {
-        Map<UUID, UUID> glyphIds = new HashMap<>();
-        List<CanvasGlyph> copiedGlyphs = glyphs.stream()
-                .map(glyph -> {
-                    UUID copyId = UUID.randomUUID();
-                    glyphIds.put(glyph.glyphUuid(), copyId);
-                    return new CanvasGlyph(
-                            copyId, glyph.symbolId(), glyph.confidence(), glyph.role(),
-                            glyph.frontX(), glyph.frontY(), glyph.length(), glyph.width(),
-                            glyph.minX(), glyph.maxX(), glyph.minY(), glyph.maxY(),
-                            glyph.rawCells());
-                })
-                .toList();
-        List<CanvasArrayRecord> copiedArrays = arrays.stream()
+        CanvasDocument fresh = withFreshGlyphIdentities();
+        return new CanvasDocument(1, 1, resolutionScale,
+                fresh.colors, fresh.strokeEffects, fresh.glyphs, fresh.arrays);
+    }
+
+    /**
+     * Returns a copy whose glyphs carry newly minted identities and whose array
+     * records reference them. Placed canvases always use this form so the same
+     * item can never share runtime glyph state with another placed canvas.
+     */
+    public CanvasDocument withFreshGlyphIdentities() {
+        if (glyphs.isEmpty()) return this;
+        Map<UUID, UUID> replacements = new HashMap<>();
+        List<CanvasGlyph> fresh = new ArrayList<>(glyphs.size());
+        for (CanvasGlyph glyph : glyphs) {
+            UUID next = UUID.randomUUID();
+            replacements.put(glyph.glyphUuid(), next);
+            fresh.add(glyph.withGlyphUuid(next));
+        }
+        return new CanvasDocument(physicalWidth, physicalHeight, resolutionScale,
+                colors, strokeEffects, fresh, remapArrays(replacements));
+    }
+
+    /**
+     * Returns a copy that keeps the recognized structure but replaces every
+     * runtime identity with a deterministic positional placeholder. Items
+     * store this form; placement mints the real identities again.
+     */
+    public CanvasDocument withoutRuntimeIdentities() {
+        if (glyphs.isEmpty()) return this;
+        Map<UUID, UUID> replacements = new HashMap<>();
+        List<CanvasGlyph> placeholders = new ArrayList<>(glyphs.size());
+        for (int index = 0; index < glyphs.size(); index++) {
+            CanvasGlyph glyph = glyphs.get(index);
+            UUID placeholder = new UUID(0L, index + 1L);
+            replacements.put(glyph.glyphUuid(), placeholder);
+            placeholders.add(glyph.withGlyphUuid(placeholder));
+        }
+        return new CanvasDocument(physicalWidth, physicalHeight, resolutionScale,
+                colors, strokeEffects, placeholders, remapArrays(replacements));
+    }
+
+    private List<CanvasArrayRecord> remapArrays(Map<UUID, UUID> replacements) {
+        return arrays.stream()
                 .map(array -> {
-                    UUID root = glyphIds.getOrDefault(array.rootGlyph(), array.rootGlyph());
+                    UUID root = replacements.getOrDefault(array.rootGlyph(), array.rootGlyph());
                     List<UUID> bound = array.boundGlyphs().stream()
-                            .map(id -> glyphIds.getOrDefault(id, id))
+                            .map(id -> replacements.getOrDefault(id, id))
                             .toList();
                     return new CanvasArrayRecord(
                             root, bound, CanvasArrayRecord.fingerprint(root, bound), array.color());
                 })
                 .toList();
-        return new CanvasDocument(1, 1, resolutionScale,
-                colors, strokeEffects, copiedGlyphs, copiedArrays);
     }
 
     public CanvasDocument resample(int newScale) {

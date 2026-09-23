@@ -23,47 +23,51 @@ class CanvasScrollGeometryTest {
         List<Vector3f> vertices = modelVertices();
         for (BlockPos support : List.of(new BlockPos(12, 34, 56), new BlockPos(-12, -34, -56))) {
             for (Direction face : Direction.values()) {
-                for (int height : new int[]{1, 2, 4, 8}) {
-                    BlockPos placement = support.relative(face);
-                    Vec3 origin = CanvasScrollGeometry.origin(placement, face);
-                    Vec3 faceCenter = Vec3.atCenterOf(support).relative(face, 0.5);
-                    Vec3 normal = Vec3.atLowerCornerOf(face.getNormal());
-                    Vec3 longAxis = CanvasOrientation.heightAxis(face);
-                    Vec3 widthAxis = CanvasOrientation.widthAxis(face);
-                    // This is the rotation/scale order consumed by PoseStack in the renderer.
-                    Matrix4f render = new Matrix4f().rotation(CanvasScrollGeometry.rotation(face))
-                            .scale(1, 1, CanvasScrollGeometry.lengthScale(height));
-                    AABB renderedBounds = null;
-                    double near = Double.POSITIVE_INFINITY, far = Double.NEGATIVE_INFINITY;
-                    double bottom = Double.POSITIVE_INFINITY, top = Double.NEGATIVE_INFINITY;
-                    double left = Double.POSITIVE_INFINITY, right = Double.NEGATIVE_INFINITY;
-                    for (Vector3f vertex : vertices) {
-                        Vector3f transformed = render.transformPosition(new Vector3f(vertex));
-                        Vec3 world = origin.add(transformed.x, transformed.y, transformed.z);
-                        Vec3 relative = world.subtract(faceCenter);
-                        near = Math.min(near, relative.dot(normal));
-                        far = Math.max(far, relative.dot(normal));
-                        bottom = Math.min(bottom, relative.dot(longAxis));
-                        top = Math.max(top, relative.dot(longAxis));
-                        left = Math.min(left, relative.dot(widthAxis));
-                        right = Math.max(right, relative.dot(widthAxis));
-                        AABB point = new AABB(world, world);
-                        renderedBounds = renderedBounds == null ? point : renderedBounds.minmax(point);
+                for (Direction top : CanvasOrientationTest.topsFor(face)) {
+                    for (int height : new int[]{1, 2, 4, 8}) {
+                        BlockPos placement = support.relative(face);
+                        Vec3 widthAxis = CanvasOrientation.rightAxis(top, face);
+                        Vec3 longAxis = CanvasOrientation.topAxis(top);
+                        Vec3 origin = CanvasScrollGeometry.origin(placement, face, widthAxis, longAxis);
+                        Vec3 faceCenter = Vec3.atCenterOf(support).relative(face, 0.5);
+                        Vec3 normal = Vec3.atLowerCornerOf(face.getNormal());
+                        // This is the rotation/scale order consumed by PoseStack in the renderer.
+                        Matrix4f render = new Matrix4f()
+                                .rotation(CanvasScrollGeometry.rotation(face, widthAxis, longAxis))
+                                .scale(1, 1, CanvasScrollGeometry.lengthScale(height));
+                        AABB renderedBounds = null;
+                        double near = Double.POSITIVE_INFINITY, far = Double.NEGATIVE_INFINITY;
+                        double bottom = Double.POSITIVE_INFINITY, top_ = Double.NEGATIVE_INFINITY;
+                        double left = Double.POSITIVE_INFINITY, right = Double.NEGATIVE_INFINITY;
+                        for (Vector3f vertex : vertices) {
+                            Vector3f transformed = render.transformPosition(new Vector3f(vertex));
+                            Vec3 world = origin.add(transformed.x, transformed.y, transformed.z);
+                            Vec3 relative = world.subtract(faceCenter);
+                            near = Math.min(near, relative.dot(normal));
+                            far = Math.max(far, relative.dot(normal));
+                            bottom = Math.min(bottom, relative.dot(longAxis));
+                            top_ = Math.max(top_, relative.dot(longAxis));
+                            left = Math.min(left, relative.dot(widthAxis));
+                            right = Math.max(right, relative.dot(widthAxis));
+                            AABB point = new AABB(world, world);
+                            renderedBounds = renderedBounds == null ? point : renderedBounds.minmax(point);
+                        }
+                        String context = face + "/" + top + ", height=" + height + ", support=" + support;
+                        assertEquals(0, near, 1.0E-5, "No floating or penetration: " + context);
+                        assertEquals(4.5 / 16, far, 1.0E-5, context);
+                        assertEquals(height, top_ - bottom, 1.0E-5, context);
+                        assertEquals(-0.5 + height / 30.0, bottom, 1.0E-5, context);
+                        assertEquals(0.5 - 5.25 / 16, left, 1.0E-5, context);
+                        assertEquals(0.5 - 0.75 / 16, right, 1.0E-5, context);
+                        AABB hitbox = CanvasScrollGeometry.bounds(
+                                placement, face, widthAxis, longAxis, height);
+                        assertEquals(hitbox.minX, renderedBounds.minX, 1.0E-5, context);
+                        assertEquals(hitbox.minY, renderedBounds.minY, 1.0E-5, context);
+                        assertEquals(hitbox.minZ, renderedBounds.minZ, 1.0E-5, context);
+                        assertEquals(hitbox.maxX, renderedBounds.maxX, 1.0E-5, context);
+                        assertEquals(hitbox.maxY, renderedBounds.maxY, 1.0E-5, context);
+                        assertEquals(hitbox.maxZ, renderedBounds.maxZ, 1.0E-5, context);
                     }
-                    String context = face + ", height=" + height + ", support=" + support;
-                    assertEquals(0, near, 1.0E-5, "No floating or penetration: " + context);
-                    assertEquals(4.5 / 16, far, 1.0E-5, context);
-                    assertEquals(height, top - bottom, 1.0E-5, context);
-                    assertEquals(-0.5 + height / 30.0, bottom, 1.0E-5, context);
-                    assertEquals(0.5 - 5.25 / 16, left, 1.0E-5, context);
-                    assertEquals(0.5 - 0.75 / 16, right, 1.0E-5, context);
-                    AABB hitbox = CanvasScrollGeometry.bounds(placement, face, height);
-                    assertEquals(hitbox.minX, renderedBounds.minX, 1.0E-5, context);
-                    assertEquals(hitbox.minY, renderedBounds.minY, 1.0E-5, context);
-                    assertEquals(hitbox.minZ, renderedBounds.minZ, 1.0E-5, context);
-                    assertEquals(hitbox.maxX, renderedBounds.maxX, 1.0E-5, context);
-                    assertEquals(hitbox.maxY, renderedBounds.maxY, 1.0E-5, context);
-                    assertEquals(hitbox.maxZ, renderedBounds.maxZ, 1.0E-5, context);
                 }
             }
         }

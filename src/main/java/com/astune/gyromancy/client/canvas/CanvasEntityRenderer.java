@@ -7,7 +7,6 @@ import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -44,7 +43,7 @@ public final class CanvasEntityRenderer extends EntityRenderer<CanvasEntity> {
             super.render(entity, yaw, partialTick, poseStack, buffers, packedLight);
             return;
         }
-        applyAttachmentOrientation(entity, yaw, poseStack);
+        applyAttachmentOrientation(entity, poseStack);
 
         CanvasDocument document = CanvasClientState.document(entity.getId());
         ResourceLocation texture = CanvasClientState.textureLocation(entity);
@@ -73,16 +72,12 @@ public final class CanvasEntityRenderer extends EntityRenderer<CanvasEntity> {
         super.render(entity, yaw, partialTick, poseStack, buffers, packedLight);
     }
 
-    private static void applyAttachmentOrientation(CanvasEntity entity, float yaw,
+    private static void applyAttachmentOrientation(CanvasEntity entity,
                                                    PoseStack poseStack) {
-        if (entity.getDirection().getAxis().isVertical()) {
-            float floorRotation = entity.getDirection() == net.minecraft.core.Direction.UP
-                    ? 90.0F : -90.0F;
-            poseStack.mulPose(Axis.XP.rotationDegrees(floorRotation));
-            poseStack.mulPose(Axis.ZP.rotationDegrees(180.0F));
-        } else {
-            poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - yaw));
-        }
+        poseStack.mulPose(CanvasScrollGeometry.quadRotation(
+                entity.surfaceWidthAxis(),
+                entity.surfaceHeightAxis(),
+                entity.surfaceNormal()));
     }
 
     /** Renders the user-supplied Blockbench scroll with its authored texture. */
@@ -93,7 +88,8 @@ public final class CanvasEntityRenderer extends EntityRenderer<CanvasEntity> {
         poseStack.pushPose();
         // Preserve the Blockbench origin. Only orient its Z axis vertically,
         // then stretch that axis to the physical height of this canvas.
-        poseStack.mulPose(CanvasScrollGeometry.rotation(entity.getDirection()));
+        poseStack.mulPose(CanvasScrollGeometry.rotation(
+                entity.getDirection(), entity.surfaceWidthAxis(), entity.surfaceHeightAxis()));
         poseStack.scale(1.0F, 1.0F, CanvasScrollGeometry.lengthScale(entity.syncedHeight()));
         VertexConsumer consumer = buffers.getBuffer(
                 RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS));

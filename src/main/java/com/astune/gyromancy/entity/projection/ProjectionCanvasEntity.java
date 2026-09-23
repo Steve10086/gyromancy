@@ -157,7 +157,7 @@ public class ProjectionCanvasEntity extends CanvasEntity {
     @Override
     public Packet<ClientGamePacketListener> getAddEntityPacket(ServerEntity entity) {
         return new ClientboundAddEntityPacket(
-                this, entity, getDirection().get3DDataValue());
+                this, entity, CanvasEntity.attachmentData(getDirection(), orientation()));
     }
 
     @Override

@@ -30,9 +30,23 @@ public final class CanvasClientState {
             if (previous != null) previous.close();
             return new Snapshot(entityId, packet.revision(), packet.document());
         });
+        applyToEntity(packet);
         if (packet.openEditor()) {
             Minecraft.getInstance().setScreen(
                     new CanvasEditorScreen(packet.entityId(), packet.revision(), packet.document()));
+        }
+    }
+
+    /**
+     * The raster is not part of synched entity data, so the client entity is
+     * kept in step with the snapshot. Creative pick-block reads the document
+     * straight from that entity.
+     */
+    private static void applyToEntity(CanvasSnapshotPacket packet) {
+        if (Minecraft.getInstance().level == null) return;
+        if (Minecraft.getInstance().level.getEntity(packet.entityId())
+                instanceof CanvasEntity canvas) {
+            canvas.replaceDocument(packet.document(), false);
         }
     }
 

@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -151,6 +152,65 @@ class CanvasDocumentTest {
         assertEquals(copy.glyphs().getFirst().glyphUuid(), copy.arrays().getFirst().rootGlyph());
         assertEquals(copy.arrays().getFirst().boundGlyphs(),
                 List.of(copy.glyphs().getFirst().glyphUuid()));
+    }
+
+    @Test
+    void freshIdentitiesRemapArraysAndDifferPerCall() {
+        CanvasGlyph root = glyph(new int[]{1});
+        CanvasGlyph rune = new CanvasGlyph(
+                UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                root.symbolId(), root.confidence(), root.role(),
+                root.frontX(), root.frontY(), root.length(), root.width(),
+                root.minX(), root.maxX(), root.minY(), root.maxY(),
+                new int[]{2});
+        CanvasArrayRecord array = new CanvasArrayRecord(
+                root.glyphUuid(), List.of(root.glyphUuid(), rune.glyphUuid()),
+                CanvasArrayRecord.fingerprint(root.glyphUuid(), List.of(rune.glyphUuid())));
+        CanvasDocument source = CanvasDocument.blank(2, 2)
+                .withCompileCache(List.of(root, rune), List.of(array));
+
+        CanvasDocument first = source.withFreshGlyphIdentities();
+        CanvasDocument second = source.withFreshGlyphIdentities();
+
+        assertEquals(source.physicalWidth(), first.physicalWidth());
+        assertArrayEquals(source.colors(), first.colors());
+        assertEquals(2, first.glyphs().size());
+        assertNotEquals(root.glyphUuid(), first.glyphs().get(0).glyphUuid());
+        assertNotEquals(first.glyphs().get(0).glyphUuid(), second.glyphs().get(0).glyphUuid());
+        assertEquals(first.glyphs().get(0).glyphUuid(), first.arrays().getFirst().rootGlyph());
+        assertEquals(first.glyphs().get(1).glyphUuid(),
+                first.arrays().getFirst().boundGlyphs().get(1));
+    }
+
+    @Test
+    void structureOnlyPlaceholdersAreDeterministicAndRebuildIdentities() {
+        CanvasGlyph root = glyph(new int[]{1});
+        CanvasArrayRecord array = new CanvasArrayRecord(
+                root.glyphUuid(), List.of(root.glyphUuid()),
+                CanvasArrayRecord.fingerprint(root.glyphUuid(), List.of(root.glyphUuid())));
+        CanvasDocument source = CanvasDocument.blank(3, 2)
+                .withCompileCache(List.of(root), List.of(array));
+
+        CanvasDocument structure = source.withoutRuntimeIdentities();
+
+        assertEquals(structure, source.withoutRuntimeIdentities());
+        assertEquals(new UUID(0L, 1L), structure.glyphs().getFirst().glyphUuid());
+        assertEquals(structure.glyphs().getFirst().glyphUuid(),
+                structure.arrays().getFirst().rootGlyph());
+        assertEquals(source.glyphs().getFirst().symbolId(),
+                structure.glyphs().getFirst().symbolId());
+        assertEquals(source.physicalWidth(), structure.physicalWidth());
+        assertArrayEquals(source.colors(), structure.colors());
+        assertNotEquals(structure.glyphs().getFirst().glyphUuid(),
+                structure.withFreshGlyphIdentities().glyphs().getFirst().glyphUuid());
+    }
+
+    @Test
+    void blankDocumentsSkipIdentityRewrites() {
+        CanvasDocument blank = CanvasDocument.blank(2, 3);
+
+        assertSame(blank, blank.withFreshGlyphIdentities());
+        assertSame(blank, blank.withoutRuntimeIdentities());
     }
 
     @Test

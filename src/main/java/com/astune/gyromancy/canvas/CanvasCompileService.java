@@ -61,6 +61,21 @@ public final class CanvasCompileService {
     }
 
     /**
+     * Rebuilds the recognized structure from a document's raster without
+     * changing the raster itself. Used when a portable canvas carries no
+     * compile cache, for example an item created before its structure was
+     * synchronized to the client.
+     */
+    public static CanvasDocument recognizeStructure(CanvasDocument document) {
+        if (document.isEmpty() || !document.glyphs().isEmpty()) return document;
+        CanvasDocument raster = document.withCompileCache(List.of(), List.of());
+        BitSet wholeRaster = new BitSet(raster.resolutionWidth() * raster.resolutionHeight());
+        wholeRaster.set(0, raster.resolutionWidth() * raster.resolutionHeight());
+        List<CanvasGlyph> glyphs = recognizeChangedComponents(raster, wholeRaster);
+        return raster.withCompileCache(glyphs, compilePortableArrays(raster, glyphs));
+    }
+
+    /**
      * Applies a portable carving edit without compiling any AST. Existing
      * glyph identities are retained unless their pixels intersect the edit
      * region. Array records which depend on an invalidated glyph are dropped;
