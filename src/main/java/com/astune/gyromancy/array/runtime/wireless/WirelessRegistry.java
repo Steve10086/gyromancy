@@ -101,7 +101,11 @@ public final class WirelessRegistry {
         }
     }
 
-    /** Records a root which could not compile until this key becomes available. */
+    /**
+     * Records a root which could not compile because this key was unavailable.
+     * Pending roots are cancelled when the source changes; they are never
+     * compiled automatically.
+     */
     public void addPending(String key, UUID rootGlyphId) {
         if (key == null || rootGlyphId == null) return;
         pendingByKey.computeIfAbsent(key, ignored -> new LinkedHashSet<>()).add(rootGlyphId);

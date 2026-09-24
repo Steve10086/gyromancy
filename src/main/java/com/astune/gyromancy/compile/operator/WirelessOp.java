@@ -1,6 +1,8 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.array.ArrayObject;
+import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.compile.CompileDiagnostic;
@@ -170,9 +172,10 @@ public final class WirelessOp implements PersistentOp, DynamicStructure {
 
     /**
      * A publishing root has no local child effect: activation only updates the
-     * level directory and asks each current dependent to follow the normal
-     * runtime recompose lifecycle.  A consumer root delegates to the resolved
-     * persistent source so the feature is also useful outside another parent.
+     * level directory and cancels every dependent array. A source change never
+     * recompiles dependents; they must be rebuilt explicitly. A consumer root
+     * delegates to the resolved persistent source so the feature is also
+     * useful outside another parent.
      */
     @Override
     public RuntimeHandle activate(OpRuntimeContext context) {
@@ -183,10 +186,8 @@ public final class WirelessOp implements PersistentOp, DynamicStructure {
         if (publishesSource()) {
             WirelessRegistry registry = level.getData(ModAttachments.WIRELESS_REGISTRY);
             Set<UUID> dependents = registry.publish(key, WirelessRegistry.Value.fromSource(publishedSource));
-            for (UUID dependent : dependents) {
-                ArrayEffectLifecycle.recompose(level, dependent);
-            }
-            WirelessDependencyCoordinator.retry(level, key);
+            cancelDependents(level, dependents);
+            WirelessDependencyCoordinator.cancelPending(level, key);
             return new RuntimeHandle(Map.of());
         }
 
@@ -201,8 +202,20 @@ public final class WirelessOp implements PersistentOp, DynamicStructure {
         WirelessRegistry registry = context.level().getData(ModAttachments.WIRELESS_REGISTRY);
         Set<UUID> dependents = registry.unpublish(
                 key, WirelessRegistry.Value.fromSource(publishedSource));
+        cancelDependents(context.level(), dependents);
+    }
+
+    /**
+     * Cancels every active array which resolved this key. Dependents are never
+     * recompiled from a source change, so the array must be rebuilt by a new
+     * compile instead of following the source automatically.
+     */
+    private static void cancelDependents(ServerLevel level, Set<UUID> dependents) {
+        if (dependents.isEmpty()) return;
+        MagicArrayManager manager = level.getData(ModAttachments.ARRAY_MANAGER);
         for (UUID dependent : dependents) {
-            ArrayEffectLifecycle.recompose(context.level(), dependent);
+            ArrayObject array = manager.getArrayObj(dependent);
+            if (array != null) ArrayEffectLifecycle.deactivate(level, array);
         }
     }
 

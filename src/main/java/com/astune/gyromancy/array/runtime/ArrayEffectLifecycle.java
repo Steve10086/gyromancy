@@ -106,49 +106,6 @@ public final class ArrayEffectLifecycle {
     }
 
     /**
-     * Rebuilds one active array after a runtime structure replacement. This
-     * deliberately follows the same lifecycle as a canvas modification:
-     * deactivate the old runtime, rebuild from the manager's current glyph
-     * tree, then activate a fresh array object. Unlike {@link #compileNew},
-     * it never claims another circle compilation opportunity.
-     */
-    public static Optional<ArrayObject> recompose(ServerLevel level, UUID arrayId) {
-        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
-        ArrayObject current = mgr.getArrayObj(arrayId);
-        if (current == null) return Optional.empty();
-
-        PositionedGlyph root = mgr.getGlyph(current.rootCircleGlyph().glyphUuid());
-        if (root == null || root.role() != SymbolRole.OUTER_CIRCLE
-                || mgr.parentCircle(root) != null) {
-            deactivate(level, current);
-            return Optional.empty();
-        }
-
-        GroupNode ast = ArrayAstBuilder.build(root, mgr,
-                glyph -> GlyphStrokeValidator.isValidForCollection(glyph, mgr, level));
-        CompileResult<ArrayCompilePipeline.Result> result = new ArrayCompilePipeline(
-                mgr.opDefinitions()).compileDetailed(ast,
-                new StaticResolveContext(level, mgr, mgr.opDefinitions(),
-                        root, List.of()));
-        if (!(result instanceof CompileResult.Success<ArrayCompilePipeline.Result> success)
-                || !(success.value().runtimeModel().root() instanceof PersistentOp)) {
-            deactivate(level, current);
-            if (result instanceof CompileResult.Failure<ArrayCompilePipeline.Result> failure) {
-                ArrayCompileFeedback.reportFailure(level, root, failure.diagnostics());
-                ArrayCompileDebug.printFailure(level, failure);
-                registerMissingDependencies(level, root, failure);
-            } else {
-                ArrayCompileFeedback.reportNotRunnable(level, root);
-            }
-            return Optional.empty();
-        }
-
-        deactivate(level, current);
-        return activateCompiled(level, mgr, success.value().staticModel(),
-                success.value().runtimeModel());
-    }
-
-    /**
      * Compiles all supplied outer circles in geometry order. All glyphs must
      * already be registered before this method is called so nested-circle
      * ownership is complete when the AST is built.

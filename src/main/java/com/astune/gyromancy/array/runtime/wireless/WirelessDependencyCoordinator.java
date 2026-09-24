@@ -1,14 +1,12 @@
 package com.astune.gyromancy.array.runtime.wireless;
 
-import com.astune.gyromancy.api.symbol.PositionedGlyph;
-import com.astune.gyromancy.array.runtime.ArrayEffectLifecycle;
 import com.astune.gyromancy.registry.ModAttachments;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.List;
 import java.util.UUID;
 
-/** Coordinates retryable Wireless compilation without embedding lifecycle logic in the compiler. */
+/** Tracks roots waiting for a Wireless key and cancels them on source changes. */
 public final class WirelessDependencyCoordinator {
     private WirelessDependencyCoordinator() {}
 
@@ -22,12 +20,14 @@ public final class WirelessDependencyCoordinator {
         level.getData(ModAttachments.WIRELESS_REGISTRY).cancelPending(rootGlyphId);
     }
 
-    public static void retry(ServerLevel level, String key) {
+    /**
+     * Drops every root waiting for the key without compiling it. A source
+     * change never recompiles its dependents; they must be rebuilt explicitly.
+     */
+    public static void cancelPending(ServerLevel level, String key) {
         WirelessRegistry registry = level.getData(ModAttachments.WIRELESS_REGISTRY);
         for (UUID rootId : registry.pending(key)) {
             registry.cancelPending(rootId);
-            PositionedGlyph root = level.getData(ModAttachments.ARRAY_MANAGER).getGlyph(rootId);
-            if (root != null) ArrayEffectLifecycle.compileNew(level, root);
         }
     }
 }
