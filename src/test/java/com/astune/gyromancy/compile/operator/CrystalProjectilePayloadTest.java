@@ -56,9 +56,13 @@ class CrystalProjectilePayloadTest {
     }
 
     @Test
-    void earthCrystalOpRemainsDefinedButUnmounted() {
+    void unmountedCrystalOpsRemainDefinedAndSerializable() {
         assertInstanceOf(EarthCrystalOp.class,
                 EntityPayload.loadPayload(new EarthCrystalOp().savePayload()).orElseThrow());
+        assertInstanceOf(LightCrystalOp.class,
+                EntityPayload.loadPayload(new LightCrystalOp().savePayload()).orElseThrow());
+        assertInstanceOf(DarkCrystalOp.class,
+                EntityPayload.loadPayload(new DarkCrystalOp().savePayload()).orElseThrow());
     }
 
     private static PositionedGlyph glyph(String name, SymbolRole role, int id) {

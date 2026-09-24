@@ -80,4 +80,10 @@ public final class ModItems {
 
     public static final DeferredItem<Item> EARTH_CRYSTAL = ITEMS.register(
             "earth_crystal", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> LIGHT_CRYSTAL = ITEMS.register(
+            "light_crystal", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> DARK_CRYSTAL = ITEMS.register(
+            "dark_crystal", () -> new Item(new Item.Properties()));
 }

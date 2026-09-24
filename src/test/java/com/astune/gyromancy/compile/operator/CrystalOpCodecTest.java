@@ -15,7 +15,8 @@ class CrystalOpCodecTest {
     @Test
     void roundTripsDefaultCrystalOpsThroughOwnCodecs() {
         List<CrystalGenOp> ops = List.of(
-                new FireCrystalOp(), new WaterCrystalOp(), new WindCrystalOp(), new EarthCrystalOp());
+                new FireCrystalOp(), new WaterCrystalOp(), new WindCrystalOp(), new EarthCrystalOp(),
+                new LightCrystalOp(), new DarkCrystalOp());
 
         for (CrystalGenOp op : ops) {
             CrystalGenOp loaded = assertInstanceOf(op.getClass(),
@@ -44,5 +45,7 @@ class CrystalOpCodecTest {
         assertEquals("gyromancy:water_crystal", new WaterCrystalOp().typeId().toString());
         assertEquals("gyromancy:wind_crystal", new WindCrystalOp().typeId().toString());
         assertEquals("gyromancy:earth_crystal", new EarthCrystalOp().typeId().toString());
+        assertEquals("gyromancy:light_crystal", new LightCrystalOp().typeId().toString());
+        assertEquals("gyromancy:dark_crystal", new DarkCrystalOp().typeId().toString());
     }
 }

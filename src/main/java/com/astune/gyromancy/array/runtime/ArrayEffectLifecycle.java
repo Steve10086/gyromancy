@@ -7,6 +7,7 @@ import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.compile.ArrayAstBuilder;
 import com.astune.gyromancy.array.compile.ArrayCompileDebug;
+import com.astune.gyromancy.array.compile.ArrayCompileFeedback;
 import com.astune.gyromancy.array.compile.ArrayCompilePipeline;
 import com.astune.gyromancy.array.compile.CompileDiagnostic;
 import com.astune.gyromancy.array.compile.CompileResult;
@@ -24,6 +25,8 @@ import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.symbol.GlyphStrokeValidator;
 import net.minecraft.server.level.ServerLevel;
 
+import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Collection;
@@ -49,6 +52,15 @@ public final class ArrayEffectLifecycle {
             PositionedGlyph circleGlyph,
             Predicate<PositionedGlyph> isValidStroke
     ) {
+        return compileNew(level, circleGlyph, isValidStroke, null);
+    }
+
+    private static Optional<ArrayObject> compileNew(
+            ServerLevel level,
+            PositionedGlyph circleGlyph,
+            Predicate<PositionedGlyph> isValidStroke,
+            @Nullable List<ArrayCompileFeedback.Issue> issues
+    ) {
         MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
         // A nested circle is compiled as a child of its parent AST.  Never
         // start (or restart) a second, independent runtime for that root; if
@@ -70,8 +82,7 @@ public final class ArrayEffectLifecycle {
                         circleGlyph, List.of()));
         if (!(result instanceof CompileResult.Success<ArrayCompilePipeline.Result> success)) {
             if (result instanceof CompileResult.Failure<ArrayCompilePipeline.Result> failure) {
-                Gyromancy.LOGGER.debug("[MagicArrayDetector] Compile failed for glyph #{}: {}",
-                        circleGlyph.glyphId(), failure.diagnostics());
+                reportIssue(level, issues, circleGlyph, failure.diagnostics(), false);
                 ArrayCompileDebug.printFailure(level, failure);
             }
             mgr.releaseCircleCompilation(circleGlyph.glyphUuid());
@@ -84,6 +95,7 @@ public final class ArrayEffectLifecycle {
         ArrayCompileDebug.printRuntime(level, runtime);
         ArrayCompileDebug.logRuntime(runtime);
         if (!(runtime.root() instanceof PersistentOp)) {
+            reportIssue(level, issues, circleGlyph, List.of(), true);
             mgr.releaseCircleCompilation(circleGlyph.glyphUuid());
             return Optional.empty();
         }
@@ -122,10 +134,11 @@ public final class ArrayEffectLifecycle {
                 || !(success.value().runtimeModel().root() instanceof PersistentOp)) {
             deactivate(level, current);
             if (result instanceof CompileResult.Failure<ArrayCompilePipeline.Result> failure) {
-                Gyromancy.LOGGER.debug("[MagicArrayRuntime] Recompose failed for glyph #{}: {}",
-                        root.glyphId(), failure.diagnostics());
+                ArrayCompileFeedback.reportFailure(level, root, failure.diagnostics());
                 ArrayCompileDebug.printFailure(level, failure);
                 registerMissingDependencies(level, root, failure);
+            } else {
+                ArrayCompileFeedback.reportNotRunnable(level, root);
             }
             return Optional.empty();
         }
@@ -150,14 +163,19 @@ public final class ArrayEffectLifecycle {
             ServerLevel level,
             Collection<PositionedGlyph> glyphs,
             Predicate<PositionedGlyph> isValidStroke) {
+        MagicArrayManager mgr = level.getData(ModAttachments.ARRAY_MANAGER);
+        List<ArrayCompileFeedback.Issue> issues = new ArrayList<>();
         glyphs.stream()
                 .filter(glyph -> glyph.role() == SymbolRole.OUTER_CIRCLE)
                 .sorted(Comparator.comparingDouble((PositionedGlyph glyph) -> glyph.bounds().area())
                         .thenComparingInt(PositionedGlyph::glyphId))
                 .forEach(circle -> {
-                    if (isValidStroke == null) compileNew(level, circle);
-                    else compileNew(level, circle, isValidStroke);
+                    Predicate<PositionedGlyph> filter = isValidStroke != null
+                            ? isValidStroke
+                            : glyph -> GlyphStrokeValidator.isValidForCollection(glyph, mgr, level);
+                    compileNew(level, circle, filter, issues);
                 });
+        ArrayCompileFeedback.reportAll(level, issues);
     }
 
     /**
@@ -234,7 +252,10 @@ public final class ArrayEffectLifecycle {
             if (!(result instanceof CompileResult.Success<ArrayCompilePipeline.Result> success)
                     || !(success.value().runtimeModel().root() instanceof PersistentOp)) {
                 if (result instanceof CompileResult.Failure<ArrayCompilePipeline.Result> failure) {
+                    ArrayCompileFeedback.reportFailure(level, root, failure.diagnostics());
                     registerMissingDependencies(level, root, failure);
+                } else {
+                    ArrayCompileFeedback.reportNotRunnable(level, root);
                 }
                 continue;
             }
@@ -323,6 +344,21 @@ public final class ArrayEffectLifecycle {
     private static CompileResult.Failure<?> failureOrEmpty(CompileResult<?> result) {
         return result instanceof CompileResult.Failure<?> failure
                 ? failure : new CompileResult.Failure<>(List.of());
+    }
+
+    private static void reportIssue(
+            ServerLevel level,
+            @Nullable List<ArrayCompileFeedback.Issue> issues,
+            PositionedGlyph root,
+            List<CompileDiagnostic> diagnostics,
+            boolean notRunnable) {
+        if (issues != null) {
+            issues.add(new ArrayCompileFeedback.Issue(root, diagnostics, notRunnable));
+        } else if (notRunnable) {
+            ArrayCompileFeedback.reportNotRunnable(level, root);
+        } else {
+            ArrayCompileFeedback.reportFailure(level, root, diagnostics);
+        }
     }
 
     /**

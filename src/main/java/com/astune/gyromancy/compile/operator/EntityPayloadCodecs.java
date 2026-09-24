@@ -28,7 +28,9 @@ final class EntityPayloadCodecs {
             Map.entry(FireCrystalOp.ID, FireCrystalOp.CODEC),
             Map.entry(WaterCrystalOp.ID, WaterCrystalOp.CODEC),
             Map.entry(WindCrystalOp.ID, WindCrystalOp.CODEC),
-            Map.entry(EarthCrystalOp.ID, EarthCrystalOp.CODEC)
+            Map.entry(EarthCrystalOp.ID, EarthCrystalOp.CODEC),
+            Map.entry(LightCrystalOp.ID, LightCrystalOp.CODEC),
+            Map.entry(DarkCrystalOp.ID, DarkCrystalOp.CODEC)
     );
 
     private EntityPayloadCodecs() {}

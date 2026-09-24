@@ -1,0 +1,7 @@
+{
+  "parent": "gyromancy:block/crystal",
+  "textures": {
+    "2": "gyromancy:block/light_crystal",
+    "particle": "gyromancy:block/light_crystal"
+  }
+}

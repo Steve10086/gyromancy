@@ -32,4 +32,10 @@ public final class ModBlocks {
 
     public static final DeferredBlock<CrystalBlock> EARTH_CRYSTAL =
             BLOCKS.register("earth_crystal", CrystalBlock::earth);
+
+    public static final DeferredBlock<CrystalBlock> LIGHT_CRYSTAL =
+            BLOCKS.register("light_crystal", CrystalBlock::light);
+
+    public static final DeferredBlock<CrystalBlock> DARK_CRYSTAL =
+            BLOCKS.register("dark_crystal", CrystalBlock::dark);
 }

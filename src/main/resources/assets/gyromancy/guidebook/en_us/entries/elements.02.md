@@ -12,4 +12,6 @@ Fire, water and wind projectiles can all do this.
 
 A crystal is sustained by the concentration around it. Once that concentration falls below what it needs, the crystal shatters and drops 1-3 of the matching element crystals.
 
-Nobody has managed to cultivate an earth crystal yet.
+Fire, water and wind crystals glow faintly on their own, and a light crystal shines like a lamp; earth and dark crystals give off no light.
+
+Nobody has managed to cultivate an earth, light or dark crystal yet.

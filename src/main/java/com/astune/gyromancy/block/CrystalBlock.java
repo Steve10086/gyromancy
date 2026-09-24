@@ -18,7 +18,11 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * A decorative block grown by a matching element crystal payload.
+ * A decorative element crystal block.
+ *
+ * <p>Fire, water and wind crystals are grown by their matching crystal
+ * generation payloads; earth, light and dark crystals have no payload yet and
+ * only exist as placed blocks.
  *
  * <p>Each crystal schedules its own stability check every
  * {@link CrystalGenOp#SCAN_INTERVAL} ticks. Once the element concentration at
@@ -59,7 +63,7 @@ public final class CrystalBlock extends Block {
 
     private final ElementType element;
 
-    private CrystalBlock(ElementType element, MapColor color) {
+    private CrystalBlock(ElementType element, MapColor color, int lightLevel) {
         super(BlockBehaviour.Properties.of()
                 .mapColor(color)
                 .strength(2.0F)
@@ -67,24 +71,35 @@ public final class CrystalBlock extends Block {
                 // The floating crystal model is smaller than a full cube, so the
                 // block must not occlude its neighbours or hide their faces.
                 .noOcclusion()
+                .lightLevel(state -> lightLevel)
                 .requiresCorrectToolForDrops());
         this.element = element;
     }
 
+    // Fire, water and wind crystals glow at light level 10; light crystals
+    // shine at 15, while earth and dark crystals give off no light.
     public static CrystalBlock fire() {
-        return new CrystalBlock(ElementType.FIRE, MapColor.FIRE);
+        return new CrystalBlock(ElementType.FIRE, MapColor.FIRE, 10);
     }
 
     public static CrystalBlock water() {
-        return new CrystalBlock(ElementType.WATER, MapColor.WATER);
+        return new CrystalBlock(ElementType.WATER, MapColor.WATER, 10);
     }
 
     public static CrystalBlock wind() {
-        return new CrystalBlock(ElementType.WIND, MapColor.COLOR_LIGHT_GREEN);
+        return new CrystalBlock(ElementType.WIND, MapColor.COLOR_LIGHT_GREEN, 10);
     }
 
     public static CrystalBlock earth() {
-        return new CrystalBlock(ElementType.EARTH, MapColor.COLOR_BROWN);
+        return new CrystalBlock(ElementType.EARTH, MapColor.COLOR_BROWN, 0);
+    }
+
+    public static CrystalBlock light() {
+        return new CrystalBlock(ElementType.LIGHT, MapColor.QUARTZ, 15);
+    }
+
+    public static CrystalBlock dark() {
+        return new CrystalBlock(ElementType.DARK, MapColor.COLOR_BLACK, 0);
     }
 
     /** The element whose local concentration keeps this crystal stable. */

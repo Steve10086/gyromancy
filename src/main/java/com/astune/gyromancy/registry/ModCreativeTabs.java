@@ -40,6 +40,8 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.WATER_CRYSTAL.get());
                         output.accept(ModItems.WIND_CRYSTAL.get());
                         output.accept(ModItems.EARTH_CRYSTAL.get());
+                        output.accept(ModItems.LIGHT_CRYSTAL.get());
+                        output.accept(ModItems.DARK_CRYSTAL.get());
                     })
                     .build());
 }

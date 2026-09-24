@@ -4,6 +4,8 @@
     "gyromancy:fire_crystal",
     "gyromancy:water_crystal",
     "gyromancy:wind_crystal",
-    "gyromancy:earth_crystal"
+    "gyromancy:earth_crystal",
+    "gyromancy:light_crystal",
+    "gyromancy:dark_crystal"
   ]
 }
