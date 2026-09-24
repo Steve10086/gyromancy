@@ -42,7 +42,7 @@
   "screen.gyromancy.canvas.mirror_vertical": "垂直镜像",
   "screen.gyromancy.canvas.view_zoom": "视图：%s%%",
   "screen.gyromancy.canvas.rune_hover": "符文：%s",
-  "screen.gyromancy.canvas.stamp_transform": "印章：%s° / %s%%（R旋转，X+拖动缩放）",
+  "screen.gyromancy.canvas.stamp_transform": "印章：%s° / %s%%（R旋转，Shift+滚轮缩放）",
   "symbol.gyromancy.arrow": "前",
   "symbol.gyromancy.arrow_up": "上",
   "symbol.gyromancy.circle_outer": "环",

@@ -4,7 +4,9 @@
 
 A stamp can draw the rune carved upon it in a single impression.
 
-While drawing: left-click to stamp, right-click to erase. Press R to rotate; hold X and drag to resize.
+While drawing: left-click to stamp, right-click to erase. Press R to rotate by 45° (hold Shift to rotate the other way); Shift + scroll resizes the stamp.
+
+The stamp size and the pen thickness are stored per character and survive logging out.
 
 <!-- page -->
 

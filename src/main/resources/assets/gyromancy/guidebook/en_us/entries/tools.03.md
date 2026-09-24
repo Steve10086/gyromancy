@@ -6,6 +6,8 @@ For all the talk of magic this and magic that, who would have thought you could 
 
 Right-click to draw.
 
+Shift + scroll adjusts the brush thickness (stored per character).
+
 The material of your pen will not improve your technique, but no magician wants to be seen drawing with a feather.
 
 <!-- page -->

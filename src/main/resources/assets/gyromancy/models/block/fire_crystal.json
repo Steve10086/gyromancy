@@ -1,6 +1,7 @@
 {
-  "parent": "minecraft:block/cube_all",
+  "parent": "gyromancy:block/crystal",
   "textures": {
-    "all": "gyromancy:block/fire_crystal"
+    "2": "gyromancy:block/fire_crystal",
+    "particle": "gyromancy:block/fire_crystal"
   }
 }
