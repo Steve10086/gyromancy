@@ -1,17 +1,17 @@
 package com.astune.gyromancy.canvas;
 
+import com.astune.gyromancy.network.UpdateCanvasToolSettingsPacket;
+import com.astune.gyromancy.registry.ModAttachments;
 import net.minecraft.world.entity.player.Player;
-
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Per-character editor settings shared by every canvas-based screen.
  *
- * <p>These values describe the local editing tool, not the item stack. The
- * carved pixels are still submitted normally; only the next editor gesture
- * needs this client-side state.
+ * <p>These values describe the local editing tool, not the item stack. They
+ * are stored as a synced player attachment, so they survive logout, death and
+ * dimension changes; the server keeps the authoritative copy while a client
+ * update is mirrored locally for immediate feedback.
  */
 public final class CanvasToolSettings {
     public static final int DEFAULT_PEN_DIAMETER = 1;
@@ -22,81 +22,84 @@ public final class CanvasToolSettings {
     public static final double MAX_STAMP_SCALE = 8.0;
     private static final double STAMP_SCROLL_STEP = 1.2;
 
-    private static final Map<UUID, Settings> BY_PLAYER = new ConcurrentHashMap<>();
-
     private CanvasToolSettings() {}
 
     public static int penDiameter(Player player) {
-        return penDiameter(player == null ? null : player.getUUID());
-    }
-
-    public static int penDiameter(UUID playerId) {
-        return playerId == null
-                ? DEFAULT_PEN_DIAMETER
-                : settings(playerId).penDiameter;
+        return player == null ? DEFAULT_PEN_DIAMETER : data(player).penDiameter();
     }
 
     /** Adjusts the brush by two pixels per wheel step and keeps it odd. */
     public static int adjustPenDiameter(Player player, double scroll) {
-        UUID playerId = player == null ? null : player.getUUID();
-        return adjustPenDiameter(playerId, scroll);
-    }
-
-    public static int adjustPenDiameter(UUID playerId, double scroll) {
-        if (playerId == null || scroll == 0.0) return DEFAULT_PEN_DIAMETER;
-
-        Settings settings = settings(playerId);
-        int steps = Math.max(1, (int) Math.round(Math.abs(scroll)));
-        int direction = scroll > 0.0 ? 1 : -1;
-        int next = settings.penDiameter + direction * steps * 2;
-        next = Math.max(MIN_PEN_DIAMETER, Math.min(MAX_PEN_DIAMETER, next));
-        if ((next & 1) == 0) next += direction > 0 ? -1 : 1;
-        settings.penDiameter = Math.max(MIN_PEN_DIAMETER,
-                Math.min(MAX_PEN_DIAMETER, next));
-        return settings.penDiameter;
+        if (player == null || scroll == 0.0) return DEFAULT_PEN_DIAMETER;
+        CanvasToolSettingsData current = data(player);
+        CanvasToolSettingsData next = current.withPenDiameter(
+                adjustedPenDiameter(current.penDiameter(), scroll));
+        store(player, next);
+        return next.penDiameter();
     }
 
     public static double stampScale(Player player) {
-        return stampScale(player == null ? null : player.getUUID());
-    }
-
-    public static double stampScale(UUID playerId) {
-        return playerId == null
-                ? DEFAULT_STAMP_SCALE
-                : settings(playerId).stampScale;
+        return player == null ? DEFAULT_STAMP_SCALE : data(player).stampScale();
     }
 
     public static double adjustStampScale(Player player, double scroll) {
-        UUID playerId = player == null ? null : player.getUUID();
-        return adjustStampScale(playerId, scroll);
+        if (player == null || scroll == 0.0) return DEFAULT_STAMP_SCALE;
+        CanvasToolSettingsData current = data(player);
+        CanvasToolSettingsData next = current.withStampScale(
+                adjustedStampScale(current.stampScale(), scroll));
+        store(player, next);
+        return next.stampScale();
     }
 
-    public static double adjustStampScale(UUID playerId, double scroll) {
-        if (playerId == null || scroll == 0.0) return DEFAULT_STAMP_SCALE;
-
-        Settings settings = settings(playerId);
-        settings.stampScale = clamp(settings.stampScale
-                        * Math.pow(STAMP_SCROLL_STEP, scroll),
-                MIN_STAMP_SCALE,
-                MAX_STAMP_SCALE);
-        return settings.stampScale;
+    /** Server-side application of a client update. Values are clamped again. */
+    public static void applyFromClient(Player player, int penDiameter, double stampScale) {
+        if (player == null) return;
+        player.setData(ModAttachments.CANVAS_TOOL_SETTINGS.get(),
+                new CanvasToolSettingsData(penDiameter, stampScale));
     }
 
-    /** Clears all client-side editor settings when the current character logs out. */
-    public static void clear() {
-        BY_PLAYER.clear();
+    /** Pure brush adjustment used by the player-facing setters and by tests. */
+    public static int adjustedPenDiameter(int current, double scroll) {
+        int start = clampPenDiameter(current);
+        if (scroll == 0.0) return start;
+
+        int steps = Math.max(1, (int) Math.round(Math.abs(scroll)));
+        int direction = scroll > 0.0 ? 1 : -1;
+        int next = Math.max(MIN_PEN_DIAMETER,
+                Math.min(MAX_PEN_DIAMETER, start + direction * steps * 2));
+        if ((next & 1) == 0) next += direction > 0 ? -1 : 1;
+        return clampPenDiameter(next);
     }
 
-    private static Settings settings(UUID playerId) {
-        return BY_PLAYER.computeIfAbsent(playerId, ignored -> new Settings());
+    /** Pure stamp scale adjustment used by the player-facing setters and by tests. */
+    public static double adjustedStampScale(double current, double scroll) {
+        double start = clampStampScale(current);
+        if (scroll == 0.0) return start;
+        return clampStampScale(start * Math.pow(STAMP_SCROLL_STEP, scroll));
     }
 
-    private static double clamp(double value, double minimum, double maximum) {
-        return Math.max(minimum, Math.min(maximum, value));
+    public static int clampPenDiameter(int value) {
+        int clamped = Math.max(MIN_PEN_DIAMETER, Math.min(MAX_PEN_DIAMETER, value));
+        // Both bounds are odd, so rounding an even value up stays in range.
+        return (clamped & 1) == 0 ? clamped + 1 : clamped;
     }
 
-    private static final class Settings {
-        private int penDiameter = DEFAULT_PEN_DIAMETER;
-        private double stampScale = DEFAULT_STAMP_SCALE;
+    public static double clampStampScale(double value) {
+        if (!Double.isFinite(value)) return DEFAULT_STAMP_SCALE;
+        return Math.max(MIN_STAMP_SCALE, Math.min(MAX_STAMP_SCALE, value));
+    }
+
+    private static CanvasToolSettingsData data(Player player) {
+        return player.getData(ModAttachments.CANVAS_TOOL_SETTINGS.get());
+    }
+
+    /** Mirrors a change locally and forwards it to the server when on a client. */
+    private static void store(Player player, CanvasToolSettingsData next) {
+        if (next.equals(data(player))) return;
+        player.setData(ModAttachments.CANVAS_TOOL_SETTINGS.get(), next);
+        if (player.level().isClientSide) {
+            PacketDistributor.sendToServer(new UpdateCanvasToolSettingsPacket(
+                    next.penDiameter(), next.stampScale()));
+        }
     }
 }

@@ -77,7 +77,32 @@ final class CanvasEditHistory {
                 && Arrays.equals(beforeEffects, afterEffects)) {
             return;
         }
-        undo.push(new ResolutionEdit(
+        pushRasterState(beforeScale, beforeColors, beforeEffects,
+                afterScale, afterColors, afterEffects);
+    }
+
+    /** Records a whole-raster transform (rotation or mirror) at the current scale. */
+    void recordTransform(int scale,
+                         int[] beforeColors,
+                         int[] beforeEffects,
+                         int[] afterColors,
+                         int[] afterEffects) {
+        commitAction();
+        if (Arrays.equals(beforeColors, afterColors)
+                && Arrays.equals(beforeEffects, afterEffects)) {
+            return;
+        }
+        pushRasterState(scale, beforeColors, beforeEffects,
+                scale, afterColors, afterEffects);
+    }
+
+    private void pushRasterState(int beforeScale,
+                                 int[] beforeColors,
+                                 int[] beforeEffects,
+                                 int afterScale,
+                                 int[] afterColors,
+                                 int[] afterEffects) {
+        undo.push(new RasterStateEdit(
                 RasterState.snapshot(beforeScale, beforeColors, beforeEffects),
                 RasterState.snapshot(afterScale, afterColors, afterEffects)));
         redo.clear();
@@ -159,7 +184,7 @@ final class CanvasEditHistory {
         }
     }
 
-    private record ResolutionEdit(RasterState before, RasterState after) implements EditAction {
+    private record RasterStateEdit(RasterState before, RasterState after) implements EditAction {
         @Override
         public RasterState applyBefore(RasterState current) {
             return before.copy();

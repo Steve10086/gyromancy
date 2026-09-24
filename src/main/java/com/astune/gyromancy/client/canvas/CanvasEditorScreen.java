@@ -3,14 +3,17 @@ package com.astune.gyromancy.client.canvas;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.canvas.CanvasEditorTool;
 import com.astune.gyromancy.canvas.CanvasDocument;
+import com.astune.gyromancy.canvas.CanvasRasterTransform;
 import com.astune.gyromancy.network.SubmitCanvasEditPacket;
 import com.astune.gyromancy.network.FinishCanvasEditPacket;
 import com.astune.gyromancy.network.SubmitCanvasInventoryPacket;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
@@ -36,6 +39,13 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private static final int SIDE_GAP = 8;
     private static final double CANVAS_AREA_WIDTH_FRACTION = 0.4D;
     private static final int SIDE_TOOLBAR_WIDTH = 84;
+    private static final int TRANSFORM_ROW_Y = 116;
+    private static final int TRANSFORM_BUTTON_SIZE = 20;
+    private static final int TRANSFORM_BUTTON_SPACING = 21;
+    private static final int SIDE_TOOLBAR_HEIGHT = TRANSFORM_ROW_Y + TRANSFORM_BUTTON_SIZE;
+    private static final int ICON_SIZE = 12;
+    private static final int ICON_COLOR = 0xFFE8E8E8;
+    private static final int ICON_DISABLED_COLOR = 0xFF7F7F7F;
     private static final int HOTBAR_SLOT_SPACING = 20;
     private static final int HOTBAR_WIDTH = 182;
     private static final int HOTBAR_HEIGHT = 22;
@@ -94,6 +104,10 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     private Button undoButton;
     private Button redoButton;
     private Button clearButton;
+    private IconButton rotateCounterClockwiseButton;
+    private IconButton rotateClockwiseButton;
+    private IconButton mirrorHorizontalButton;
+    private IconButton mirrorVerticalButton;
 
     public CanvasEditorScreen(int entityId, int baseRevision, CanvasDocument document) {
         this(createMenu(), entityId, baseRevision, document);
@@ -157,6 +171,26 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
                 .bounds(toolbarX + 46, toolbarY + 68, 38, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose())
                 .bounds(toolbarX, toolbarY + 92, SIDE_TOOLBAR_WIDTH, 20).build());
+        rotateCounterClockwiseButton = addRenderableWidget(new IconButton(
+                toolbarX, toolbarY + TRANSFORM_ROW_Y,
+                Component.translatable("screen.gyromancy.canvas.rotate_ccw"),
+                (graphics, x, y, color) -> paintRotateIcon(graphics, x, y, false, color),
+                button -> rotateCanvas(false)));
+        rotateClockwiseButton = addRenderableWidget(new IconButton(
+                toolbarX + TRANSFORM_BUTTON_SPACING, toolbarY + TRANSFORM_ROW_Y,
+                Component.translatable("screen.gyromancy.canvas.rotate_cw"),
+                (graphics, x, y, color) -> paintRotateIcon(graphics, x, y, true, color),
+                button -> rotateCanvas(true)));
+        mirrorHorizontalButton = addRenderableWidget(new IconButton(
+                toolbarX + TRANSFORM_BUTTON_SPACING * 2, toolbarY + TRANSFORM_ROW_Y,
+                Component.translatable("screen.gyromancy.canvas.mirror_horizontal"),
+                (graphics, x, y, color) -> paintMirrorIcon(graphics, x, y, true, color),
+                button -> mirrorCanvas(true)));
+        mirrorVerticalButton = addRenderableWidget(new IconButton(
+                toolbarX + TRANSFORM_BUTTON_SPACING * 3, toolbarY + TRANSFORM_ROW_Y,
+                Component.translatable("screen.gyromancy.canvas.mirror_vertical"),
+                (graphics, x, y, color) -> paintMirrorIcon(graphics, x, y, false, color),
+                button -> mirrorCanvas(false)));
         updateActionButtons();
     }
 
@@ -194,7 +228,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         panelX = viewportX + (availableWidth - panelWidth) / 2;
         panelY = TOP_MARGIN + (availableHeight - panelHeight) / 2;
         toolbarX = viewportX + availableWidth + SIDE_GAP;
-        int latestToolbarY = inventoryY - 112;
+        int latestToolbarY = inventoryY - SIDE_TOOLBAR_HEIGHT;
         toolbarY = Math.max(TOP_MARGIN, Math.min(panelY, latestToolbarY));
         viewportController.layout(fittedCanvasRect(), viewportRect());
     }
@@ -203,7 +237,7 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     public Rect2i jeiToolbarArea() {
         int padding = 3;
         return new Rect2i(toolbarX - padding, toolbarY - padding,
-                SIDE_TOOLBAR_WIDTH + padding * 2, 112 + padding * 2);
+                SIDE_TOOLBAR_WIDTH + padding * 2, SIDE_TOOLBAR_HEIGHT + padding * 2);
     }
 
     private int inventoryBackgroundWidth() {
@@ -515,6 +549,15 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // Undo and redo take priority so a tool cannot swallow Ctrl+Z/Ctrl+R.
+        if (CanvasEditorKeyMappings.matchesUndo(keyCode, scanCode)) {
+            undo();
+            return true;
+        }
+        if (CanvasEditorKeyMappings.matchesRedo(keyCode, scanCode)) {
+            redo();
+            return true;
+        }
         CanvasEditorTool tool = selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null
                 && tool.editorKeyPressed(
@@ -629,6 +672,43 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
         updateActionButtons();
     }
 
+    private void rotateCanvas(boolean clockwise) {
+        finishStroke();
+        int size = rasterWidth();
+        applyTransform(
+                clockwise
+                        ? CanvasRasterTransform.rotateClockwise(colors, size)
+                        : CanvasRasterTransform.rotateCounterClockwise(colors, size),
+                clockwise
+                        ? CanvasRasterTransform.rotateClockwise(effects, size)
+                        : CanvasRasterTransform.rotateCounterClockwise(effects, size));
+    }
+
+    private void mirrorCanvas(boolean horizontal) {
+        finishStroke();
+        int size = rasterWidth();
+        applyTransform(
+                horizontal
+                        ? CanvasRasterTransform.mirrorHorizontally(colors, size)
+                        : CanvasRasterTransform.mirrorVertically(colors, size),
+                horizontal
+                        ? CanvasRasterTransform.mirrorHorizontally(effects, size)
+                        : CanvasRasterTransform.mirrorVertically(effects, size));
+    }
+
+    private void applyTransform(int[] nextColors, int[] nextEffects) {
+        if (Arrays.equals(colors, nextColors) && Arrays.equals(effects, nextEffects)) {
+            return;
+        }
+        history.recordTransform(scale, colors, effects, nextColors, nextEffects);
+        colors = nextColors;
+        effects = nextEffects;
+        clearRunePreview();
+        rebuildCanvasTexture();
+        updateChanged();
+        updateActionButtons();
+    }
+
     @Override
     public void updateChanged() {
         changed = scale != initialScale
@@ -638,9 +718,16 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
 
     @Override
     public void updateActionButtons() {
+        boolean hasContent = hasCanvasContent();
         if (undoButton != null) undoButton.active = history.canUndo();
         if (redoButton != null) redoButton.active = history.canRedo();
-        if (clearButton != null) clearButton.active = hasCanvasContent();
+        if (clearButton != null) clearButton.active = hasContent;
+        if (rotateCounterClockwiseButton != null) {
+            rotateCounterClockwiseButton.active = hasContent;
+        }
+        if (rotateClockwiseButton != null) rotateClockwiseButton.active = hasContent;
+        if (mirrorHorizontalButton != null) mirrorHorizontalButton.active = hasContent;
+        if (mirrorVerticalButton != null) mirrorVerticalButton.active = hasContent;
     }
 
     private boolean hasCanvasContent() {
@@ -1041,5 +1128,125 @@ public final class CanvasEditorScreen extends AbstractContainerScreen<CanvasEdit
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    @FunctionalInterface
+    private interface IconPainter {
+        void paint(GuiGraphics graphics, int x, int y, int color);
+    }
+
+    /** A compact toolbar button that draws a painted icon instead of a label. */
+    private static final class IconButton extends Button {
+        private final IconPainter painter;
+
+        private IconButton(int x, int y, Component label, IconPainter painter, OnPress onPress) {
+            super(x, y, TRANSFORM_BUTTON_SIZE, TRANSFORM_BUTTON_SIZE, label, onPress,
+                    DEFAULT_NARRATION);
+            this.painter = painter;
+            setTooltip(Tooltip.create(label));
+        }
+
+        @Override
+        protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY,
+                                    float partialTick) {
+            super.renderWidget(graphics, mouseX, mouseY, partialTick);
+            int iconX = getX() + (getWidth() - ICON_SIZE) / 2;
+            int iconY = getY() + (getHeight() - ICON_SIZE) / 2;
+            painter.paint(graphics, iconX, iconY, active ? ICON_COLOR : ICON_DISABLED_COLOR);
+        }
+
+        @Override
+        public void renderString(GuiGraphics graphics, Font font, int color) {
+            // The icon replaces the text label.
+        }
+    }
+
+    private static void paintRotateIcon(GuiGraphics graphics, int x, int y,
+                                        boolean clockwise, int color) {
+        int centerX = x + ICON_SIZE / 2;
+        int centerY = y + ICON_SIZE / 2;
+        double radius = 4.0;
+        if (clockwise) {
+            drawArc(graphics, centerX, centerY, radius, 300.0, 630.0, color);
+            drawChevron(graphics, centerX + 1, centerY - (int) radius, true, color);
+        } else {
+            drawArc(graphics, centerX, centerY, radius, 240.0, -90.0, color);
+            drawChevron(graphics, centerX - 1, centerY - (int) radius, false, color);
+        }
+    }
+
+    private static void paintMirrorIcon(GuiGraphics graphics, int x, int y,
+                                        boolean horizontal, int color) {
+        int center = ICON_SIZE / 2;
+        if (horizontal) {
+            for (int offset = 0; offset < ICON_SIZE; offset += 3) {
+                graphics.fill(x + center, y + offset, x + center + 1,
+                        y + Math.min(ICON_SIZE, offset + 2), color);
+            }
+            paintHorizontalTriangle(graphics, x + 1, y + 3, 4, 6, false, color);
+            paintHorizontalTriangle(graphics, x + ICON_SIZE - 5, y + 3, 4, 6, true, color);
+        } else {
+            for (int offset = 0; offset < ICON_SIZE; offset += 3) {
+                graphics.fill(x + offset, y + center, x + Math.min(ICON_SIZE, offset + 2),
+                        y + center + 1, color);
+            }
+            paintVerticalTriangle(graphics, x + 3, y + 1, 6, 4, false, color);
+            paintVerticalTriangle(graphics, x + 3, y + ICON_SIZE - 5, 6, 4, true, color);
+        }
+    }
+
+    private static void drawArc(GuiGraphics graphics, int centerX, int centerY,
+                                double radius, double startDegrees, double endDegrees,
+                                int color) {
+        int steps = Math.max(16, (int) Math.round(Math.abs(endDegrees - startDegrees) / 6.0));
+        for (int step = 0; step <= steps; step++) {
+            double angle = Math.toRadians(startDegrees
+                    + (endDegrees - startDegrees) * step / (double) steps);
+            int x = centerX + (int) Math.round(Math.cos(angle) * radius);
+            int y = centerY + (int) Math.round(Math.sin(angle) * radius);
+            graphics.fill(x, y, x + 1, y + 1, color);
+        }
+    }
+
+    private static void drawChevron(GuiGraphics graphics, int tipX, int tipY,
+                                    boolean pointsRight, int color) {
+        int direction = pointsRight ? 1 : -1;
+        graphics.fill(tipX, tipY, tipX + 1, tipY + 1, color);
+        graphics.fill(tipX - direction, tipY - 1, tipX - direction + 1, tipY, color);
+        graphics.fill(tipX - direction, tipY + 1, tipX - direction + 1, tipY + 2, color);
+        graphics.fill(tipX - direction * 2, tipY - 2, tipX - direction * 2 + 1, tipY - 1, color);
+        graphics.fill(tipX - direction * 2, tipY + 2, tipX - direction * 2 + 1, tipY + 3, color);
+    }
+
+    private static void paintHorizontalTriangle(GuiGraphics graphics, int left, int top,
+                                                int width, int height, boolean pointsRight,
+                                                int color) {
+        for (int row = 0; row < height; row++) {
+            double normalized = (row + 0.5) / height;
+            int extent = Math.max(1,
+                    (int) Math.round((1.0 - Math.abs(normalized * 2.0 - 1.0)) * width));
+            if (pointsRight) {
+                graphics.fill(left, top + row, left + extent, top + row + 1, color);
+            } else {
+                graphics.fill(left + width - extent, top + row,
+                        left + width, top + row + 1, color);
+            }
+        }
+    }
+
+    private static void paintVerticalTriangle(GuiGraphics graphics, int left, int top,
+                                              int width, int height, boolean pointsDown,
+                                              int color) {
+        for (int column = 0; column < width; column++) {
+            double normalized = (column + 0.5) / width;
+            int extent = Math.max(1,
+                    (int) Math.round((1.0 - Math.abs(normalized * 2.0 - 1.0)) * height));
+            if (pointsDown) {
+                graphics.fill(left + column, top, left + column + 1, top + extent, color);
+            } else {
+                graphics.fill(left + column, top + height - extent,
+                        left + column + 1, top + height, color);
+            }
+        }
     }
 }

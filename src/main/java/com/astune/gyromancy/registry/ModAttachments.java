@@ -4,7 +4,9 @@ import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.array.MagicArrayManager;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.runtime.wireless.WirelessRegistry;
+import com.astune.gyromancy.canvas.CanvasToolSettingsData;
 import com.astune.gyromancy.element.ElementChunkData;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
@@ -66,6 +68,20 @@ public final class ModAttachments {
             WIRELESS_REGISTRY = ATTACHMENTS.register("wireless_registry",
             () -> AttachmentType.builder(WirelessRegistry::new)
                     .serialize(WirelessRegistry.CODEC)
+                    .build()
+    );
+
+    /**
+     * Per-player canvas editor preferences. Persisted with the player, copied
+     * on death, and synced so the local editor screens read the authoritative
+     * values.
+     */
+    public static final Supplier<AttachmentType<CanvasToolSettingsData>>
+            CANVAS_TOOL_SETTINGS = ATTACHMENTS.register("canvas_tool_settings",
+            () -> AttachmentType.builder(() -> CanvasToolSettingsData.DEFAULT)
+                    .serialize(CanvasToolSettingsData.CODEC)
+                    .sync(ByteBufCodecs.fromCodec(CanvasToolSettingsData.CODEC))
+                    .copyOnDeath()
                     .build()
     );
 }

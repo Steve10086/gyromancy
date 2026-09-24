@@ -2,7 +2,6 @@ package com.astune.gyromancy.client.canvas;
 
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasEntity;
-import com.astune.gyromancy.canvas.CanvasToolSettings;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.astune.gyromancy.network.CanvasSnapshotPacket;
 import net.minecraft.client.Minecraft;
@@ -71,7 +70,6 @@ public final class CanvasClientState {
     public static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         clear();
         CanvasTooltipTextureCache.clear();
-        CanvasToolSettings.clear();
     }
 
     /** Releases dimension-local snapshots before Minecraft swaps client levels. */
@@ -79,7 +77,6 @@ public final class CanvasClientState {
         if (!event.getLevel().isClientSide()) return;
         clear();
         CanvasTooltipTextureCache.clear();
-        CanvasToolSettings.clear();
     }
 
     private static void remove(int entityId) {

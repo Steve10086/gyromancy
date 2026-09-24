@@ -2,6 +2,7 @@ package com.astune.gyromancy.client.canvas;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -190,6 +191,42 @@ class CanvasEditHistoryTest {
         assertNotNull(afterHighStrokeRedo);
         assertEquals(20, afterHighStrokeRedo.colors()[15]);
         assertEquals(2, afterHighStrokeRedo.effects()[15]);
+    }
+
+    @Test
+    void transformIsUndoneAndRedoneAtTheCurrentScale() {
+        CanvasEditHistory history = new CanvasEditHistory();
+        int[] colors = {1, 2, 3, 4};
+        int[] effects = {5, 6, 7, 8};
+        int[] rotatedColors = {3, 1, 4, 2};
+        int[] rotatedEffects = {7, 5, 8, 6};
+
+        history.recordTransform(1, colors, effects, rotatedColors, rotatedEffects);
+        assertTrue(history.canUndo());
+
+        CanvasEditHistory.RasterState undone =
+                history.undo(1, rotatedColors, rotatedEffects);
+        assertNotNull(undone);
+        assertEquals(1, undone.scale());
+        assertArrayEquals(colors, undone.colors());
+        assertArrayEquals(effects, undone.effects());
+
+        CanvasEditHistory.RasterState redone = history.redo(
+                undone.scale(), undone.colors(), undone.effects());
+        assertNotNull(redone);
+        assertArrayEquals(rotatedColors, redone.colors());
+        assertArrayEquals(rotatedEffects, redone.effects());
+    }
+
+    @Test
+    void transformThatChangesNothingCreatesNoHistoryEntry() {
+        CanvasEditHistory history = new CanvasEditHistory();
+        int[] colors = {1, 2, 3, 4};
+        int[] effects = {5, 6, 7, 8};
+
+        history.recordTransform(1, colors, effects, colors.clone(), effects.clone());
+
+        assertFalse(history.canUndo());
     }
 
     private static void change(CanvasEditHistory history,

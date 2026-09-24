@@ -541,6 +541,15 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // Undo and redo take priority so a tool cannot swallow Ctrl+Z/Ctrl+R.
+        if (CanvasEditorKeyMappings.matchesUndo(keyCode, scanCode)) {
+            undo();
+            return true;
+        }
+        if (CanvasEditorKeyMappings.matchesRedo(keyCode, scanCode)) {
+            redo();
+            return true;
+        }
         CanvasEditorTool tool = selectedEditorTool();
         if (tool != null && minecraft != null && minecraft.player != null
                 && tool.editorKeyPressed(this, minecraft.player.getMainHandItem(),

@@ -80,5 +80,11 @@ public final class ModNetwork {
                 CompassRadiusPacket.STREAM_CODEC,
                 CompassRadiusPacket::handleServer
         );
+
+        registrar.playToServer(
+                UpdateCanvasToolSettingsPacket.TYPE,
+                UpdateCanvasToolSettingsPacket.STREAM_CODEC,
+                UpdateCanvasToolSettingsPacket::handleServer
+        );
     }
 }

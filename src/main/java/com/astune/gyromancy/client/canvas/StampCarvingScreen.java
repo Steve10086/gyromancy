@@ -280,6 +280,15 @@ public final class StampCarvingScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // Undo and redo take priority over the view modifier tracking below.
+        if (CanvasEditorKeyMappings.matchesUndo(keyCode, scanCode)) {
+            undo();
+            return true;
+        }
+        if (CanvasEditorKeyMappings.matchesRedo(keyCode, scanCode)) {
+            redo();
+            return true;
+        }
         if (CanvasEditorKeyMappings.matchesViewModifier(keyCode, scanCode)) {
             viewModifierHeld = true;
         }
