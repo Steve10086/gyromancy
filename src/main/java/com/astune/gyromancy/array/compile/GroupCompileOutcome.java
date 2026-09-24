@@ -8,12 +8,8 @@ import java.util.Set;
 public sealed interface GroupCompileOutcome
         permits GroupCompileOutcome.Success, GroupCompileOutcome.NoCandidate,
         GroupCompileOutcome.Failure {
-    record Success(CompiledOp op, Set<String> dependencyKeys, boolean deferred)
+    record Success(CompiledOp op, Set<String> dependencyKeys)
             implements GroupCompileOutcome {
-        public Success(CompiledOp op, Set<String> dependencyKeys) {
-            this(op, dependencyKeys, false);
-        }
-
         public Success {
             dependencyKeys = Set.copyOf(dependencyKeys);
         }

@@ -6,7 +6,7 @@
 
 - 编译后的节点统一是 `CompiledOp`。
 - 阶段1的 `CompiledOp` 只描述已匹配的结构；只有阶段3 Dispatcher 才会调用 `PersistentOp` 的生命周期方法。
-- `DynamicStructure` 在父 Definition 匹配前替换最终结构；`LocalCompilable` 只在阶段2处理需要局部物化的 Op。
+- `DynamicStructure` 在父 Definition 匹配前替换最终结构；阶段2 对整棵 Op 树递归执行 `localCompile`（`CompiledOp` 的 default 实现会递归子节点并用 `copyWithInputs` 重建），其结果才是最终结构。向量簇等特殊编译由对应 Op 覆盖 `localCompile` 完成。
 - `EmitOp` 是 child 发射协议；实体 payload 贡献通过 `CompiledOp` 的 direct child 方法完成。它们作为 root 被编译出来时，不会产生有意义的 runtime effect。
 - 新 Op 通过类内部的 `@RegisteredOp + DEFINITION` 进入匹配系统；需要多个互斥入口时，可由注解显式列出多个 definition 字段。
 
@@ -74,7 +74,7 @@ flowchart TD
    - `boundary`：当前 group 的边界 glyph；
    - `matchedInputs`：只包含 match pattern 消耗掉的 inputs；
    - `inputs`：当前 group 的全部 direct runes 和已编译 child Ops。
-7. `CompiledArray` 是阶段1产物；`LocalCompiler` 再将其转换为 `RuntimeModel`。
+7. `CompiledArray` 是阶段1产物；`LocalCompiler` 随后对整棵树递归执行 `localCompile` 得到最终 `RuntimeModel`。默认实现递归子节点并通过 `copyWithInputs` 重建；运行时读取子节点的 Op 必须覆盖 `copyWithInputs`，需要特殊二次编译的 Op（如向量簇、形状解码）覆盖 `localCompile`。
 
 匹配是 group-local 的。父 Op 看不到 child group 内部的 direct runes，只能看到一个 `OpInput.Op`。
 

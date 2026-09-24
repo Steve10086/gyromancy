@@ -9,14 +9,6 @@ public sealed interface OpInputMatcher permits OpInputMatcher.Rune, OpInputMatch
         OpInputMatcher.SecretTextRune {
     boolean matches(OpInput input);
 
-    /**
-     * A deferred child still carries a dynamically preserved structure and is
-     * therefore accepted by any matcher until the structure pass resolves it.
-     */
-    static boolean isDeferred(OpInput input) {
-        return input instanceof OpInput.Op op && op.deferred();
-    }
-
     static OpInputMatcher rune(String symbolName) {
         return new Rune(symbolName);
     }

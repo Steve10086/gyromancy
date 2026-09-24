@@ -78,10 +78,14 @@ public final class ArrayCompileFeedback {
     }
 
     static Component failureMessage(List<CompileDiagnostic> diagnostics) {
-        CompileDiagnostic primary = diagnostics.isEmpty()
-                ? new CompileDiagnostic("unknown", "Compilation failed")
-                : diagnostics.getFirst();
-        return Component.translatable(MESSAGE_PREFIX + "failed",
+        boolean runtime = isRuntimeError(diagnostics);
+        CompileDiagnostic primary = diagnostics.stream()
+                .filter(diagnostic -> !CompileDiagnostic.RUNTIME_ERROR.equals(diagnostic.code()))
+                .findFirst()
+                .orElseGet(() -> diagnostics.isEmpty()
+                        ? new CompileDiagnostic("unknown", "Compilation failed")
+                        : diagnostics.getFirst());
+        return Component.translatable(MESSAGE_PREFIX + (runtime ? "runtime_error" : "failed"),
                 Component.translatableWithFallback(
                         translationKeyFor(primary.code()), "%s", primary.message()));
     }
@@ -96,8 +100,19 @@ public final class ArrayCompileFeedback {
 
     private static void logFailure(PositionedGlyph root,
                                    List<CompileDiagnostic> diagnostics) {
+        if (isRuntimeError(diagnostics)) {
+            Gyromancy.LOGGER.warn("[MagicArrayRuntime] {} in {}: {}",
+                    CompileDiagnostic.RUNTIME_ERROR,
+                    root.symbolId().getPath() + "#" + root.glyphId(), diagnostics);
+            return;
+        }
         Gyromancy.LOGGER.warn("[MagicArray] Compile failed for glyph #{} ({}): {}",
                 root.glyphId(), root.symbolId().getPath(), diagnostics);
+    }
+
+    private static boolean isRuntimeError(List<CompileDiagnostic> diagnostics) {
+        return diagnostics.stream()
+                .anyMatch(diagnostic -> CompileDiagnostic.RUNTIME_ERROR.equals(diagnostic.code()));
     }
 
     private static void broadcast(ServerLevel level, List<PositionedGlyph> roots,

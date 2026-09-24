@@ -33,7 +33,7 @@ class OpResolutionTest {
     void ordinaryOperatorWithoutLocalRuleIsKept() {
         StubOp operator = new StubOp("ordinary", glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1));
 
-        LocalCompileResult result = OpResolver.localCompile(operator,
+        LocalCompileResult result = operator.localCompile(
                 new LocalCompileContext(new LocalCompiler()));
 
         LocalCompileResult.Success success = assertInstanceOf(LocalCompileResult.Success.class, result);
@@ -93,7 +93,7 @@ class OpResolutionTest {
         @Override public int color() { return 0; }
     }
 
-    private static final class LocalStub extends StubOp implements LocalCompilable {
+    private static final class LocalStub extends StubOp {
         private LocalStub(PositionedGlyph boundary) {
             super("local_stub", boundary);
         }

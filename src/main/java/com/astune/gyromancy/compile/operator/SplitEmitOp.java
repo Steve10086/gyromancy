@@ -3,8 +3,6 @@ package com.astune.gyromancy.compile.operator;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.CompileResult;
-import com.astune.gyromancy.array.compile.LocalCompileContext;
-import com.astune.gyromancy.array.compile.LocalCompileResult;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
@@ -21,7 +19,7 @@ import java.util.List;
 import java.util.Optional;
 
 @RegisteredOp
-public final class SplitEmitOp extends EmitOp implements LocalCompilable {
+public final class SplitEmitOp extends EmitOp {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "split_emit");
     private static final ResourceLocation SPLIT_SYMBOL =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "split");
@@ -58,12 +56,8 @@ public final class SplitEmitOp extends EmitOp implements LocalCompilable {
     }
 
     @Override
-    public LocalCompileResult localCompile(LocalCompileContext context) {
-        List<OpInput> materialized = inputs().stream()
-                .map(context::materialize)
-                .toList();
-        return LocalCompileResult.success(new SplitEmitOp(
-                boundary(), matchedInputs(), materialized));
+    public SplitEmitOp copyWithInputs(List<OpInput> inputs) {
+        return new SplitEmitOp(boundary(), matchedInputs(), inputs);
     }
 
     @Override

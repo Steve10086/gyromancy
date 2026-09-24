@@ -36,7 +36,7 @@ import java.util.WeakHashMap;
  * attached as an entity payload, on a distance-adjusted fixed interval.
  */
 @RegisteredOp
-public final class LoopOp extends OnEntityTickOp implements PersistentOp, LocalCompilable,
+public final class LoopOp extends OnEntityTickOp implements PersistentOp,
         EntityPayloadContributor {
     private static final int CHECK_INTERVAL = 10;
     private static final int MIN_PAYLOAD_INTERVAL = 5;

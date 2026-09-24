@@ -66,6 +66,11 @@ public final class TornadoProjectileOp extends ProjectileEntityOp {
     }
 
     @Override
+    public TornadoProjectileOp copyWithInputs(List<OpInput> inputs) {
+        return new TornadoProjectileOp(boundary(), matchedInputs(), inputs);
+    }
+
+    @Override
     public TornadoBallEntity create(Level level, Vec3 pos, Vec3 velocity,
                                     Vec3 acceleration, float size) {
         return new TornadoBallEntity(level, pos, velocity, acceleration, size);

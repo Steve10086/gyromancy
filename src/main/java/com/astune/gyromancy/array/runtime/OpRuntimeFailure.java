@@ -2,6 +2,7 @@ package com.astune.gyromancy.array.runtime;
 
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.array.ArrayObject;
+import com.astune.gyromancy.array.compile.CompileDiagnostic;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.registry.ModAttachments;
 
@@ -15,7 +16,7 @@ public final class OpRuntimeFailure {
             Collections.newSetFromMap(new IdentityHashMap<>());
 
     public enum Kind {
-        RUNTIME_ERROR("runtime_error"),
+        RUNTIME_ERROR(CompileDiagnostic.RUNTIME_ERROR),
         AMBIGUOUS_MATCH("ambiguous_match");
 
         private final String code;

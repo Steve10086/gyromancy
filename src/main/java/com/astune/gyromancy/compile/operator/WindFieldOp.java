@@ -72,7 +72,7 @@ public final class WindFieldOp extends FieldOp {
     }
 
     @Override
-    protected FieldOp copyWithInputs(List<OpInput> inputs) {
+    public FieldOp copyWithInputs(List<OpInput> inputs) {
         return new WindFieldOp(boundary, matchedInputs, inputs);
     }
 

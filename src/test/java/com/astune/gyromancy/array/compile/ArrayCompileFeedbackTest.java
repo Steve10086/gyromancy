@@ -66,6 +66,23 @@ class ArrayCompileFeedbackTest {
     }
 
     @Test
+    void runtimeFailuresUseTheRuntimeErrorKeyAndSkipTheMarker() {
+        Component message = ArrayCompileFeedback.failureMessage(List.of(
+                new CompileDiagnostic(CompileDiagnostic.RUNTIME_ERROR,
+                        "Momentum cannot resolve a vector source at runtime"),
+                new CompileDiagnostic("missing_wireless_source", "wireless:1:2:8")));
+
+        TranslatableContents outer = assertInstanceOf(
+                TranslatableContents.class, message.getContents());
+        assertEquals("message.gyromancy.array.compile.runtime_error", outer.getKey());
+
+        Component innerComponent = assertInstanceOf(Component.class, outer.getArgs()[0]);
+        TranslatableContents inner = assertInstanceOf(
+                TranslatableContents.class, innerComponent.getContents());
+        assertEquals("message.gyromancy.array.compile.missing_wireless_source", inner.getKey());
+    }
+
+    @Test
     void notRunnableMessageUsesItsOwnKey() {
         Component message = ArrayCompileFeedback.notRunnableMessage();
 

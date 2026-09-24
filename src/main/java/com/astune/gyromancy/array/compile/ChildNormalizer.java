@@ -13,8 +13,8 @@ public interface ChildNormalizer {
     static ChildNormalizer preserving() {
         return (sourceGroup, outcome, ignored) -> switch (outcome) {
             case GroupCompileOutcome.Success success -> new CompileResult.Success<>(
-                    new NormalizedChild(new OpInput.Op(success.op(), sourceGroup,
-                            success.deferred()), success.dependencyKeys()));
+                    new NormalizedChild(new OpInput.Op(success.op(), sourceGroup),
+                            success.dependencyKeys()));
             case GroupCompileOutcome.NoCandidate noCandidate -> new CompileResult.Success<>(
                     new NormalizedChild(new OpInput.RawGroup(sourceGroup, noCandidate.diagnostics()),
                             java.util.Set.of()));

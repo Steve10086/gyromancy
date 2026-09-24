@@ -8,7 +8,9 @@ import com.astune.gyromancy.array.compile.ArrayNode;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.CompiledArray;
 import com.astune.gyromancy.array.compile.GroupNode;
+import com.astune.gyromancy.array.compile.LocalCompiler;
 import com.astune.gyromancy.array.compile.OpInput;
+import com.astune.gyromancy.array.compile.RuntimeModel;
 import com.astune.gyromancy.array.compile.SequenceNode;
 import com.astune.gyromancy.array.compile.SymbolNode;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
@@ -49,7 +51,11 @@ class WaterMomentumTickTest {
 
         CompileResult.Success<CompiledArray> success = assertInstanceOf(
                 CompileResult.Success.class, ArrayNodeCompiler.compile(ast));
-        WaterProjectileOp root = assertInstanceOf(WaterProjectileOp.class, success.value().root());
+        CompileResult<RuntimeModel> runtime = new LocalCompiler().compile(success.value());
+        CompileResult.Success<RuntimeModel> runtimeSuccess = assertInstanceOf(
+                CompileResult.Success.class, runtime);
+        WaterProjectileOp root = assertInstanceOf(WaterProjectileOp.class,
+                runtimeSuccess.value().root());
 
         MomentumOp outer = null;
         for (OpInput input : root.inputs()) {

@@ -1,12 +1,11 @@
 package com.astune.gyromancy.array.compile;
 
 import com.astune.gyromancy.compile.operator.CompiledOp;
-import com.astune.gyromancy.compile.operator.LocalCompilable;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
 
-/** Optional local-compilation pass over a statically normalized Op tree. */
+/** Stage-2 pass which recursively materializes every compiled Op. */
 public final class LocalCompiler {
     private final Map<CompiledOp, CompiledOp> cache = new IdentityHashMap<>();
 
@@ -24,19 +23,16 @@ public final class LocalCompiler {
         CompiledOp cached = cache.get(operator);
         if (cached != null) return new CompileResult.Success<>(cached);
 
-        CompiledOp result = operator;
-        if (operator instanceof LocalCompilable local) {
-            LocalCompileContext context = new LocalCompileContext(this);
-            LocalCompileResult localResult = local.localCompile(context);
-            if (!context.failures().isEmpty()) {
-                return new CompileResult.Failure<>(context.failures());
-            }
-            if (localResult instanceof LocalCompileResult.Failure failure) {
-                return new CompileResult.Failure<>(failure.diagnostics());
-            }
-            result = ((LocalCompileResult.Success) localResult).operator();
+        LocalCompileContext context = new LocalCompileContext(this);
+        LocalCompileResult localResult = operator.localCompile(context);
+        if (!context.failures().isEmpty()) {
+            return new CompileResult.Failure<>(context.failures());
+        }
+        if (localResult instanceof LocalCompileResult.Failure failure) {
+            return new CompileResult.Failure<>(failure.diagnostics());
         }
 
+        CompiledOp result = ((LocalCompileResult.Success) localResult).operator();
         cache.put(operator, result);
         return new CompileResult.Success<>(result);
     }

@@ -69,7 +69,6 @@ public abstract class GroupCompiler {
         OpResolveContext groupContext = context.withTargetBoundary(group.boundary());
         List<OpInput> inputs = new ArrayList<>();
         Set<String> dependencyKeys = new LinkedHashSet<>();
-        boolean deferred = false;
         for (ArrayNode child : sequence.children()) {
             if (child instanceof SymbolNode symbol) {
                 inputs.add(new OpInput.Rune(symbol.glyph()));
@@ -96,7 +95,6 @@ public abstract class GroupCompiler {
             dependencyKeys.addAll(childInput.dependencyKeys());
             if (nestedOutcome instanceof GroupCompileOutcome.Success success) {
                 dependencyKeys.addAll(success.dependencyKeys());
-                deferred |= success.deferred();
             }
         }
 
@@ -104,8 +102,7 @@ public abstract class GroupCompiler {
         if (created instanceof GroupCompileOutcome.Success success) {
             Set<String> combined = new LinkedHashSet<>(dependencyKeys);
             combined.addAll(success.dependencyKeys());
-            return new GroupCompileOutcome.Success(success.op(), combined,
-                    deferred || success.deferred());
+            return new GroupCompileOutcome.Success(success.op(), combined);
         }
         return created;
     }
@@ -166,7 +163,6 @@ public abstract class GroupCompiler {
         for (int i = 0; i < inputs.size(); i++) {
             if (used.contains(i)) continue;
             OpInput input = inputs.get(i);
-            if (OpInputMatcher.isDeferred(input)) continue;
             if (accepted.stream().noneMatch(matcher -> matcher.matches(input))) return false;
         }
         return true;
@@ -175,7 +171,6 @@ public abstract class GroupCompiler {
     private static int firstMatch(List<OpInput> inputs, OpInputMatcher matcher, Set<Integer> used) {
         for (int i = 0; i < inputs.size(); i++) {
             if (used.contains(i)) continue;
-            if (OpInputMatcher.isDeferred(inputs.get(i))) return i;
             if (matcher.matches(inputs.get(i))) return i;
         }
         return -1;

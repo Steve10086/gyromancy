@@ -71,6 +71,11 @@ public final class WaterProjectileOp extends ProjectileEntityOp {
     }
 
     @Override
+    public WaterProjectileOp copyWithInputs(List<OpInput> inputs) {
+        return new WaterProjectileOp(boundary(), matchedInputs(), inputs);
+    }
+
+    @Override
     public WaterBallEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
         WaterBallEntity entity = new WaterBallEntity(level, pos, velocity, acceleration, size);
         return entity;

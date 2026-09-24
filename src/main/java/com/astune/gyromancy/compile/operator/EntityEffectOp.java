@@ -123,6 +123,14 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
         return inputs;
     }
 
+    /**
+     * Rebuilds the concrete effect with materialized direct inputs. Every
+     * runtime path of this family iterates {@link #inputs()}, so subclasses
+     * must attach the stage-2 materialized children.
+     */
+    @Override
+    public abstract EntityEffectOp copyWithInputs(List<OpInput> inputs);
+
     public List<OpInput> matchedInputs() {
         return matchedInputs;
     }

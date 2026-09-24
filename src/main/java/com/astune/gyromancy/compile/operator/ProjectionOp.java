@@ -7,8 +7,6 @@ import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.astune.gyromancy.array.compile.CompileResult;
-import com.astune.gyromancy.array.compile.LocalCompileContext;
-import com.astune.gyromancy.array.compile.LocalCompileResult;
 import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
@@ -39,7 +37,7 @@ import static java.lang.Math.max;
 
 /** Projects the glyphs enclosed by a canvas outer circle onto a fixed parallel plane. */
 @RegisteredOp
-public final class ProjectionOp implements CompiledOp, PersistentOp, LocalCompilable {
+public final class ProjectionOp implements CompiledOp, PersistentOp {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "projection");
     private static final List<OpInputMatcher> SOURCE_MATCHERS = List.of(
@@ -89,12 +87,8 @@ public final class ProjectionOp implements CompiledOp, PersistentOp, LocalCompil
     }
 
     @Override
-    public LocalCompileResult localCompile(LocalCompileContext context) {
-        List<OpInput> materialized = inputs.stream()
-                .map(context::materialize)
-                .toList();
-        return LocalCompileResult.success(new ProjectionOp(
-                boundary, matchedInputs, materialized));
+    public ProjectionOp copyWithInputs(List<OpInput> inputs) {
+        return new ProjectionOp(boundary, matchedInputs, inputs);
     }
 
     @Override

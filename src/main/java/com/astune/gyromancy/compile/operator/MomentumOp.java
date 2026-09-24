@@ -5,10 +5,13 @@ import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
+import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.LocalCompileContext;
 import com.astune.gyromancy.array.compile.LocalCompileResult;
+import com.astune.gyromancy.array.compile.VectorCompiler;
 import com.astune.gyromancy.compile.vector.VectorContext;
 import com.astune.gyromancy.compile.vector.VectorOp;
+import com.astune.gyromancy.compile.vector.VectorOpDefinitions;
 import com.astune.gyromancy.compile.vector.VectorOpSerialization;
 import com.astune.gyromancy.entity.MagicEntity;
 import com.astune.gyromancy.symbol.SymbolCatalog;
@@ -28,13 +31,15 @@ import java.util.Optional;
  * Consumes VectorOps and applies them as movement. Vector construction and
  * matching remain outside this class.
  */
-public final class MomentumOp extends OnEntityTickOp implements CompiledOp, LocalCompilable,
+public final class MomentumOp extends OnEntityTickOp implements CompiledOp,
         EntityEmissionModifier, EntityPayloadContributor {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "momentum");
 
     private static final double MOMENTUM_SCALE = 1.0 / 10;
     private static final double DIRECTION_EPSILON = 1.0E-8;
+    private static final MomentumInputResolver INPUT_RESOLVER =
+            new MomentumInputResolver(new VectorCompiler(VectorOpDefinitions.definitions()));
 
     /**
      * Applies the same lift used by the projectile momentum path.  Arrow
@@ -123,33 +128,41 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp, Loca
     /** Snapshot acceleration vectors are sampled once on their first tick. */
     private List<Vec3> accelerationSnapshots;
 
-    static MomentumOp compiled(PositionedGlyph boundary, List<OpInput> matchedInputs,
-                               List<OpInput> inputs, MomentumInputResolver resolver) {
-        return compiled(boundary, matchedInputs, inputs, resolver,
-                OpResolveContext.forVector(boundary));
-    }
-
-    static MomentumOp compiled(PositionedGlyph boundary, List<OpInput> matchedInputs,
-                               List<OpInput> inputs, MomentumInputResolver resolver,
-                               OpResolveContext context) {
+    /**
+     * Stage-1 symbolic node. Vector resolution is deliberately a stage-2
+     * local compile: every nested vector cluster stays a legally matched raw
+     * structure until the whole tree has been built, and only the recursive
+     * local pass turns it into real VectorOps.
+     */
+    static MomentumOp symbolic(PositionedGlyph boundary, List<OpInput> matchedInputs,
+                               List<OpInput> inputs) {
         Optional<SurfaceFrame> compileFrame = Optional.ofNullable(
                 boundary == null ? null : boundary.surface());
-        MomentumInputResolver.ResolvedInputs resolved = resolver.resolve(boundary, inputs, context);
         return new MomentumOp(boundary, matchedInputs, inputs, compileFrame,
-                resolved.velocityInputs(), resolved.accelerationInputs(), Vec3.ZERO, 0,
-                resolver.drainRotationSpeed(inputs), ApplicationPhase.SPAWN,
-                resolved.dynamic(), Optional.empty());
+                List.of(), List.of(), Vec3.ZERO, 0,
+                INPUT_RESOLVER.drainRotationSpeed(inputs), ApplicationPhase.SPAWN,
+                false, Optional.empty());
     }
 
     @Override
     public LocalCompileResult localCompile(LocalCompileContext context) {
         try {
-            MomentumInputResolver.ResolvedInputs resolved = resolvedInputs(null);
+            List<OpInput> materialized = inputs.stream()
+                    .map(context::materialize)
+                    .toList();
+            CompileResult<MomentumInputResolver.ResolvedInputs> resolved =
+                    INPUT_RESOLVER.resolve(boundary, materialized);
+            if (resolved instanceof CompileResult.Failure<
+                    MomentumInputResolver.ResolvedInputs> failure) {
+                return new LocalCompileResult.Failure(failure.diagnostics());
+            }
+            MomentumInputResolver.ResolvedInputs value =
+                    ((CompileResult.Success<MomentumInputResolver.ResolvedInputs>) resolved).value();
             return LocalCompileResult.success(new MomentumOp(
-                    boundary, matchedInputs, inputs, compileFrame,
-                    resolved.velocityInputs(), resolved.accelerationInputs(),
+                    boundary, matchedInputs, materialized, compileFrame,
+                    value.velocityInputs(), value.accelerationInputs(),
                     acceleration, elapsedTicks, drainRotationSpeed, phase,
-                    resolved.dynamic(), activationFrame));
+                    value.dynamic(), activationFrame));
         } catch (RuntimeException exception) {
             return LocalCompileResult.failure("invalid_momentum_inputs", exception.getMessage());
         }

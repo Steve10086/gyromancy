@@ -48,9 +48,15 @@ final class RotationVectorDefinition {
                 OpResolveContext effectiveContext = context == null
                         ? OpResolveContext.forVector(boundary) : context;
                 PositionedGlyph loop = ((OpInput.Rune) matchedInputs.getFirst()).glyph();
+                CompileResult<List<VectorComposition.Input>> resolved = VectorInputCompiler.groups(
+                        inputs, VectorDefinitionSupport.compiler(), effectiveContext);
+                if (resolved instanceof CompileResult.Failure<
+                        List<VectorComposition.Input>> failure) {
+                    return new CompileResult.Failure<>(failure.diagnostics());
+                }
                 return new CompileResult.Success<>(new RotationVectorOp(
                         ID, boundary, inputs, 0,
-                    VectorInputCompiler.groups(inputs, VectorDefinitionSupport.compiler(), effectiveContext),
+                        ((CompileResult.Success<List<VectorComposition.Input>>) resolved).value(),
                         VectorInputCompiler.direct(boundary, inputs),
                         loop.length() * ROTATION_SPEED_SCALE,
                         VectorOp.secretScale(inputs),

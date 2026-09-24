@@ -6,8 +6,6 @@ import com.astune.gyromancy.api.field.ShapeOrientation;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.CompileDiagnostic;
 import com.astune.gyromancy.array.compile.CompileResult;
-import com.astune.gyromancy.array.compile.LocalCompileContext;
-import com.astune.gyromancy.array.compile.LocalCompileResult;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.OpRuntimeFailure;
@@ -35,7 +33,7 @@ import java.util.Optional;
  * velocity, acceleration, or projectile-only deferred cleanup. A concrete
  * field op supplies the configured field entity and its payloads.</p>
  */
-public abstract class FieldOp extends EntityEffectOp implements LocalCompilable {
+public abstract class FieldOp extends EntityEffectOp {
     private static final String MOMENTUM_UNSUPPORTED = "field_rejects_momentum";
 
     protected FieldOp(ResourceLocation id, ElementType element, PositionedGlyph boundary,
@@ -43,16 +41,9 @@ public abstract class FieldOp extends EntityEffectOp implements LocalCompilable 
         super(id, element, boundary, matchedInputs, inputs);
     }
 
-    @Override
-    public LocalCompileResult localCompile(LocalCompileContext context) {
-        List<OpInput> materialized = inputs.stream()
-                .map(context::materialize)
-                .toList();
-        return LocalCompileResult.success(copyWithInputs(materialized));
-    }
-
     /** Rebuilds the concrete field Op after its local child inputs are materialized. */
-    protected abstract FieldOp copyWithInputs(List<OpInput> inputs);
+    @Override
+    public abstract FieldOp copyWithInputs(List<OpInput> inputs);
 
     @Override
     public final RuntimeHandle activate(OpRuntimeContext context) {

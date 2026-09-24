@@ -1,6 +1,8 @@
 package com.astune.gyromancy.compile.operator;
 
+import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.array.compile.CompileDiagnostic;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.VectorCompiler;
@@ -13,6 +15,8 @@ import java.util.List;
 /** Compile-side support selected by Momentum's operator definition. */
 final class MomentumInputResolver {
     private static final double DRAIN_ROTATION_SCALE = 18.0;
+    private static final String RUNTIME_ERROR_MESSAGE =
+            "Momentum cannot resolve a vector source at runtime";
 
     private final VectorCompiler vectorCompiler;
 
@@ -20,12 +24,12 @@ final class MomentumInputResolver {
         this.vectorCompiler = vectorCompiler;
     }
 
-    ResolvedInputs resolve(PositionedGlyph boundary, List<OpInput> inputs) {
+    CompileResult<ResolvedInputs> resolve(PositionedGlyph boundary, List<OpInput> inputs) {
         return resolve(boundary, inputs, OpResolveContext.forVector(boundary));
     }
 
-    ResolvedInputs resolve(PositionedGlyph boundary, List<OpInput> inputs,
-                           OpResolveContext context) {
+    CompileResult<ResolvedInputs> resolve(PositionedGlyph boundary, List<OpInput> inputs,
+                                          OpResolveContext context) {
         List<MomentumOp.VectorInput> velocityInputs = new ArrayList<>();
         List<MomentumOp.AccelerationInput> accelerationInputs = new ArrayList<>();
         boolean dynamic = false;
@@ -56,16 +60,19 @@ final class MomentumInputResolver {
                 continue;
             }
 
-            addVectorGroup(velocityInputs, input, context);
+            List<CompileDiagnostic> failures = addVectorGroup(velocityInputs, input, context);
+            if (!failures.isEmpty()) {
+                return new CompileResult.Failure<>(failures);
+            }
         }
 
         ResolvedInputs resolved = new ResolvedInputs(List.copyOf(velocityInputs),
                 List.copyOf(accelerationInputs), dynamic);
-        com.astune.gyromancy.Gyromancy.LOGGER.debug(
+        Gyromancy.LOGGER.debug(
                 "[Momentum] resolve boundary={} dynamic={} velocity={} acceleration={}",
                 boundary == null ? "none" : boundary.glyphId(), dynamic,
                 resolved.velocityInputs().size(), resolved.accelerationInputs().size());
-        return resolved;
+        return new CompileResult.Success<>(resolved);
     }
 
     double drainRotationSpeed(List<OpInput> inputs) {
@@ -86,23 +93,41 @@ final class MomentumInputResolver {
                         vector, motionMode(rune.symbolName()))));
     }
 
-    private void addVectorGroup(List<MomentumOp.VectorInput> result, OpInput input,
-                                OpResolveContext context) {
-        if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp) return;
+    /**
+     * Interprets a non-momentum child as a vector source. A failure is a hard
+     * stage-2 rejection: the vector compiler is the authoritative second pass,
+     * so an input it cannot compile must not be silently dropped. The runtime
+     * error marker keeps this class of failure distinguishable from authored
+     * structure errors.
+     */
+    private List<CompileDiagnostic> addVectorGroup(List<MomentumOp.VectorInput> result,
+                                                   OpInput input, OpResolveContext context) {
+        if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp) return List.of();
 
         if (input instanceof OpInput.RawGroup
                 || input instanceof OpInput.Op op && op.sourceGroup() != null) {
             CompileResult<CompiledOp> compiled = vectorCompiler.compile(input, context);
-            if (addCompiledVector(result, compiled)) return;
-            com.astune.gyromancy.Gyromancy.LOGGER.debug(
-                    "[Momentum] vector group dropped input={} result={}",
-                    describe(input), compiled instanceof CompileResult.Failure<CompiledOp> failure
-                            ? failure.diagnostics() : compiled);
+            if (addCompiledVector(result, compiled)) return List.of();
+            if (input instanceof OpInput.Op op && op.operator() instanceof VectorOp vector) {
+                result.add(new MomentumOp.VectorInput(vector, MomentumOp.MotionMode.DIRECT));
+                return List.of();
+            }
+            Gyromancy.LOGGER.debug("[Momentum] vector group rejected input={} result={}",
+                    describe(input), compiled);
+            List<CompileDiagnostic> diagnostics = new ArrayList<>();
+            diagnostics.add(new CompileDiagnostic(CompileDiagnostic.RUNTIME_ERROR,
+                    RUNTIME_ERROR_MESSAGE));
+            if (input instanceof OpInput.RawGroup raw) diagnostics.addAll(raw.failures());
+            if (compiled instanceof CompileResult.Failure<CompiledOp> failure) {
+                diagnostics.addAll(failure.diagnostics());
+            }
+            return List.copyOf(diagnostics);
         }
 
         if (input instanceof OpInput.Op op && op.operator() instanceof VectorOp vector) {
             result.add(new MomentumOp.VectorInput(vector, MomentumOp.MotionMode.DIRECT));
         }
+        return List.of();
     }
 
     private static String describe(OpInput input) {

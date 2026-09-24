@@ -6,8 +6,7 @@ import java.util.List;
 
 public sealed interface LocalCompileResult
         permits LocalCompileResult.Success, LocalCompileResult.Failure {
-    record Success(CompiledOp operator, LocalForwardContext forwarded)
-            implements LocalCompileResult {}
+    record Success(CompiledOp operator) implements LocalCompileResult {}
 
     record Failure(List<CompileDiagnostic> diagnostics) implements LocalCompileResult {
         public Failure {
@@ -16,7 +15,7 @@ public sealed interface LocalCompileResult
     }
 
     static Success success(CompiledOp operator) {
-        return new Success(operator, null);
+        return new Success(operator);
     }
 
     static Failure failure(String code, String message) {

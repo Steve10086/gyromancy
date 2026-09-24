@@ -33,6 +33,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ArrayNodeCompilerTest {
     @Test
@@ -78,7 +79,7 @@ class ArrayNodeCompilerTest {
     }
 
     @Test
-    void loopAcceptsADeferredWirelessConsumerUntilRuntimeResolution() {
+    void loopAcceptsAWirelessConsumerByItsPersistentType() {
         PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
         PositionedGlyph loop = glyph("loop", SymbolRole.PARAMETER_RUNE, 2);
         PositionedGlyph wirelessCircle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
@@ -96,6 +97,24 @@ class ArrayNodeCompilerTest {
 
         assertEquals(false, child.publishesSource());
         assertEquals("wireless:1", child.key());
+    }
+
+    @Test
+    void strictParentDefinitionRejectsAnUnresolvedWirelessChild() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph split = glyph("split", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph wirelessCircle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
+        PositionedGlyph space = glyph("space", SymbolRole.CENTER_SYMBOL, 4);
+        PositionedGlyph secretOne = glyph("secret_text_1", SymbolRole.PARAMETER_RUNE, 5);
+        GroupNode ast = group(outer, new SymbolNode(split),
+                group(wirelessCircle, new SymbolNode(space), new SymbolNode(secretOne)));
+
+        @SuppressWarnings("unchecked")
+        var failure = (CompileResult.Failure<CompiledArray>) assertInstanceOf(CompileResult.Failure.class,
+                ArrayNodeCompiler.compile(ast,
+                        List.of(WirelessOp.DEFINITION, SplitEmitOp.DEFINITION)));
+
+        assertEquals("definition_rejected", failure.diagnostics().getFirst().code());
     }
 
     @Test
@@ -182,7 +201,7 @@ class ArrayNodeCompilerTest {
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
-        MomentumOp momentum = assertInstanceOf(MomentumOp.class, success.value().root());
+        MomentumOp momentum = assertInstanceOf(MomentumOp.class, materializedRoot(success.value()));
 
         assertEquals(2, momentum.velocityInputs().size());
         assertEquals(MomentumOp.MotionMode.TANGENTIAL,
@@ -205,7 +224,7 @@ class ArrayNodeCompilerTest {
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
-        MomentumOp momentum = assertInstanceOf(MomentumOp.class, success.value().root());
+        MomentumOp momentum = assertInstanceOf(MomentumOp.class, materializedRoot(success.value()));
 
         assertEquals(2, momentum.velocityInputs().size());
         assertEquals(List.of(), momentum.accelerationInputs());
@@ -226,7 +245,7 @@ class ArrayNodeCompilerTest {
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
-        MomentumOp parent = assertInstanceOf(MomentumOp.class, success.value().root());
+        MomentumOp parent = assertInstanceOf(MomentumOp.class, materializedRoot(success.value()));
         MomentumOp child = assertInstanceOf(MomentumOp.class,
                 assertInstanceOf(OpInput.Op.class, parent.inputs().get(1)).operator());
 
@@ -346,7 +365,7 @@ class ArrayNodeCompilerTest {
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
-        FireProjectileOp root = assertInstanceOf(FireProjectileOp.class, success.value().root());
+        FireProjectileOp root = assertInstanceOf(FireProjectileOp.class, materializedRoot(success.value()));
         MomentumOp launchMomentum = assertInstanceOf(MomentumOp.class,
                 assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator());
         List<EntityPayload> payloads = new ArrayList<>();
@@ -373,7 +392,7 @@ class ArrayNodeCompilerTest {
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
-        MomentumOp parent = assertInstanceOf(MomentumOp.class, success.value().root());
+        MomentumOp parent = assertInstanceOf(MomentumOp.class, materializedRoot(success.value()));
         MomentumOp child = assertInstanceOf(MomentumOp.class,
                 assertInstanceOf(OpInput.Op.class, parent.inputs().get(1)).operator());
         List<EntityPayload> payloads = new ArrayList<>();
@@ -637,7 +656,7 @@ class ArrayNodeCompilerTest {
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
-        SplitEmitOp splitOp = assertInstanceOf(SplitEmitOp.class, success.value().root());
+        SplitEmitOp splitOp = assertInstanceOf(SplitEmitOp.class, materializedRoot(success.value()));
 
         assertEquals(1, splitOp.emissions().size());
         assertEquals(new Vec3(2.0, 0.0, 0.0), splitOp.emissions().getFirst().velocity());
@@ -660,7 +679,7 @@ class ArrayNodeCompilerTest {
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
-        SplitEmitOp splitOp = assertInstanceOf(SplitEmitOp.class, success.value().root());
+        SplitEmitOp splitOp = assertInstanceOf(SplitEmitOp.class, materializedRoot(success.value()));
 
         assertEquals(2, splitOp.emissions().size());
         assertEquals(new Vec3(2.0, 0.0, 0.0), splitOp.emissions().get(0).velocity());
@@ -685,6 +704,87 @@ class ArrayNodeCompilerTest {
         CompiledOp child = assertInstanceOf(OpInput.Op.class, root.inputs().get(1)).operator();
 
         assertInstanceOf(SplitEmitOp.class, child);
+    }
+
+    @Test
+    void momentumVectorFailureIsAHardStageTwoRejection() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph motion = glyph("motion", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
+        PositionedGlyph unsupported = glyph("unsupported", SymbolRole.PARAMETER_RUNE, 4);
+        GroupNode ast = group(circle, new SymbolNode(motion),
+                group(inner, new SymbolNode(unsupported)));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+
+        CompileResult<RuntimeModel> result = new LocalCompiler().compile(success.value());
+        CompileResult.Failure<RuntimeModel> failure =
+                assertInstanceOf(CompileResult.Failure.class, result);
+
+        assertEquals(CompileDiagnostic.RUNTIME_ERROR, failure.diagnostics().getFirst().code());
+        assertTrue(failure.diagnostics().stream()
+                        .anyMatch(diagnostic -> "missing_primary_element".equals(diagnostic.code())),
+                "the nested raw group failure must be carried into the runtime error");
+    }
+
+    @Test
+    void projectilePropagatesNestedVectorFailureThroughStageTwo() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2);
+        PositionedGlyph momentumCircle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
+        PositionedGlyph motion = glyph("motion", SymbolRole.PARAMETER_RUNE, 4);
+        PositionedGlyph vectorCircle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 5);
+        PositionedGlyph unsupported = glyph("unsupported", SymbolRole.PARAMETER_RUNE, 6);
+        GroupNode ast = group(outer, new SymbolNode(fire),
+                group(momentumCircle, new SymbolNode(motion),
+                        group(vectorCircle, new SymbolNode(unsupported))));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+
+        CompileResult<RuntimeModel> result = new LocalCompiler().compile(success.value());
+        CompileResult.Failure<RuntimeModel> failure =
+                assertInstanceOf(CompileResult.Failure.class, result);
+
+        assertEquals(CompileDiagnostic.RUNTIME_ERROR, failure.diagnostics().getFirst().code());
+    }
+
+    @Test
+    void nestedVectorClustersStayRawUntilStageTwo() {
+        PositionedGlyph outer = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph motion = glyph("motion", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph vectorCircle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 4);
+        PositionedGlyph nestedCircle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 5);
+        PositionedGlyph arrowUp = glyph("arrow_up", SymbolRole.PARAMETER_RUNE, 6);
+        GroupNode ast = group(outer, new SymbolNode(motion),
+                group(vectorCircle, new SymbolNode(arrow),
+                        group(nestedCircle, new SymbolNode(arrowUp))));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+        MomentumOp symbolic = assertInstanceOf(MomentumOp.class, success.value().root());
+
+        // Stage 1 keeps the multi-layer vector cluster as a legally matched
+        // raw structure; no VectorOp exists yet.
+        assertEquals(List.of(), symbolic.velocityInputs());
+        assertTrue(symbolic.inputs().stream().anyMatch(OpInput.RawGroup.class::isInstance),
+                "the nested vector cluster must survive stage 1 as a raw group");
+
+        // Stage 2 recursively compiles the cluster into real VectorOps.
+        MomentumOp resolved = assertInstanceOf(MomentumOp.class, materializedRoot(success.value()));
+        assertEquals(1, resolved.velocityInputs().size());
+    }
+
+    private static CompiledOp materializedRoot(CompiledArray compiled) {
+        CompileResult<RuntimeModel> result = new LocalCompiler().compile(compiled);
+        CompileResult.Success<RuntimeModel> success =
+                assertInstanceOf(CompileResult.Success.class, result);
+        return success.value().root();
     }
 
     private static GroupNode group(PositionedGlyph circle, ArrayNode... children) {

@@ -10,6 +10,8 @@ import com.astune.gyromancy.array.compile.ArrayNodeCompiler;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.CompiledArray;
 import com.astune.gyromancy.array.compile.GroupNode;
+import com.astune.gyromancy.array.compile.LocalCompiler;
+import com.astune.gyromancy.array.compile.RuntimeModel;
 import com.astune.gyromancy.array.compile.SequenceNode;
 import com.astune.gyromancy.array.compile.SymbolNode;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
@@ -117,7 +119,8 @@ class MomentumOpTest {
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
-        FireProjectileOp projectile = assertInstanceOf(FireProjectileOp.class, success.value().root());
+        FireProjectileOp projectile = assertInstanceOf(FireProjectileOp.class,
+                materializedRoot(success.value()));
 
         EmitOp.Emission emission = projectile.emissions().getFirst();
 
@@ -176,11 +179,11 @@ class MomentumOpTest {
         @SuppressWarnings("unchecked")
         var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
-        MomentumOp op = assertInstanceOf(MomentumOp.class, success.value().root());
+        MomentumOp op = assertInstanceOf(MomentumOp.class, materializedRoot(success.value()));
         @SuppressWarnings("unchecked")
         var liveSuccess = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
                 ArrayNodeCompiler.compile(ast));
-        MomentumOp liveOp = assertInstanceOf(MomentumOp.class, liveSuccess.value().root());
+        MomentumOp liveOp = assertInstanceOf(MomentumOp.class, materializedRoot(liveSuccess.value()));
 
         SurfaceFrame liveFrame = SurfaceFrame.facing(
                 Vec3.ZERO, new Vec3(1.0, 0.0, 0.0), new Vec3(0.0, 1.0, 0.0));
@@ -269,6 +272,13 @@ class MomentumOpTest {
         assertEquals(1, vector.calls);
         assertVectorEquals(new Vec3(0.1, 0.0, 0.0), first);
         assertVectorEquals(first, second);
+    }
+
+    private static CompiledOp materializedRoot(CompiledArray compiled) {
+        CompileResult<RuntimeModel> result = new LocalCompiler().compile(compiled);
+        CompileResult.Success<RuntimeModel> success =
+                assertInstanceOf(CompileResult.Success.class, result);
+        return success.value().root();
     }
 
     private static void assertVectorEquals(Vec3 expected, Vec3 actual) {

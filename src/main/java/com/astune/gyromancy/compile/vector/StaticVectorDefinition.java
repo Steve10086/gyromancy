@@ -73,10 +73,15 @@ public final class StaticVectorDefinition {
                                                      List<OpInput> inputs) {
                 OpResolveContext effectiveContext = context == null
                         ? OpResolveContext.forVector(boundary) : context;
+                CompileResult<List<VectorComposition.Input>> resolved = VectorInputCompiler.all(
+                        boundary, inputs, VectorDefinitionSupport.compiler(), effectiveContext);
+                if (resolved instanceof CompileResult.Failure<
+                        List<VectorComposition.Input>> failure) {
+                    return new CompileResult.Failure<>(failure.diagnostics());
+                }
                 return new CompileResult.Success<>(new StaticVectorOp(
                         id, boundary, inputs, 0,
-                        VectorInputCompiler.all(boundary, inputs, VectorDefinitionSupport.compiler(),
-                                effectiveContext),
+                        ((CompileResult.Success<List<VectorComposition.Input>>) resolved).value(),
                         VectorDefinitionSupport.containsRune(inputs, "curl"),
                         VectorOp.secretScale(inputs),
                         VectorDefinitionSupport.containsRune(inputs, "revert")));

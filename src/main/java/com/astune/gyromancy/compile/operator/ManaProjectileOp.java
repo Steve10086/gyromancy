@@ -71,6 +71,11 @@ public final class ManaProjectileOp extends EntityEffectOp {
     }
 
     @Override
+    public ManaProjectileOp copyWithInputs(List<OpInput> inputs) {
+        return new ManaProjectileOp(boundary(), matchedInputs(), inputs);
+    }
+
+    @Override
     public RuntimeHandle activate(OpRuntimeContext ctx) {
         ServerLevel level = ctx.level();
         PositionedGlyph center = primaryRune();

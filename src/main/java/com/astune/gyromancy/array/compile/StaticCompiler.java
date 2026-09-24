@@ -57,7 +57,7 @@ public final class StaticCompiler {
                 context.withTargetBoundary(ast.boundary()));
         if (resolution instanceof StructureResolution.Preserved preserved) {
             return new GroupCompileOutcome.Success(success.op(), merge(
-                    success.dependencyKeys(), preserved.dependencyKeys()), true);
+                    success.dependencyKeys(), preserved.dependencyKeys()));
         }
         if (resolution instanceof StructureResolution.RetryableDependency retryable) {
             return new GroupCompileOutcome.Failure(retryable.missing().stream()
@@ -128,7 +128,7 @@ public final class StaticCompiler {
         if (resolution instanceof StructureResolution.Preserved preserved) {
             dependencies.addAll(preserved.dependencyKeys());
             return new CompileResult.Success<>(new NormalizedChild(
-                    new OpInput.Op(child, sourceGroup).asDeferred(), dependencies));
+                    new OpInput.Op(child, sourceGroup), dependencies));
         }
         if (resolution instanceof StructureResolution.RetryableDependency retryable) {
             return new CompileResult.Failure<>(retryable.missing().stream()
@@ -163,8 +163,8 @@ public final class StaticCompiler {
         dependencies.addAll(found.dependencyKeys());
         dependencies.addAll(compiledSource.dependencyKeys());
         return new CompileResult.Success<>(new NormalizedChild(
-                new OpInput.Op(compiledSource.op(), found.finalGroup(),
-                        compiledSource.deferred()), dependencies));
+                new OpInput.Op(compiledSource.op(), found.finalGroup()),
+                dependencies));
     }
 
     private static String sourceToken(StructureResolution.Found found) {

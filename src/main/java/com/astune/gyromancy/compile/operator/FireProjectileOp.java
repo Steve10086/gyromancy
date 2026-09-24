@@ -66,6 +66,11 @@ public final class FireProjectileOp extends ProjectileEntityOp {
     }
 
     @Override
+    public FireProjectileOp copyWithInputs(List<OpInput> inputs) {
+        return new FireProjectileOp(boundary(), matchedInputs(), inputs);
+    }
+
+    @Override
     public FireballEntity create(Level level, Vec3 pos, Vec3 velocity, Vec3 acceleration, float size) {
         return new FireballEntity(level, pos, velocity, acceleration, size);
     }

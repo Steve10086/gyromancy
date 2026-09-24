@@ -45,6 +45,21 @@ class VectorCompilerTest {
     }
 
     @Test
+    void nestedGroupThatCannotCompileAsAVectorIsRejected() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 2);
+        PositionedGlyph inner = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 3);
+        PositionedGlyph unsupported = glyph("unsupported", SymbolRole.PARAMETER_RUNE, 4);
+        GroupNode ast = group(circle, new SymbolNode(arrow),
+                group(inner, new SymbolNode(unsupported)));
+
+        CompileResult<CompiledOp> result = new VectorCompiler(VectorOpDefinitions.definitions())
+                .compile(new OpInput.RawGroup(ast, List.of()));
+
+        assertInstanceOf(CompileResult.Failure.class, result);
+    }
+
+    @Test
     void rejectsNonCircleRootWithoutTryingAnotherBoundaryPolicy() {
         PositionedGlyph center = glyph("fire", SymbolRole.CENTER_SYMBOL, 1);
         PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 2);

@@ -59,6 +59,11 @@ public final class IlluminationOp extends ProjectileEntityOp {
     }
 
     @Override
+    public IlluminationOp copyWithInputs(List<OpInput> inputs) {
+        return new IlluminationOp(boundary(), matchedInputs(), inputs);
+    }
+
+    @Override
     public IlluminationEntity create(Level level, Vec3 pos, Vec3 velocity,
                                      Vec3 acceleration, float size) {
         return new IlluminationEntity(level, pos, velocity, acceleration, size);

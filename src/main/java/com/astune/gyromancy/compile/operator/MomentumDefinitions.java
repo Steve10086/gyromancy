@@ -8,8 +8,6 @@ import com.astune.gyromancy.array.compile.OpDefinition;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.OpInputMatcher;
 import com.astune.gyromancy.array.compile.RegisteredOp;
-import com.astune.gyromancy.array.compile.VectorCompiler;
-import com.astune.gyromancy.compile.vector.VectorOpDefinitions;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
@@ -19,9 +17,6 @@ import java.util.List;
 public final class MomentumDefinitions {
     public static final ResourceLocation MOTION_DEFINITION_ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "momentum_motion");
-
-    private static final MomentumInputResolver INPUT_RESOLVER =
-            new MomentumInputResolver(new VectorCompiler(VectorOpDefinitions.definitions()));
 
     private MomentumDefinitions() {}
 
@@ -54,17 +49,10 @@ public final class MomentumDefinitions {
             }
 
             @Override
-            public CompileResult<com.astune.gyromancy.compile.operator.CompiledOp> compile(
+            public CompileResult<CompiledOp> compile(
                     PositionedGlyph boundary, List<OpInput> matchedInputs, List<OpInput> inputs) {
-                return compile(OpResolveContext.forVector(boundary), boundary, matchedInputs, inputs);
-            }
-
-            @Override
-            public CompileResult<com.astune.gyromancy.compile.operator.CompiledOp> compile(
-                    OpResolveContext context, PositionedGlyph boundary,
-                    List<OpInput> matchedInputs, List<OpInput> inputs) {
-                return new CompileResult.Success<>(MomentumOp.compiled(
-                        boundary, matchedInputs, inputs, INPUT_RESOLVER, context));
+                return new CompileResult.Success<>(
+                        MomentumOp.symbolic(boundary, matchedInputs, inputs));
             }
         };
     }

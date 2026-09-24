@@ -1,6 +1,8 @@
 package com.astune.gyromancy.compile.vector;
 
+import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
+import com.astune.gyromancy.array.compile.CompileDiagnostic;
 import com.astune.gyromancy.array.compile.CompileResult;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.compile.operator.OpResolveContext;
@@ -14,19 +16,23 @@ import java.util.List;
 final class VectorInputCompiler {
     private VectorInputCompiler() {}
 
-    static List<VectorComposition.Input> all(PositionedGlyph boundary,
+    static CompileResult<List<VectorComposition.Input>> all(PositionedGlyph boundary,
                                              List<OpInput> inputs,
                                              VectorCompiler compiler) {
         return all(boundary, inputs, compiler, OpResolveContext.forVector(boundary));
     }
 
-    static List<VectorComposition.Input> all(PositionedGlyph boundary,
+    static CompileResult<List<VectorComposition.Input>> all(PositionedGlyph boundary,
                                              List<OpInput> inputs,
                                              VectorCompiler compiler,
                                              OpResolveContext context) {
-        List<VectorComposition.Input> result = direct(boundary, inputs);
-        result.addAll(groups(inputs, compiler, context));
-        return List.copyOf(result);
+        List<VectorComposition.Input> result = new ArrayList<>(direct(boundary, inputs));
+        CompileResult<List<VectorComposition.Input>> grouped = groups(inputs, compiler, context);
+        if (grouped instanceof CompileResult.Failure<List<VectorComposition.Input>> failure) {
+            return new CompileResult.Failure<>(failure.diagnostics());
+        }
+        result.addAll(((CompileResult.Success<List<VectorComposition.Input>>) grouped).value());
+        return new CompileResult.Success<>(List.copyOf(result));
     }
 
     static List<VectorComposition.Input> direct(PositionedGlyph boundary,
@@ -41,11 +47,17 @@ final class VectorInputCompiler {
         return result;
     }
 
-    static List<VectorComposition.Input> groups(List<OpInput> inputs, VectorCompiler compiler) {
+    static CompileResult<List<VectorComposition.Input>> groups(List<OpInput> inputs,
+                                                VectorCompiler compiler) {
         return groups(inputs, compiler, OpResolveContext.forVector(null));
     }
 
-    static List<VectorComposition.Input> groups(List<OpInput> inputs,
+    /**
+     * Recursively compiles nested group inputs. A group the vector compiler
+     * cannot turn into a vector is a hard rejection: silently dropping it
+     * would let an authored structure disappear without any feedback.
+     */
+    static CompileResult<List<VectorComposition.Input>> groups(List<OpInput> inputs,
                                                 VectorCompiler compiler,
                                                 OpResolveContext context) {
         List<VectorComposition.Input> result = new ArrayList<>();
@@ -60,11 +72,16 @@ final class VectorInputCompiler {
                     && op.operator() instanceof VectorOp vector) {
                 result.add(new VectorComposition.Input(vector, VectorComposition.Mode.DIRECT));
             } else {
-                com.astune.gyromancy.Gyromancy.LOGGER.debug(
-                        "[Vector] group dropped input={} result={}", describe(input), compiled);
+                Gyromancy.LOGGER.debug("[Vector] group rejected input={} result={}",
+                        describe(input), compiled);
+                return new CompileResult.Failure<>(
+                        compiled instanceof CompileResult.Failure<CompiledOp> failure
+                                ? failure.diagnostics()
+                                : List.of(new CompileDiagnostic("missing_vector_source_group",
+                                        "Vector compilation requires a group input")));
             }
         }
-        return result;
+        return new CompileResult.Success<>(List.copyOf(result));
     }
 
     private static String describe(OpInput input) {

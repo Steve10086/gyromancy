@@ -39,7 +39,7 @@ import java.util.Optional;
  * contain at most one nested group for the following dimension.</p>
  */
 @RegisteredOp
-public final class ShapeOp implements CompiledOp, LocalCompilable {
+public final class ShapeOp implements CompiledOp {
     public static final ResourceLocation ID =
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "field_shape");
     private static final int RECTANGULAR_DIMENSIONS = 3;
@@ -258,9 +258,10 @@ public final class ShapeOp implements CompiledOp, LocalCompilable {
     }
 
     /**
-     * Retains ordinary raw groups, while deferred inputs follow the same
-     * runtime forwarding path as every other dynamic parent parameter. This
-     * keeps ShapeOp independent of concrete resolvable operator types.
+     * Retains ordinary raw groups, while compiled children forwarding a source
+     * group follow the same runtime forwarding path as every other dynamic
+     * parent parameter. This keeps ShapeOp independent of concrete resolvable
+     * operator types.
      */
     private GroupNode parameterGroup(OpInput input, OpRuntimeContext context) {
         if (input instanceof OpInput.RawGroup raw) return raw.group();
