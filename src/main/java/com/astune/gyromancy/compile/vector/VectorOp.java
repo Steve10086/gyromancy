@@ -9,6 +9,7 @@ import com.astune.gyromancy.symbol.SecretTextSymbol;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -25,7 +26,7 @@ public abstract class VectorOp implements CompiledOp {
             ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "vector_runtime");
     private final ResourceLocation id;
     private final PositionedGlyph boundary;
-    private final List<OpInput> inputs;
+    private final List<OpInput> rawInputs;
     private final int color;
     private final double scale;
     private final boolean reverted;
@@ -39,7 +40,7 @@ public abstract class VectorOp implements CompiledOp {
                        List<OpInput> inputs, int color, double scale, boolean reverted) {
         this.id = id;
         this.boundary = boundary;
-        this.inputs = List.copyOf(inputs);
+        this.rawInputs = List.copyOf(inputs);
         this.color = color;
         this.scale = Double.isFinite(scale) ? scale : 1.0;
         this.reverted = reverted;
@@ -99,9 +100,37 @@ public abstract class VectorOp implements CompiledOp {
         return boundary;
     }
 
+    /** The authored inputs this vector was compiled from. */
+    protected final List<OpInput> rawInputs() {
+        return rawInputs;
+    }
+
+    /**
+     * Nested vectors composed into this one. They are exposed through
+     * {@link #inputs()} as executable children so the final Op tree has a
+     * single edge set.
+     */
+    List<VectorOp> composedVectors() {
+        return List.of();
+    }
+
     @Override
     public final List<OpInput> inputs() {
-        return inputs;
+        List<VectorOp> composed = composedVectors();
+        if (composed.isEmpty()) return rawInputs;
+        List<OpInput> combined = new ArrayList<>(rawInputs.size() + composed.size());
+        combined.addAll(rawInputs);
+        for (VectorOp vector : composed) {
+            boolean present = false;
+            for (OpInput input : combined) {
+                if (input instanceof OpInput.Op op && op.operator() == vector) {
+                    present = true;
+                    break;
+                }
+            }
+            if (!present) combined.add(new OpInput.Op(vector));
+        }
+        return List.copyOf(combined);
     }
 
     @Override

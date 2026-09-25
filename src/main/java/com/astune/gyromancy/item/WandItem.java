@@ -1,5 +1,6 @@
 package com.astune.gyromancy.item;
 
+import com.astune.gyromancy.ink.InkRegistry;
 import com.astune.gyromancy.registry.ModDataComponents;
 import com.astune.gyromancy.wand.WandContents;
 import com.astune.gyromancy.wand.WandLayout;
@@ -37,6 +38,14 @@ public class WandItem extends Item {
 
     public WandLayout layout() {
         return layout;
+    }
+
+    /**
+     * The mana id every array projected by this wand carries. A single fixed id
+     * for now; future wands may override this from item data.
+     */
+    public int getManaId() {
+        return InkRegistry.MANA_INK_ID;
     }
 
     @Override

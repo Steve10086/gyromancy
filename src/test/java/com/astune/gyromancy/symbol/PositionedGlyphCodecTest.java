@@ -40,6 +40,33 @@ class PositionedGlyphCodecTest {
     }
 
     @Test
+    void roundTripsSolvedManaElements() {
+        double[] values = new double[com.astune.gyromancy.api.element.ElementType.COUNT];
+        values[com.astune.gyromancy.api.element.ElementType.SPACE.ordinal()] = 3.5;
+        com.astune.gyromancy.api.element.ManaElements elements =
+                new com.astune.gyromancy.api.element.ManaElements(values);
+        PositionedGlyph glyph = new PositionedGlyph(
+                UUID.fromString("00000000-0000-0000-0000-000000000123"),
+                7,
+                ResourceLocation.fromNamespaceAndPath("gyromancy", "fire"),
+                0.9f,
+                SymbolRole.PARAMETER_RUNE,
+                new Vec3(1.0, 0.0, 0.0),
+                2.0,
+                1.0,
+                new BlockPos(1, 2, 3),
+                1.0, 2.0, 3.0, 4.0,
+                Set.of(new PixelPos(new BlockPos(1, 2, 3), Direction.NORTH, 4, 5, 0xFF00AA00)),
+                elements
+        );
+
+        var json = PositionedGlyph.CODEC.encodeStart(JsonOps.INSTANCE, glyph).getOrThrow();
+        PositionedGlyph decoded = PositionedGlyph.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+
+        assertEquals(elements, decoded.manaElements());
+    }
+
+    @Test
     void decodesOldPersistentGlyphData() {
         PositionedGlyph glyph = new PositionedGlyph(
                 UUID.fromString("00000000-0000-0000-0000-000000000123"),

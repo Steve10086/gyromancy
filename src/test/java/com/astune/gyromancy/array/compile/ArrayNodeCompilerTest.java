@@ -1,6 +1,8 @@
 package com.astune.gyromancy.array.compile;
 
 import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.api.element.ManaElements;
 import com.astune.gyromancy.api.symbol.PixelPos;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.api.symbol.SymbolRole;
@@ -778,6 +780,27 @@ class ArrayNodeCompilerTest {
         // Stage 2 recursively compiles the cluster into real VectorOps.
         MomentumOp resolved = assertInstanceOf(MomentumOp.class, materializedRoot(success.value()));
         assertEquals(1, resolved.velocityInputs().size());
+    }
+
+    @Test
+    void compiledArrayAggregatesItsStaticSymbolMana() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1)
+                .withManaElements(mana(1.5));
+        PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2)
+                .withManaElements(mana(2.5));
+        GroupNode ast = group(circle, new SymbolNode(fire));
+
+        @SuppressWarnings("unchecked")
+        var success = (CompileResult.Success<CompiledArray>) assertInstanceOf(CompileResult.Success.class,
+                ArrayNodeCompiler.compile(ast));
+
+        assertEquals(4.0, success.value().manaElements().at(ElementType.MANA), 1.0E-9);
+    }
+
+    private static ManaElements mana(double mana) {
+        double[] values = new double[ElementType.COUNT];
+        values[ElementType.MANA.ordinal()] = mana;
+        return new ManaElements(values);
     }
 
     private static CompiledOp materializedRoot(CompiledArray compiled) {

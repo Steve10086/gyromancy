@@ -189,9 +189,9 @@ public interface CanvasPenTool extends CanvasEditorTool {
 
     record Stroke(int color, int effect) {
         public Stroke {
-            if (effect <= 0 || effect > 255) {
+            if (effect <= 0) {
                 throw new IllegalArgumentException(
-                        "Canvas stroke effect must be between 1 and 255");
+                        "Canvas stroke effect must be positive");
             }
         }
     }

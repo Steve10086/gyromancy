@@ -22,6 +22,7 @@ import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.registry.ModSymbols;
 import com.astune.gyromancy.symbol.FloodFillExtractor.ExtractedGlyph;
 import com.astune.gyromancy.symbol.SymbolRecognizer;
+import com.astune.gyromancy.symbol.SymbolMana;
 import com.astune.gyromancy.util.CanvasScanUtils;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.BlockPos;
@@ -267,7 +268,7 @@ public final class CanvasCompileService {
             return false;
         }
         for (int effect : effects) {
-            if (effect < 0 || effect > 255) return false;
+            if (effect < 0) return false;
         }
 
         CanvasDocument submitted;
@@ -470,7 +471,8 @@ public final class CanvasCompileService {
                     (double) (component.maxX() + 1) / width,
                     (double) component.minY() / height,
                     (double) (component.maxY() + 1) / height,
-                    cells));
+                    cells,
+                    SymbolMana.solveCanvasGlyph(effects, cells, document.manaPixelArea())));
         }
         return recognized;
     }
@@ -577,7 +579,8 @@ public final class CanvasCompileService {
         return new PositionedGlyph(
                 glyph.glyphUuid(), glyphId, glyph.symbolId(), glyph.confidence(), glyph.role(),
                 front, extents[0], extents[1], BlockPos.ZERO,
-                minU, maxU, minV, maxV, Set.of(), Optional.empty(), surface);
+                minU, maxU, minV, maxV, Set.of(), Optional.empty(), surface,
+                glyph.manaElements());
     }
 
     private static double[] portableGlyphExtents(

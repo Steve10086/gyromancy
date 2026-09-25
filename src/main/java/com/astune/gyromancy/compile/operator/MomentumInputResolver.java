@@ -32,10 +32,12 @@ final class MomentumInputResolver {
                                           OpResolveContext context) {
         List<MomentumOp.VectorInput> velocityInputs = new ArrayList<>();
         List<MomentumOp.AccelerationInput> accelerationInputs = new ArrayList<>();
+        List<OpInput> treeInputs = new ArrayList<>(inputs.size());
         boolean dynamic = false;
 
         for (OpInput input : inputs) {
             if (input instanceof OpInput.Rune rune) {
+                treeInputs.add(input);
                 if ("loop".equals(rune.symbolName())) {
                     dynamic = true;
                     continue;
@@ -50,12 +52,18 @@ final class MomentumInputResolver {
             // A nested MomentumOp group also carries a source group, but its
             // direct `motion` rune never matches the vector definitions, so it
             // still falls through to the acceleration branch below.
-            if (input instanceof OpInput.Op op && op.sourceGroup() != null
-                    && addCompiledVector(velocityInputs, vectorCompiler.compile(input, context))) {
-                continue;
+            if (input instanceof OpInput.Op op && op.sourceGroup() != null) {
+                CompileResult<CompiledOp> compiled = vectorCompiler.compile(input, context);
+                if (addCompiledVector(velocityInputs, compiled)) {
+                    // The referenced vector replaces its source op in the final tree.
+                    treeInputs.add(new OpInput.Op(
+                            ((CompileResult.Success<CompiledOp>) compiled).value()));
+                    continue;
+                }
             }
 
             if (input instanceof OpInput.Op op && op.operator() instanceof MomentumOp momentum) {
+                treeInputs.add(input);
                 addMomentumAcceleration(accelerationInputs, momentum, context);
                 continue;
             }
@@ -64,10 +72,11 @@ final class MomentumInputResolver {
             if (!failures.isEmpty()) {
                 return new CompileResult.Failure<>(failures);
             }
+            treeInputs.add(input);
         }
 
         ResolvedInputs resolved = new ResolvedInputs(List.copyOf(velocityInputs),
-                List.copyOf(accelerationInputs), dynamic);
+                List.copyOf(accelerationInputs), dynamic, List.copyOf(treeInputs));
         Gyromancy.LOGGER.debug(
                 "[Momentum] resolve boundary={} dynamic={} velocity={} acceleration={}",
                 boundary == null ? "none" : boundary.glyphId(), dynamic,
@@ -143,7 +152,7 @@ final class MomentumInputResolver {
             List<MomentumOp.AccelerationInput> result, MomentumOp momentum,
             OpResolveContext context) {
         ResolvedInputs resolved = new ResolvedInputs(momentum.velocityInputs(),
-                momentum.accelerationInputs(), momentum.dynamic());
+                momentum.accelerationInputs(), momentum.dynamic(), List.of());
         MomentumOp.UpdateMode updateMode = resolved.dynamic()
                 ? MomentumOp.UpdateMode.DYNAMIC
                 : MomentumOp.UpdateMode.SNAPSHOT;
@@ -174,5 +183,10 @@ final class MomentumInputResolver {
 
     record ResolvedInputs(List<MomentumOp.VectorInput> velocityInputs,
                           List<MomentumOp.AccelerationInput> accelerationInputs,
-                          boolean dynamic) {}
+                          boolean dynamic,
+                          List<OpInput> treeInputs) {
+        ResolvedInputs {
+            treeInputs = List.copyOf(treeInputs);
+        }
+    }
 }

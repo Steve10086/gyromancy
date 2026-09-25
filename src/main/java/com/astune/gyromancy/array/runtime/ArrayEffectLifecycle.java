@@ -258,7 +258,8 @@ public final class ArrayEffectLifecycle {
                 compiled.rootCircleGlyph(),
                 compiled.boundGlyphs(),
                 compilationEffectEndTick,
-                Map.of("__array_color", compiled.color()));
+                Map.of("__array_color", compiled.color()),
+                compiled.manaElements());
         RuntimeHandle handle = OpRuntimeDispatcher.activate(
                 runtimeModel, level, activationArray);
         if (OpRuntimeFailure.consumePendingTermination(activationArray)) {
@@ -274,7 +275,8 @@ public final class ArrayEffectLifecycle {
                 compiled.rootCircleGlyph(),
                 compiled.boundGlyphs(),
                 compilationEffectEndTick,
-                Map.copyOf(scratchData));
+                Map.copyOf(scratchData),
+                compiled.manaElements());
         manager.registerArrayObj(array);
         RuntimeModelRegistry.put(level, arrayId, runtimeModel);
         for (String key : compiled.wirelessDependencyKeys()) {

@@ -1,6 +1,7 @@
 package com.astune.gyromancy.array.runtime;
 
 import com.astune.gyromancy.api.array.ArrayObject;
+import com.astune.gyromancy.api.element.ManaElements;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.ArrayCompilePipeline;
 import com.astune.gyromancy.array.compile.CompileResult;
@@ -27,7 +28,8 @@ public final class OpRuntimeDispatcher {
     /** Activates a runtime with its array frame available before registration. */
     public static RuntimeHandle activate(
             CompiledArray compiled, ServerLevel level, ArrayObject array) {
-        return activate(new RuntimeModel(compiled.root(), compiled.wirelessDependencyKeys()),
+        return activate(new RuntimeModel(compiled.root(), compiled.wirelessDependencyKeys(),
+                        compiled.manaElements()),
                 level, array, compiled.rootCircleGlyph());
     }
 
@@ -54,6 +56,9 @@ public final class OpRuntimeDispatcher {
         Map<String, Object> data = new HashMap<>(handle.scratchData());
         data.put(RUNTIME_KEY, model.root().id().toString());
         data.put(COMPILED_OP_KEY, model.root());
+        // The activated effect keeps its own persisted copy of the array's
+        // solved mana elements; consumption is not implemented yet.
+        data.put(ManaElements.SCRATCH_KEY, model.manaElements());
         return new RuntimeHandle(Map.copyOf(data));
     }
 

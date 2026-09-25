@@ -1,5 +1,6 @@
 package com.astune.gyromancy.array.compile;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -16,7 +17,12 @@ public final class ArrayCompilePipeline {
 
     public CompileResult<RuntimeModel> compile(
             GroupNode ast, StaticResolveContext staticContext) {
-        CompileResult<Result> result = compileDetailed(ast, staticContext);
+        return compile(ast, staticContext, true);
+    }
+
+    private CompileResult<RuntimeModel> compile(
+            GroupNode ast, StaticResolveContext staticContext, boolean verifyManaCost) {
+        CompileResult<Result> result = compileDetailed(ast, staticContext, verifyManaCost);
         if (result instanceof CompileResult.Failure<Result> failure) {
             return new CompileResult.Failure<>(failure.diagnostics());
         }
@@ -31,6 +37,11 @@ public final class ArrayCompilePipeline {
 
     public CompileResult<Result> compileDetailed(
             GroupNode ast, StaticResolveContext staticContext) {
+        return compileDetailed(ast, staticContext, true);
+    }
+
+    public CompileResult<Result> compileDetailed(
+            GroupNode ast, StaticResolveContext staticContext, boolean verifyManaCost) {
         CompileResult<CompiledArray> staticResult =
                 new StaticCompiler(definitions).compile(ast, staticContext);
         if (staticResult instanceof CompileResult.Failure<CompiledArray> failure) {
@@ -41,9 +52,19 @@ public final class ArrayCompilePipeline {
         if (runtimeResult instanceof CompileResult.Failure<RuntimeModel> failure) {
             return new CompileResult.Failure<>(failure.diagnostics());
         }
-        return new CompileResult.Success<>(new Result(
-                staticModel,
-                ((CompileResult.Success<RuntimeModel>) runtimeResult).value()));
+        RuntimeModel runtimeModel = ((CompileResult.Success<RuntimeModel>) runtimeResult).value();
+        if (verifyManaCost) {
+            List<CompileDiagnostic> shortfalls =
+                    ArrayManaCost.check(runtimeModel.root(), staticModel.manaElements());
+            if (!shortfalls.isEmpty()) {
+                List<CompileDiagnostic> diagnostics = new ArrayList<>();
+                diagnostics.add(new CompileDiagnostic(CompileDiagnostic.RUNTIME_ERROR,
+                        "The array does not hold enough elements for its cost"));
+                diagnostics.addAll(shortfalls);
+                return new CompileResult.Failure<>(diagnostics);
+            }
+        }
+        return new CompileResult.Success<>(new Result(staticModel, runtimeModel));
     }
 
     public record Result(CompiledArray staticModel, RuntimeModel runtimeModel) {}
@@ -62,7 +83,9 @@ public final class ArrayCompilePipeline {
         GroupNode ast = ArrayAstBuilder.build(root, isolated);
         StaticResolveContext context = new StaticResolveContext(
                 null, isolated, isolated.opDefinitions(), root, List.of());
-        return new ArrayCompilePipeline(isolated.opDefinitions()).compile(ast, context);
+        // Teardown must never be blocked by the mana cost gate.
+        return new ArrayCompilePipeline(isolated.opDefinitions())
+                .compile(ast, context, false);
     }
 
 }

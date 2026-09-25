@@ -1,5 +1,7 @@
 package com.astune.gyromancy.compile.operator;
 
+import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.api.element.ManaElements;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.LocalCompileContext;
 import com.astune.gyromancy.array.compile.LocalCompileResult;
@@ -10,13 +12,34 @@ import java.util.ArrayList;
 import java.util.List;
 
 public interface CompiledOp {
+    /** Default cost of one compiled operator: ten mana, no other elements. */
+    ManaElements DEFAULT_COST = defaultCost();
+
     ResourceLocation id();
 
     PositionedGlyph boundary();
 
+    /**
+     * Direct entries of this operator. An entry is either authored data
+     * ({@link OpInput.Rune}, {@link OpInput.RawGroup}) or an executable child
+     * ({@link OpInput.Op}); the final Op tree is the subgraph induced by the
+     * {@code OpInput.Op} edges, so every compiled operator is listed exactly
+     * once.
+     */
     List<OpInput> inputs();
 
     int color();
+
+    /** The elements this operator consumes when its array activates. */
+    default ManaElements getCost() {
+        return DEFAULT_COST;
+    }
+
+    private static ManaElements defaultCost() {
+        double[] values = new double[ElementType.COUNT];
+        values[ElementType.MANA.ordinal()] = 10.0;
+        return new ManaElements(values);
+    }
 
     default List<CompiledOp> childOps() {
         List<CompiledOp> children = new ArrayList<>();

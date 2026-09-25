@@ -1,5 +1,6 @@
 package com.astune.gyromancy.canvas;
 
+import com.astune.gyromancy.api.element.ManaElements;
 import com.astune.gyromancy.api.symbol.SymbolRole;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -27,7 +28,8 @@ public record CanvasGlyph(
         double maxX,
         double minY,
         double maxY,
-        int[] cells
+        int[] cells,
+        ManaElements manaElements
 ) {
     private static final Codec<UUID> UUID_CODEC =
             Codec.STRING.xmap(UUID::fromString, UUID::toString);
@@ -48,11 +50,22 @@ public record CanvasGlyph(
                     Codec.DOUBLE.fieldOf("max_x").forGetter(CanvasGlyph::maxX),
                     Codec.DOUBLE.fieldOf("min_y").forGetter(CanvasGlyph::minY),
                     Codec.DOUBLE.fieldOf("max_y").forGetter(CanvasGlyph::maxY),
-                    INT_ARRAY_CODEC.fieldOf("cells").forGetter(CanvasGlyph::cells))
+                    INT_ARRAY_CODEC.fieldOf("cells").forGetter(CanvasGlyph::cells),
+                    ManaElements.CODEC.optionalFieldOf("mana_elements", ManaElements.EMPTY)
+                            .forGetter(CanvasGlyph::manaElements))
                     .apply(instance, CanvasGlyph::new));
+
+    public CanvasGlyph(UUID glyphUuid, ResourceLocation symbolId, float confidence,
+                       SymbolRole role, double frontX, double frontY, double length,
+                       double width, double minX, double maxX, double minY, double maxY,
+                       int[] cells) {
+        this(glyphUuid, symbolId, confidence, role, frontX, frontY, length, width,
+                minX, maxX, minY, maxY, cells, ManaElements.EMPTY);
+    }
 
     public CanvasGlyph {
         cells = cells.clone();
+        manaElements = manaElements == null ? ManaElements.EMPTY : manaElements;
     }
 
     @Override
@@ -67,7 +80,13 @@ public record CanvasGlyph(
     /** Returns an equivalent glyph carrying a different identity. */
     public CanvasGlyph withGlyphUuid(UUID uuid) {
         return new CanvasGlyph(uuid, symbolId, confidence, role, frontX, frontY,
-                length, width, minX, maxX, minY, maxY, cells);
+                length, width, minX, maxX, minY, maxY, cells, manaElements);
+    }
+
+    /** Returns an equivalent glyph carrying solved mana elements. */
+    public CanvasGlyph withManaElements(ManaElements elements) {
+        return new CanvasGlyph(glyphUuid, symbolId, confidence, role, frontX, frontY,
+                length, width, minX, maxX, minY, maxY, cells, elements);
     }
 
     public CanvasGlyph resampleCells(int oldWidth, int oldHeight, int newWidth, int newHeight) {
@@ -88,7 +107,8 @@ public record CanvasGlyph(
             }
         }
         return new CanvasGlyph(glyphUuid, symbolId, confidence, role, frontX, frontY,
-                length, width, minX, maxX, minY, maxY, Arrays.copyOf(scaled, count));
+                length, width, minX, maxX, minY, maxY, Arrays.copyOf(scaled, count),
+                manaElements);
     }
 
     @Override
@@ -107,6 +127,7 @@ public record CanvasGlyph(
                 && glyphUuid.equals(other.glyphUuid)
                 && symbolId.equals(other.symbolId)
                 && role == other.role
+                && manaElements.equals(other.manaElements)
                 && Arrays.equals(cells, other.cells);
     }
 
@@ -124,6 +145,8 @@ public record CanvasGlyph(
         result = 31 * result + Double.hashCode(maxX);
         result = 31 * result + Double.hashCode(minY);
         result = 31 * result + Double.hashCode(maxY);
+        result = 31 * result + manaElements.hashCode();
         return 31 * result + Arrays.hashCode(cells);
     }
 }
+

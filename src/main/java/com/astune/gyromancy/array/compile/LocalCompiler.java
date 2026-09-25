@@ -16,7 +16,8 @@ public final class LocalCompiler {
         }
         return new CompileResult.Success<>(new RuntimeModel(
                 ((CompileResult.Success<CompiledOp>) root).value(),
-                staticModel.wirelessDependencyKeys()));
+                staticModel.wirelessDependencyKeys(),
+                staticModel.manaElements()));
     }
 
     CompileResult<CompiledOp> materialize(CompiledOp operator) {

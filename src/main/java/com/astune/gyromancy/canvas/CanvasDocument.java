@@ -85,6 +85,17 @@ public record CanvasDocument(
         return PIXELS_PER_BLOCK * resolutionScale;
     }
 
+    /**
+     * World-area coefficient of one raster pixel for the symbol mana solve.
+     * Canvas pixels are square: a block canvas has area 1, larger or
+     * higher-resolution canvases scale by {@code (size / resolutionScale)} per
+     * axis.
+     */
+    public double manaPixelArea() {
+        return (physicalWidth / (double) resolutionScale)
+                * (physicalHeight / (double) resolutionScale);
+    }
+
     @Override
     public int[] colors() {
         return colors.clone();

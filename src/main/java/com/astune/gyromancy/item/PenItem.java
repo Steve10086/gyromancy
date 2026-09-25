@@ -58,7 +58,9 @@ public class PenItem extends Item implements IPaintProvider, CanvasPenTool {
      */
     @Override
     public Optional<Stroke> canvasStroke(ItemStack stack, Player player) {
-        return Optional.of(new Stroke(DEFAULT_CANVAS_COLOR, DEFAULT_CANVAS_EFFECT));
+        InkType ink = resolveOffhandInk(player);
+        int manaId = ink != null ? ink.getManaValue() : DEFAULT_CANVAS_EFFECT;
+        return Optional.of(new Stroke(DEFAULT_CANVAS_COLOR, manaId));
     }
 
     // ═══════════════════════════════════════════════════════════════

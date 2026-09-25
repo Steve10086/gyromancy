@@ -5,6 +5,7 @@ import com.astune.gyromancy.array.compile.OpInput;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** Rotates a nested vector around direct arrow-defined axes over runtime ticks. */
@@ -55,6 +56,14 @@ public final class RotationVectorOp extends VectorOp {
     @Override
     protected Vec3 applyRevert(Vec3 vector) {
         return vector;
+    }
+
+    @Override
+    List<VectorOp> composedVectors() {
+        List<VectorOp> nested = new ArrayList<>(axisInputs.size() + vectorInputs.size());
+        for (VectorComposition.Input input : axisInputs) nested.add(input.vector());
+        for (VectorComposition.Input input : vectorInputs) nested.add(input.vector());
+        return List.copyOf(nested);
     }
 
     List<VectorComposition.Input> axisInputs() {

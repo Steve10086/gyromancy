@@ -949,7 +949,7 @@ public final class RuneCarvingScreen extends AbstractContainerScreen<RuneCarving
         if (width <= 0 || x < 0 || x >= width || y < 0 || y >= width) return;
         int index = y * width + x;
         int normalizedColor = ((color >>> 24) & 0xFF) == 0 ? 0 : color;
-        int normalizedEffect = normalizedColor == 0 ? 0 : 1;
+        int normalizedEffect = normalizedColor == 0 ? 0 : Math.max(1, effect);
         if (colors[index] == normalizedColor && effects[index] == normalizedEffect) return;
         history.recordChange(index, colors[index], effects[index], normalizedColor, normalizedEffect);
         colors[index] = normalizedColor;

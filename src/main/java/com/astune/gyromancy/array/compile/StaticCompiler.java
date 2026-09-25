@@ -1,5 +1,6 @@
 package com.astune.gyromancy.array.compile;
 
+import com.astune.gyromancy.api.element.ManaElements;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.compile.operator.CompiledOp;
 import com.astune.gyromancy.compile.operator.OpResolveContext;
@@ -33,7 +34,21 @@ public final class StaticCompiler {
                 ast.boundary(),
                 GroupCompiler.boundGlyphs(success.op()),
                 success.op().color(),
-                success.dependencyKeys()));
+                success.dependencyKeys(),
+                sumStaticMana(ast)));
+    }
+
+    /**
+     * Aggregates the solved mana elements of this array's own static symbols.
+     * Dynamically resolved wireless structures are deliberately excluded: only
+     * the authored structure drawn on this array contributes.
+     */
+    private static ManaElements sumStaticMana(GroupNode ast) {
+        ManaElements total = ManaElements.EMPTY;
+        for (PositionedGlyph glyph : ArrayAstBuilder.boundGlyphs(ast)) {
+            total = total.plus(glyph.manaElements());
+        }
+        return total;
     }
 
     public CompileResult<CompiledArray> compile(GroupNode ast) {

@@ -85,6 +85,23 @@ class ArrayObjectCodecTest {
         assertEquals(0, decoded.remainingCompilationEffectTicks(5_000L));
     }
 
+    @Test
+    void roundTripsSolvedManaElements() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1);
+        double[] values = new double[com.astune.gyromancy.api.element.ElementType.COUNT];
+        values[com.astune.gyromancy.api.element.ElementType.MANA.ordinal()] = 8.5;
+        com.astune.gyromancy.api.element.ManaElements elements =
+                new com.astune.gyromancy.api.element.ManaElements(values);
+        ArrayObject array = new ArrayObject(
+                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                circle, List.of(circle), 0L, Map.of(), elements);
+
+        var json = ArrayObject.CODEC.encodeStart(JsonOps.INSTANCE, array).getOrThrow();
+        ArrayObject decoded = ArrayObject.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+
+        assertEquals(elements, decoded.manaElements());
+    }
+
     private static PositionedGlyph glyph(String name, SymbolRole role, int id) {
         BlockPos pos = new BlockPos(id, id + 1, id + 2);
         return new PositionedGlyph(

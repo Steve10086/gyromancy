@@ -20,6 +20,7 @@ import com.astune.gyromancy.symbol.GlyphChunkStorage;
 import com.astune.gyromancy.symbol.GlyphMarker;
 import com.astune.gyromancy.symbol.ManaPixelDetector;
 import com.astune.gyromancy.symbol.SymbolRecognizer;
+import com.astune.gyromancy.symbol.SymbolMana;
 import com.astune.gyromancy.network.SyncArrayPacket;
 import com.astune.gyromancy.network.SyncGlyphPacket;
 import com.astune.painter.api.CanvasData;
@@ -434,7 +435,8 @@ public final class MagicArrayDetector {
                 glyph.pixels().iterator().next().pos(),
                 glyph.minWorldX(), glyph.maxWorldX(),
                 glyph.minWorldY(), glyph.maxWorldY(),
-                Set.copyOf(glyph.pixels()));
+                Set.copyOf(glyph.pixels()),
+                SymbolMana.solveBlockGlyph(glyph.pixels(), level));
         manager.registerGlyph(positioned);
         ArrayEffectLifecycle.deactivateParentedRootArrays(level);
         GlyphChunkStorage.store(level, positioned);

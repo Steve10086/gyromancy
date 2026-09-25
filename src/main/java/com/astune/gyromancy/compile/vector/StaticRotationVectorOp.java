@@ -38,6 +38,11 @@ public final class StaticRotationVectorOp extends VectorOp {
         return vector;
     }
 
+    @Override
+    List<VectorOp> composedVectors() {
+        return inputs.stream().map(VectorComposition.Input::vector).toList();
+    }
+
     List<VectorComposition.Input> vectorInputs() {
         return inputs;
     }

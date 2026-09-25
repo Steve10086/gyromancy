@@ -32,6 +32,7 @@
   "message.gyromancy.canvas.cannot_unfurl": "这个地方似乎没法展开",
   "message.gyromancy.array.compile.failed": "法阵编译失败：%s",
   "message.gyromancy.array.compile.runtime_error": "法阵运行时错误：%s",
+  "message.gyromancy.array.compile.insufficient_element": "元素不足：%s",
   "message.gyromancy.array.compile.more": "（共 %s 项问题）",
   "message.gyromancy.array.compile.not_runnable": "该法阵未构成可执行的术式",
   "message.gyromancy.array.compile.missing_primary_element": "术式缺少核心输入或不匹配",

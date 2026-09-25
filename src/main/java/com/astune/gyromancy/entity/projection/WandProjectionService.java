@@ -5,8 +5,11 @@ import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasGlyph;
+import com.astune.gyromancy.element.ManaIdTable;
+import com.astune.gyromancy.item.WandItem;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.registry.ModDataComponents;
+import com.astune.gyromancy.symbol.SymbolMana;
 import com.astune.gyromancy.wand.WandLayout;
 import com.astune.gyromancy.wand.WandSlotSnapshots;
 import net.minecraft.core.Direction;
@@ -20,7 +23,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
-import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -68,7 +70,7 @@ public final class WandProjectionService {
             CanvasDocument document = cachedDocument.get();
             projectedGlyphs += document.glyphs().size();
             if (spawnProjection(serverLevel, player, layout, hand, slot,
-                    view, facing, document)) {
+                    view, facing, document, wandManaId(wand))) {
                 spawnedSlots++;
             }
         }
@@ -107,7 +109,7 @@ public final class WandProjectionService {
             Vec3 view = player.getViewVector(1.0F).normalize();
             Direction facing = Direction.getNearest(view);
             if (spawnProjection(pending.level(), player, pending.layout(), pending.hand(),
-                    1, view, facing, document.get())) {
+                    1, view, facing, document.get(), wandManaId(player.getUseItem()))) {
                 Gyromancy.LOGGER.debug("[Wand] Delayed second projection spawned for {}",
                         player.getScoreboardName());
             }
@@ -137,12 +139,12 @@ public final class WandProjectionService {
     private static boolean spawnProjection(ServerLevel level, Player player,
                                             WandLayout layout, InteractionHand hand,
                                             int slot, Vec3 view, Direction facing,
-                                            CanvasDocument document) {
+                                            CanvasDocument document, int manaId) {
         Vec3 center = WandProjectionPose.targetCenter(
                 player.getEyePosition(), view, layout.slotOffset(slot), player.getYRot(),
                 WandProjectionPose.mirrorForHand(player.getMainArm(), hand));
         WandProjectionEntity projection = WandProjectionEntity.create(
-                level, center, facing, copyForProjection(document), player.getUUID(),
+                level, center, facing, copyForProjection(document, manaId), player.getUUID(),
                 view,
                 player.getYRot() + 180.0F, player.getXRot(),
                 (float) layout.slotOffset(slot),
@@ -165,38 +167,39 @@ public final class WandProjectionService {
                                      InteractionHand hand, long dueGameTime) {}
 
     /** Prevents cached glyph UUIDs from colliding when one canvas is projected repeatedly. */
-    private static CanvasDocument copyForProjection(CanvasDocument source) {
-        Map<UUID, UUID> ids = new HashMap<>();
-        List<CanvasGlyph> glyphs = source.glyphs().stream().map(glyph -> {
-            UUID next = UUID.randomUUID();
-            ids.put(glyph.glyphUuid(), next);
-            return new CanvasGlyph(next, glyph.symbolId(), glyph.confidence(), glyph.role(),
-                    glyph.frontX(), glyph.frontY(), glyph.length(), glyph.width(),
-                    glyph.minX(), glyph.maxX(), glyph.minY(), glyph.maxY(), glyph.cells());
-        }).toList();
+    private static CanvasDocument copyForProjection(CanvasDocument source, int manaId) {
+        int[] effects = source.strokeEffects();
+        List<CanvasGlyph> glyphs = new ArrayList<>();
+        for (CanvasGlyph glyph : source.glyphs()) {
+            int[] cells = glyph.cells();
+            for (int cell : cells) {
+                if (cell >= 0 && cell < effects.length) effects[cell] = manaId;
+            }
+            glyphs.add(new CanvasGlyph(UUID.randomUUID(), glyph.symbolId(), glyph.confidence(),
+                    glyph.role(), glyph.frontX(), glyph.frontY(), glyph.length(), glyph.width(),
+                    glyph.minX(), glyph.maxX(), glyph.minY(), glyph.maxY(), cells,
+                    SymbolMana.solveCanvasGlyph(effects, cells, source.manaPixelArea())));
+        }
         // A projection is compiled from its copied glyphs when it appears in
         // the world. Array records are only a legacy/material cache and must
         // not become a second activation path.
-        return source.withCompileCache(glyphs, List.of());
+        return source.withRaster(source.colors(), effects).withCompileCache(glyphs, List.of());
+    }
+
+    private static int wandManaId(ItemStack wand) {
+        return wand.getItem() instanceof WandItem wandItem
+                ? wandItem.getManaId()
+                : ManaIdTable.FALLBACK_ID;
     }
 
     /**
      * Copies only selected recognized glyphs into a new projection document.
      * The raster is filtered as well, so unselected source strokes cannot leak
-     * into the projected plane.
+     * into the projected plane. Every projected symbol carries the supplied
+     * mana id.
      */
     public static CanvasDocument copySelectedGlyphsForProjection(
-            CanvasDocument source, Set<UUID> selectedGlyphIds) {
-        List<CanvasGlyph> glyphs = source.glyphs().stream()
-                .filter(glyph -> selectedGlyphIds.contains(glyph.glyphUuid()))
-                .map(glyph -> {
-                    UUID next = UUID.randomUUID();
-                    return new CanvasGlyph(next, glyph.symbolId(), glyph.confidence(), glyph.role(),
-                            glyph.frontX(), glyph.frontY(), glyph.length(), glyph.width(),
-                            glyph.minX(), glyph.maxX(), glyph.minY(), glyph.maxY(), glyph.cells());
-                })
-                .toList();
-
+            CanvasDocument source, Set<UUID> selectedGlyphIds, int manaId) {
         int[] colors = source.colors();
         int[] effects = source.strokeEffects();
         boolean[] selectedCells = new boolean[effects.length];
@@ -212,8 +215,21 @@ public final class WandProjectionService {
                 effects[i] = 0;
             }
         }
+
+        List<CanvasGlyph> glyphs = new ArrayList<>();
+        for (CanvasGlyph glyph : source.glyphs()) {
+            if (!selectedGlyphIds.contains(glyph.glyphUuid())) continue;
+            int[] cells = glyph.cells();
+            for (int cell : cells) {
+                if (cell >= 0 && cell < effects.length) effects[cell] = manaId;
+            }
+            glyphs.add(new CanvasGlyph(UUID.randomUUID(), glyph.symbolId(), glyph.confidence(),
+                    glyph.role(), glyph.frontX(), glyph.frontY(), glyph.length(), glyph.width(),
+                    glyph.minX(), glyph.maxX(), glyph.minY(), glyph.maxY(), cells,
+                    SymbolMana.solveCanvasGlyph(effects, cells, source.manaPixelArea())));
+        }
         return new CanvasDocument(source.physicalWidth(), source.physicalHeight(),
-                source.resolutionScale(), colors, effects, glyphs, List.of());
+                source.resolutionScale(), colors, effects, List.copyOf(glyphs), List.of());
     }
 
     /**
@@ -225,7 +241,8 @@ public final class WandProjectionService {
             CanvasDocument source,
             Set<UUID> selectedGlyphIds,
             PositionedGlyph sourceCircle,
-            SurfaceFrame sourceFrame) {
+            SurfaceFrame sourceFrame,
+            int manaId) {
         int width = source.resolutionWidth();
         int height = source.resolutionHeight();
         SurfaceFrame.SurfaceBounds circle = sourceCircle.boundsOn(sourceFrame);
@@ -237,7 +254,7 @@ public final class WandProjectionService {
         double sourceWidth = right - left;
         double sourceHeight = bottom - top;
         if (sourceWidth <= 1.0E-6 || sourceHeight <= 1.0E-6) {
-            return copySelectedGlyphsForProjection(source, selectedGlyphIds);
+            return copySelectedGlyphsForProjection(source, selectedGlyphIds, manaId);
         }
 
         double scaleX = 1.0 / sourceWidth;
@@ -247,7 +264,7 @@ public final class WandProjectionService {
         int[] colors = new int[sourceColors.length];
         int[] effects = new int[sourceEffects.length];
 
-        List<CanvasGlyph> glyphs = source.glyphs().stream()
+        List<CanvasGlyph> mapped = source.glyphs().stream()
                 .filter(glyph -> selectedGlyphIds.contains(glyph.glyphUuid()))
                 .map(glyph -> new CanvasGlyph(
                         UUID.randomUUID(),
@@ -266,8 +283,18 @@ public final class WandProjectionService {
                                 sourceColors, sourceEffects, colors, effects)))
                 .toList();
 
+        List<CanvasGlyph> glyphs = new ArrayList<>(mapped.size());
+        for (CanvasGlyph glyph : mapped) {
+            int[] cells = glyph.cells();
+            for (int cell : cells) {
+                if (cell >= 0 && cell < effects.length) effects[cell] = manaId;
+            }
+            glyphs.add(glyph.withManaElements(
+                    SymbolMana.solveCanvasGlyph(effects, cells, source.manaPixelArea())));
+        }
+
         return new CanvasDocument(source.physicalWidth(), source.physicalHeight(),
-                source.resolutionScale(), colors, effects, glyphs, List.of());
+                source.resolutionScale(), colors, effects, List.copyOf(glyphs), List.of());
     }
 
     private static int[] mapCells(

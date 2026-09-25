@@ -18,8 +18,10 @@ import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.runtime.emit.EmittedObject;
 import com.astune.gyromancy.canvas.CanvasDocument;
 import com.astune.gyromancy.canvas.CanvasEntity;
+import com.astune.gyromancy.canvas.CanvasGlyph;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.astune.gyromancy.symbol.SymbolCatalog;
+import com.astune.gyromancy.symbol.SymbolMana;
 import com.astune.gyromancy.entity.projection.ProjectionCanvasEntity;
 import com.astune.gyromancy.entity.projection.WandProjectionService;
 import net.minecraft.resources.ResourceLocation;
@@ -156,10 +158,16 @@ public final class ProjectionOp implements CompiledOp, PersistentOp {
             return new RuntimeHandle(Map.of());
         }
 
+        CanvasDocument sourceDocument = sourceCircle.canvas().document();
+        int manaId = SymbolMana.dominantId(sourceDocument.strokeEffects(),
+                sourceDocument.glyphs().stream()
+                        .filter(glyph -> selected.contains(glyph.glyphUuid()))
+                        .map(CanvasGlyph::cells)
+                        .toList());
         SurfaceFrame sourceFrame = sourceCircle.canvas().surfaceFrame();
         CanvasDocument document = WandProjectionService.copySelectedGlyphsForProjection(
                 sourceCircle.canvas().document(), selected,
-                sourceCircle.circle(), sourceFrame);
+                sourceCircle.circle(), sourceFrame, manaId);
         Vec3 offset = projectionOffset(context);
         SurfaceFrame targetFrame = new SurfaceFrame(
                 sourceFrame.origin().add(offset),

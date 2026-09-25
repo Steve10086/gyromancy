@@ -22,8 +22,11 @@ public final class InkRegistry {
 
     // ═══════════════════ Configuration point — add new inks here ═══════════════════
 
+    /** Mana id written by the default mana ink; also the wand projection id. */
+    public static final int MANA_INK_ID = 20;
+
     private static final InkDef[] INKS = {
-            new InkDef("mana_ink", 0xFFFFFFFF, 20),
+            new InkDef("mana_ink", 0xFFFFFFFF, MANA_INK_ID),
     };
 
     record InkDef(String name, int color, int manaValue) {}

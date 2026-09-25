@@ -159,13 +159,37 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp,
             MomentumInputResolver.ResolvedInputs value =
                     ((CompileResult.Success<MomentumInputResolver.ResolvedInputs>) resolved).value();
             return LocalCompileResult.success(new MomentumOp(
-                    boundary, matchedInputs, materialized, compileFrame,
+                    boundary, matchedInputs, withVelocityTreeInputs(value), compileFrame,
                     value.velocityInputs(), value.accelerationInputs(),
                     acceleration, elapsedTicks, drainRotationSpeed, phase,
                     value.dynamic(), activationFrame));
         } catch (RuntimeException exception) {
             return LocalCompileResult.failure("invalid_momentum_inputs", exception.getMessage());
         }
+    }
+
+    /**
+     * Exposes every resolved velocity vector as an executable tree edge once.
+     * Vectors already present through a structural edge (a recompiled source
+     * group replacement) are kept as-is; acceleration vectors stay reachable
+     * through the nested MomentumOp that provided them.
+     */
+    private static List<OpInput> withVelocityTreeInputs(
+            MomentumInputResolver.ResolvedInputs value) {
+        List<OpInput> result = new ArrayList<>(
+                value.treeInputs().size() + value.velocityInputs().size());
+        result.addAll(value.treeInputs());
+        for (VectorInput input : value.velocityInputs()) {
+            boolean present = false;
+            for (OpInput entry : result) {
+                if (entry instanceof OpInput.Op op && op.operator() == input.vector()) {
+                    present = true;
+                    break;
+                }
+            }
+            if (!present) result.add(new OpInput.Op(input.vector()));
+        }
+        return List.copyOf(result);
     }
 
     private MomentumOp(List<AccelerationInput> accelerationInputs, Vec3 acceleration,
@@ -426,7 +450,7 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp,
 
     private MomentumInputResolver.ResolvedInputs resolvedInputs(OpRuntimeContext context) {
         return new MomentumInputResolver.ResolvedInputs(
-                velocityInputs, accelerationInputs, dynamic);
+                velocityInputs, accelerationInputs, dynamic, List.of());
     }
 
     private List<Vec3> spawnVectorSnapshots(VectorContext context,

@@ -58,6 +58,11 @@ public final class StaticVectorOp extends VectorOp {
         return curl ? VectorFrameMath.orientByMovement(result, context) : result;
     }
 
+    @Override
+    List<VectorOp> composedVectors() {
+        return inputs.stream().map(VectorComposition.Input::vector).toList();
+    }
+
     List<VectorComposition.Input> vectorInputs() {
         return inputs;
     }

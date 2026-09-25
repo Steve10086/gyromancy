@@ -380,7 +380,8 @@ public class CanvasEntity extends BlockAttachedEntity {
                 local.glyphUuid(), glyphId, local.symbolId(), local.confidence(), local.role(),
                 front, extents[0], extents[1], getPos(),
                 minWorldX, maxWorldX, minWorldY, maxWorldY,
-                Set.copyOf(pixels), java.util.Optional.of(getUUID()), frame);
+                Set.copyOf(pixels), java.util.Optional.of(getUUID()), frame,
+                local.manaElements());
     }
 
     public Vec3 localToWorld(double normalizedX, double normalizedY) {

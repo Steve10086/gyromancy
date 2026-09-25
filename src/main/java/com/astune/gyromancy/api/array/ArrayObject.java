@@ -1,5 +1,6 @@
 package com.astune.gyromancy.api.array;
 
+import com.astune.gyromancy.api.element.ManaElements;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.runtime.emit.EmittedObject;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
@@ -28,7 +29,8 @@ public record ArrayObject(
         PositionedGlyph rootCircleGlyph,
         List<PositionedGlyph> boundGlyphs,
         long compilationEffectEndTick,
-        Map<String, Object> scratchData
+        Map<String, Object> scratchData,
+        ManaElements manaElements
 ) {
     public static final int COMPILATION_EFFECT_TICKS = 200;
     private static final Codec<UUID> UUID_CODEC = Codec.STRING.xmap(UUID::fromString, UUID::toString);
@@ -41,7 +43,9 @@ public record ArrayObject(
                     PositionedGlyph.CODEC.listOf().fieldOf("bound_glyphs").forGetter(ArrayObject::boundGlyphs),
                     Codec.LONG.optionalFieldOf("compilation_effect_end_tick", 0L)
                             .forGetter(ArrayObject::compilationEffectEndTick),
-                    SCRATCH_CODEC.optionalFieldOf("scratch_data", Map.of()).forGetter(ArrayObject::scratchData))
+                    SCRATCH_CODEC.optionalFieldOf("scratch_data", Map.of()).forGetter(ArrayObject::scratchData),
+                    ManaElements.CODEC.optionalFieldOf("mana_elements", ManaElements.EMPTY)
+                            .forGetter(ArrayObject::manaElements))
              .apply(i, ArrayObject::new));
 
     /** Legacy/convenience constructor for arrays without a live compilation effect. */
@@ -49,7 +53,20 @@ public record ArrayObject(
                        PositionedGlyph rootCircleGlyph,
                        List<PositionedGlyph> boundGlyphs,
                        Map<String, Object> scratchData) {
-        this(arrayId, rootCircleGlyph, boundGlyphs, 0L, scratchData);
+        this(arrayId, rootCircleGlyph, boundGlyphs, 0L, scratchData, ManaElements.EMPTY);
+    }
+
+    public ArrayObject(UUID arrayId,
+                       PositionedGlyph rootCircleGlyph,
+                       List<PositionedGlyph> boundGlyphs,
+                       long compilationEffectEndTick,
+                       Map<String, Object> scratchData) {
+        this(arrayId, rootCircleGlyph, boundGlyphs, compilationEffectEndTick,
+                scratchData, ManaElements.EMPTY);
+    }
+
+    public ArrayObject {
+        manaElements = manaElements == null ? ManaElements.EMPTY : manaElements;
     }
 
     /** All glyphs bound to this array. */
@@ -116,8 +133,19 @@ public record ArrayObject(
             case "long" -> Long.parseLong(entry.value());
             case "double" -> Double.parseDouble(entry.value());
             case "boolean" -> Boolean.parseBoolean(entry.value());
+            case "doubles" -> decodeManaElements(entry.value());
             default -> null;
         };
+    }
+
+    private static ManaElements decodeManaElements(String value) {
+        if (value.isEmpty()) return ManaElements.EMPTY;
+        String[] parts = value.split(",");
+        double[] values = new double[parts.length];
+        for (int index = 0; index < parts.length; index++) {
+            values[index] = Double.parseDouble(parts[index]);
+        }
+        return new ManaElements(values);
     }
 
     private static List<ScratchEntry> encodeScratchData(Map<String, Object> scratchData) {
@@ -143,6 +171,15 @@ public record ArrayObject(
     }
 
     private static ScratchEntry encodeScratchValue(String key, Object value) {
+        if (value instanceof ManaElements elements) {
+            double[] values = elements.values();
+            StringBuilder builder = new StringBuilder();
+            for (int index = 0; index < values.length; index++) {
+                if (index > 0) builder.append(',');
+                builder.append(values[index]);
+            }
+            return new ScratchEntry(key, "doubles", builder.toString(), Optional.empty());
+        }
         if (value instanceof EntityRef ref) {
             return new ScratchEntry(key, "entity", ref.uuid().toString(), Optional.of(ref.entityType()));
         }

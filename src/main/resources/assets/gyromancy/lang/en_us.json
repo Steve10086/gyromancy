@@ -32,6 +32,7 @@
   "message.gyromancy.canvas.cannot_unfurl": "The canvas cannot unfold here.",
   "message.gyromancy.array.compile.failed": "Spell array compile failed: %s",
   "message.gyromancy.array.compile.runtime_error": "Spell array runtime error: %s",
+  "message.gyromancy.array.compile.insufficient_element": "Insufficient element: %s",
   "message.gyromancy.array.compile.more": " (+%s more issue(s))",
   "message.gyromancy.array.compile.not_runnable": "This circle does not form a runnable spell",
   "message.gyromancy.array.compile.missing_primary_element": "The spell has no matching core operator",
