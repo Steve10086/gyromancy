@@ -28,6 +28,7 @@ public final class ClientEffectLifecycle {
         FlipbookEffect.clearAll();
         EntityEffect.clearAll();
         VortexOrbitEffect.clearAll();
+        CrystalSpawnEffects.clear();
         ElementBallRenderer.clearClientState();
         FireballRenderer.clearClientState();
         ManaballRenderer.clearClientState();

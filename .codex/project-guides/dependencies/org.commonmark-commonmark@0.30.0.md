@@ -1,0 +1,239 @@
+# org.commonmark-commonmark Guide
+
+Generated fallback guide. Prefer an upstream GUIDE.md/SKILL.md when available.
+
+## Public Surface
+
+- `module-info`
+- `org.commonmark.Extension`
+- `org.commonmark.internal.BlockContent`
+- `org.commonmark.internal.BlockContinueImpl`
+- `org.commonmark.internal.BlockQuoteParser`
+- `org.commonmark.internal.BlockStartImpl`
+- `org.commonmark.internal.Bracket`
+- `org.commonmark.internal.Definitions`
+- `org.commonmark.internal.Delimiter`
+- `org.commonmark.internal.DocumentBlockParser`
+- `org.commonmark.internal.DocumentParser`
+- `org.commonmark.internal.FencedCodeBlockParser`
+- `org.commonmark.internal.HeadingParser`
+- `org.commonmark.internal.HtmlBlockParser`
+- `org.commonmark.internal.IndentedCodeBlockParser`
+- `org.commonmark.internal.InlineParserContextImpl`
+- `org.commonmark.internal.InlineParserImpl`
+- `org.commonmark.internal.LinkReferenceDefinitionParser`
+- `org.commonmark.internal.ListBlockParser`
+- `org.commonmark.internal.ListItemParser`
+- `org.commonmark.internal.ParagraphParser`
+- `org.commonmark.internal.StaggeredDelimiterProcessor`
+- `org.commonmark.internal.ThematicBreakParser`
+- `org.commonmark.internal.inline.AsteriskDelimiterProcessor`
+- `org.commonmark.internal.inline.AutolinkInlineParser`
+- `org.commonmark.internal.inline.BackslashInlineParser`
+- `org.commonmark.internal.inline.BackticksInlineParser`
+- `org.commonmark.internal.inline.CoreLinkProcessor`
+- `org.commonmark.internal.inline.EmphasisDelimiterProcessor`
+- `org.commonmark.internal.inline.EntityInlineParser`
+- `org.commonmark.internal.inline.HtmlInlineParser`
+- `org.commonmark.internal.inline.LinkResultImpl`
+- `org.commonmark.internal.inline.ParsedInlineImpl`
+- `org.commonmark.internal.inline.UnderscoreDelimiterProcessor`
+- `org.commonmark.internal.renderer.NodeRendererMap`
+- `org.commonmark.internal.util.Escaping`
+- `org.commonmark.internal.util.Html5Entities`
+- `org.commonmark.internal.util.LineReader`
+- `org.commonmark.internal.util.LinkScanner`
+- `org.commonmark.internal.util.Parsing`
+- `org.commonmark.node.AbstractVisitor`
+- `org.commonmark.node.Block`
+- `org.commonmark.node.BlockQuote`
+- `org.commonmark.node.BulletList`
+- `org.commonmark.node.Code`
+- `org.commonmark.node.CustomBlock`
+- `org.commonmark.node.CustomNode`
+- `org.commonmark.node.DefinitionMap`
+- `org.commonmark.node.Delimited`
+- `org.commonmark.node.Document`
+- `org.commonmark.node.Emphasis`
+- `org.commonmark.node.FencedCodeBlock`
+- `org.commonmark.node.HardLineBreak`
+- `org.commonmark.node.Heading`
+- `org.commonmark.node.HtmlBlock`
+- `org.commonmark.node.HtmlInline`
+- `org.commonmark.node.Image`
+- `org.commonmark.node.IndentedCodeBlock`
+- `org.commonmark.node.Link`
+- `org.commonmark.node.LinkReferenceDefinition`
+- `org.commonmark.node.ListBlock`
+- `org.commonmark.node.ListItem`
+- `org.commonmark.node.Node`
+- `org.commonmark.node.Nodes`
+- `org.commonmark.node.OrderedList`
+- `org.commonmark.node.Paragraph`
+- `org.commonmark.node.SoftLineBreak`
+- `org.commonmark.node.SourceSpan`
+- `org.commonmark.node.SourceSpans`
+- `org.commonmark.node.StrongEmphasis`
+- `org.commonmark.node.Text`
+- `org.commonmark.node.ThematicBreak`
+- `org.commonmark.node.Visitor`
+- `org.commonmark.node.package-info`
+- `org.commonmark.package-info`
+- `org.commonmark.parser.IncludeSourceSpans`
+- `org.commonmark.parser.InlineParser`
+- `org.commonmark.parser.InlineParserContext`
+- `org.commonmark.parser.InlineParserFactory`
+- `org.commonmark.parser.Parser`
+- `org.commonmark.parser.PostProcessor`
+- `org.commonmark.parser.SourceLine`
+- `org.commonmark.parser.SourceLines`
+- `org.commonmark.parser.beta.InlineContentParser`
+- `org.commonmark.parser.beta.InlineContentParserFactory`
+- `org.commonmark.parser.beta.InlineParserState`
+- `org.commonmark.parser.beta.LinkInfo`
+- `org.commonmark.parser.beta.LinkProcessor`
+- `org.commonmark.parser.beta.LinkResult`
+- `org.commonmark.parser.beta.ParsedInline`
+- `org.commonmark.parser.beta.Position`
+- `org.commonmark.parser.beta.Scanner`
+- `org.commonmark.parser.beta.package-info`
+- `org.commonmark.parser.block.AbstractBlockParser`
+- `org.commonmark.parser.block.AbstractBlockParserFactory`
+- `org.commonmark.parser.block.BlockContinue`
+- `org.commonmark.parser.block.BlockParser`
+- `org.commonmark.parser.block.BlockParserFactory`
+- `org.commonmark.parser.block.BlockStart`
+- `org.commonmark.parser.block.MatchedBlockParser`
+- `org.commonmark.parser.block.ParserState`
+- `org.commonmark.parser.block.package-info`
+- `org.commonmark.parser.delimiter.DelimiterProcessor`
+- `org.commonmark.parser.delimiter.DelimiterRun`
+- `org.commonmark.parser.package-info`
+- `org.commonmark.renderer.NodeRenderer`
+- `org.commonmark.renderer.Renderer`
+- `org.commonmark.renderer.html.AttributeProvider`
+- `org.commonmark.renderer.html.AttributeProviderContext`
+- `org.commonmark.renderer.html.AttributeProviderFactory`
+- `org.commonmark.renderer.html.CoreHtmlNodeRenderer`
+- `org.commonmark.renderer.html.DefaultUrlSanitizer`
+- `org.commonmark.renderer.html.HtmlNodeRendererContext`
+- `org.commonmark.renderer.html.HtmlNodeRendererFactory`
+- `org.commonmark.renderer.html.HtmlRenderer`
+- `org.commonmark.renderer.html.HtmlWriter`
+- `org.commonmark.renderer.html.UrlSanitizer`
+- `org.commonmark.renderer.html.package-info`
+- `org.commonmark.renderer.markdown.CoreMarkdownNodeRenderer`
+- `org.commonmark.renderer.markdown.MarkdownNodeRendererContext`
+
+## Sample Signatures
+
+- `public interface org.commonmark.Extension {`
+- `public org.commonmark.internal.BlockContent();`
+- `public org.commonmark.internal.BlockContent(java.lang.String);`
+- `public void add(java.lang.CharSequence);`
+- `public java.lang.String getString();`
+- `public class org.commonmark.internal.BlockContinueImpl extends org.commonmark.parser.block.BlockContinue {`
+- `public org.commonmark.internal.BlockContinueImpl(int, int, boolean);`
+- `public int getNewIndex();`
+- `public int getNewColumn();`
+- `public boolean isFinalize();`
+- `public class org.commonmark.internal.BlockQuoteParser extends org.commonmark.parser.block.AbstractBlockParser {`
+- `public org.commonmark.internal.BlockQuoteParser();`
+- `public boolean isContainer();`
+- `public boolean canContain(org.commonmark.node.Block);`
+- `public org.commonmark.node.BlockQuote getBlock();`
+- `public org.commonmark.parser.block.BlockContinue tryContinue(org.commonmark.parser.block.ParserState);`
+- `public org.commonmark.node.Block getBlock();`
+- `public class org.commonmark.internal.BlockStartImpl extends org.commonmark.parser.block.BlockStart {`
+- `public org.commonmark.internal.BlockStartImpl(org.commonmark.parser.block.BlockParser...);`
+- `public org.commonmark.parser.block.BlockParser[] getBlockParsers();`
+- `public int getNewIndex();`
+- `public int getNewColumn();`
+- `public boolean isReplaceActiveBlockParser();`
+- `public org.commonmark.parser.block.BlockStart atIndex(int);`
+- `public org.commonmark.parser.block.BlockStart atColumn(int);`
+- `public class org.commonmark.internal.Bracket {`
+- `public final org.commonmark.node.Text markerNode;`
+- `public final org.commonmark.parser.beta.Position markerPosition;`
+- `public final org.commonmark.node.Text bracketNode;`
+- `public final org.commonmark.parser.beta.Position bracketPosition;`
+- `public final org.commonmark.parser.beta.Position contentPosition;`
+- `public final org.commonmark.internal.Bracket previous;`
+- `public final org.commonmark.internal.Delimiter previousDelimiter;`
+- `public class org.commonmark.internal.Definitions {`
+- `public org.commonmark.internal.Definitions();`
+- `public <D> void addDefinitions(org.commonmark.node.DefinitionMap<D>);`
+- `public <V> V getDefinition(java.lang.Class<V>, java.lang.String);`
+- `public class org.commonmark.internal.Delimiter implements org.commonmark.parser.delimiter.DelimiterRun {`
+- `public final java.util.List<org.commonmark.node.Text> characters;`
+- `public final char delimiterChar;`
+- `public org.commonmark.internal.Delimiter previous;`
+- `public org.commonmark.internal.Delimiter next;`
+- `public org.commonmark.internal.Delimiter(java.util.List<org.commonmark.node.Text>, char, boolean, boolean, org.commonmark.internal.Delimiter);`
+- `public boolean canOpen();`
+- `public boolean canClose();`
+- `public class org.commonmark.internal.DocumentBlockParser extends org.commonmark.parser.block.AbstractBlockParser {`
+- `public org.commonmark.internal.DocumentBlockParser();`
+- `public boolean isContainer();`
+- `public boolean canContain(org.commonmark.node.Block);`
+- `public org.commonmark.node.Document getBlock();`
+- `public org.commonmark.parser.block.BlockContinue tryContinue(org.commonmark.parser.block.ParserState);`
+- `public org.commonmark.node.Block getBlock();`
+- `public class org.commonmark.internal.DocumentParser implements org.commonmark.parser.block.ParserState {`
+- `public org.commonmark.internal.DocumentParser(java.util.List<org.commonmark.parser.block.BlockParserFactory>, org.commonmark.parser.InlineParserFactory, java.util.List<org.commonmark.parser.beta.InlineContentParserFactory>, java.util.List<org.commonmark.parser.delimiter.DelimiterProcessor>, java.util.List<org.commonmark.parser.beta.LinkProcessor>, java.util.Set<java.lang.Character>, org.commonmark.parser.IncludeSourceSpans, int, int);`
+- `public static java.util.Set<java.lang.Class<? extends org.commonmark.node.Block>> getDefaultBlockParserTypes();`
+- `public static java.util.List<org.commonmark.parser.block.BlockParserFactory> calculateBlockParserFactories(java.util.List<org.commonmark.parser.block.BlockParserFactory>, java.util.Set<java.lang.Class<? extends org.commonmark.node.Block>>);`
+- `public static void checkEnabledBlockTypes(java.util.Set<java.lang.Class<? extends org.commonmark.node.Block>>);`
+- `public org.commonmark.node.Document parse(java.lang.String);`
+- `public org.commonmark.node.Document parse(java.io.Reader) throws java.io.IOException;`
+- `public org.commonmark.parser.SourceLine getLine();`
+- `public class org.commonmark.internal.FencedCodeBlockParser extends org.commonmark.parser.block.AbstractBlockParser {`
+- `public org.commonmark.internal.FencedCodeBlockParser(char, int, int);`
+- `public org.commonmark.node.Block getBlock();`
+- `public org.commonmark.parser.block.BlockContinue tryContinue(org.commonmark.parser.block.ParserState);`
+- `public void addLine(org.commonmark.parser.SourceLine);`
+- `public void closeBlock();`
+- `public class org.commonmark.internal.HeadingParser extends org.commonmark.parser.block.AbstractBlockParser {`
+- `public org.commonmark.internal.HeadingParser(int, org.commonmark.parser.SourceLines);`
+- `public org.commonmark.node.Block getBlock();`
+- `public org.commonmark.parser.block.BlockContinue tryContinue(org.commonmark.parser.block.ParserState);`
+- `public void parseInlines(org.commonmark.parser.InlineParser);`
+- `public class org.commonmark.internal.HtmlBlockParser extends org.commonmark.parser.block.AbstractBlockParser {`
+- `public org.commonmark.node.Block getBlock();`
+- `public org.commonmark.parser.block.BlockContinue tryContinue(org.commonmark.parser.block.ParserState);`
+- `public void addLine(org.commonmark.parser.SourceLine);`
+- `public void closeBlock();`
+- `public class org.commonmark.internal.IndentedCodeBlockParser extends org.commonmark.parser.block.AbstractBlockParser {`
+- `public org.commonmark.internal.IndentedCodeBlockParser();`
+- `public org.commonmark.node.Block getBlock();`
+- `public org.commonmark.parser.block.BlockContinue tryContinue(org.commonmark.parser.block.ParserState);`
+- `public void addLine(org.commonmark.parser.SourceLine);`
+- `public void closeBlock();`
+- `public class org.commonmark.internal.InlineParserContextImpl implements org.commonmark.parser.InlineParserContext {`
+- `public org.commonmark.internal.InlineParserContextImpl(java.util.List<org.commonmark.parser.beta.InlineContentParserFactory>, java.util.List<org.commonmark.parser.delimiter.DelimiterProcessor>, java.util.List<org.commonmark.parser.beta.LinkProcessor>, java.util.Set<java.lang.Character>, int, org.commonmark.internal.Definitions);`
+- `public java.util.List<org.commonmark.parser.beta.InlineContentParserFactory> getCustomInlineContentParserFactories();`
+- `public java.util.List<org.commonmark.parser.delimiter.DelimiterProcessor> getCustomDelimiterProcessors();`
+- `public java.util.List<org.commonmark.parser.beta.LinkProcessor> getCustomLinkProcessors();`
+- `public java.util.Set<java.lang.Character> getCustomLinkMarkers();`
+- `public int getMaxInlineNesting();`
+- `public org.commonmark.node.LinkReferenceDefinition getLinkReferenceDefinition(java.lang.String);`
+- `public class org.commonmark.internal.InlineParserImpl implements org.commonmark.parser.InlineParser,org.commonmark.parser.beta.InlineParserState {`
+- `public org.commonmark.internal.InlineParserImpl(org.commonmark.parser.InlineParserContext);`
+- `public org.commonmark.parser.beta.Scanner scanner();`
+- `public void parse(org.commonmark.parser.SourceLines, org.commonmark.node.Node);`
+- `public class org.commonmark.internal.LinkReferenceDefinitionParser {`
+- `public org.commonmark.internal.LinkReferenceDefinitionParser();`
+- `public void parse(org.commonmark.parser.SourceLine);`
+- `public void addSourceSpan(org.commonmark.node.SourceSpan);`
+- `public class org.commonmark.internal.ListBlockParser extends org.commonmark.parser.block.AbstractBlockParser {`
+- `public org.commonmark.internal.ListBlockParser(org.commonmark.node.ListBlock);`
+- `public boolean isContainer();`
+- `public boolean canContain(org.commonmark.node.Block);`
+- `public org.commonmark.node.Block getBlock();`
+- `public org.commonmark.parser.block.BlockContinue tryContinue(org.commonmark.parser.block.ParserState);`
+- `public class org.commonmark.internal.ListItemParser extends org.commonmark.parser.block.AbstractBlockParser {`
+- `public org.commonmark.internal.ListItemParser(int, int);`
+- `public boolean isContainer();`
+- `public boolean canContain(org.commonmark.node.Block);`
+- `public org.commonmark.node.Block getBlock();`
+- `public org.commonmark.parser.block.BlockContinue tryContinue(org.commonmark.parser.block.ParserState);`

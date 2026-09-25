@@ -21,7 +21,7 @@ import java.util.*;
 public final class FireProjectileOp extends ProjectileEntityOp {
     private static final int ELEMENT_EXCHANGE_INTERVAL = 10;
     private static final double VOLUME_LOSS = 0.1;
-    private static final double EQUILIBRIUM = 1000.0;
+    private static final double EQUILIBRIUM = 2000.0;
     private static final double MAX_VOLUME_LEVEL = 200.0;
     private static final double MANA_TO_VOLUME = 0.05;
     public static final String STORED_MANA_KEY = "storedMana";

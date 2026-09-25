@@ -9,6 +9,7 @@ import com.astune.gyromancy.client.entity.WaterBallRenderer;
 import com.astune.gyromancy.client.entity.WindFieldRenderer;
 import com.astune.gyromancy.client.canvas.CanvasEntityRenderer;
 import com.astune.gyromancy.client.canvas.CanvasTooltipComponent;
+import com.astune.gyromancy.client.effect.CrystalBlockEntityRenderer;
 import com.astune.gyromancy.client.item.WandClientItemExtensions;
 import com.astune.gyromancy.client.glyph.GlyphImageProvider;
 import com.astune.gyromancy.client.glyph.GlyphRenderer;
@@ -17,6 +18,7 @@ import com.astune.gyromancy.client.guide.GuideLinkFormatter;
 import com.astune.gyromancy.client.guide.MarkdownPageComponent;
 import com.astune.gyromancy.item.CompassItem;
 import com.astune.gyromancy.canvas.CanvasTooltipImage;
+import com.astune.gyromancy.registry.ModBlockEntities;
 import com.astune.gyromancy.registry.ModEntities;
 import com.astune.gyromancy.registry.ModItems;
 import com.astune.gyromancy.registry.ModMenus;
@@ -96,6 +98,8 @@ public final class ClientSetup {
         event.registerEntityRenderer(ModEntities.CANVAS.get(), CanvasEntityRenderer::new);
         event.registerEntityRenderer(ModEntities.CANVAS_PROJECTION.get(), CanvasEntityRenderer::new);
         event.registerEntityRenderer(ModEntities.WAND_PROJECTION.get(), CanvasEntityRenderer::new);
+        event.registerBlockEntityRenderer(ModBlockEntities.CRYSTAL.get(),
+                CrystalBlockEntityRenderer::new);
     }
 
     @SubscribeEvent

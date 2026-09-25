@@ -1,14 +1,24 @@
 {
   "dependency_guides": [
     ".codex/project-guides/dependencies/com.microsoft.onnxruntime-onnxruntime@1.18.0.md",
-    ".codex/project-guides/dependencies/maven.modrinth-pigmentum@0.5.8beta.md",
+    ".codex/project-guides/dependencies/maven.modrinth-pigmentum@pigmentum_version.md",
     ".codex/project-guides/dependencies/org.appliedenergistics.yoga-yoga@1.0.0.md",
+    ".codex/project-guides/dependencies/org.commonmark-commonmark@0.30.0.md",
     ".codex/project-guides/dependencies/org.junit.jupiter-junit-jupiter-engine@5.10.2.md",
-    ".codex/project-guides/dependencies/org.junit.jupiter-junit-jupiter@5.10.2.md",
-    ".codex/project-guides/dependencies/photon.md"
+    ".codex/project-guides/dependencies/org.junit.jupiter-junit-jupiter@5.10.2.md"
   ],
-  "missing_dependency_guides": [],
+  "missing_dependency_guides": [
+    {
+      "name": "maven.modrinth-pigmentum",
+      "needs_subagent": true,
+      "path": ".codex/project-guides/dependencies/maven.modrinth-pigmentum@pigmentum_version.md",
+      "source": "missing",
+      "version": "${pigmentum_version}"
+    }
+  ],
   "project_guide": ".codex/project-guides/PROJECT_GUIDE.md",
-  "repository_remotes": [],
+  "repository_remotes": [
+    "https://github.com/Steve10086/gyromancy.git"
+  ],
   "schema": "guideweaver.v1"
 }

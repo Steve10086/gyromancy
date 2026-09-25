@@ -2,6 +2,7 @@ package com.astune.gyromancy.symbol;
 
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.api.element.ManaElements;
+import com.astune.gyromancy.element.ManaIdTable;
 import com.astune.gyromancy.ink.InkRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -24,9 +25,13 @@ class SymbolManaTest {
 
     @Test
     void unknownIdsFallBackAndStillContributeTheirRow() {
+        int[] fallback = ManaIdTable.rowFor(ManaIdTable.FALLBACK_ID);
+
         ManaElements solved = SymbolMana.solve(Map.of(555_555, 5), 1.0);
 
-        assertTrue(solved.isEmpty());
+        for (ElementType element : ElementType.values()) {
+            assertEquals(5.0 * fallback[element.ordinal()], solved.at(element));
+        }
     }
 
     @Test

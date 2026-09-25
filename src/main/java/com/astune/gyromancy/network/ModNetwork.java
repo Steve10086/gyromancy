@@ -86,5 +86,17 @@ public final class ModNetwork {
                 UpdateCanvasToolSettingsPacket.STREAM_CODEC,
                 UpdateCanvasToolSettingsPacket::handleServer
         );
+
+        registrar.playToClient(
+                CrystalSpawnFxPacket.TYPE,
+                CrystalSpawnFxPacket.STREAM_CODEC,
+                CrystalSpawnFxPacket::handleClient
+        );
+
+        registrar.playToClient(
+                CrystalGrowthPacket.TYPE,
+                CrystalGrowthPacket.STREAM_CODEC,
+                CrystalGrowthPacket::handleClient
+        );
     }
 }

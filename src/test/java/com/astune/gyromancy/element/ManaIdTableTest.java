@@ -20,10 +20,10 @@ class ManaIdTableTest {
     }
 
     @Test
-    void unknownIdsFallBackToTheZeroRow() {
+    void unknownIdsFallBackToTheRegisteredFallbackRow() {
         int[] row = ManaIdTable.rowFor(987_654);
 
-        assertArrayEquals(new int[ElementType.COUNT], row);
+        assertArrayEquals(ManaIdTable.rowFor(ManaIdTable.FALLBACK_ID), row);
     }
 
     @Test

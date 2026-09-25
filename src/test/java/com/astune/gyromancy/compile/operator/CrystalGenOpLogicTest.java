@@ -77,6 +77,23 @@ class CrystalGenOpLogicTest {
     }
 
     @Test
+    void evictsPositionsTheEffectMovedAwayFrom() {
+        Map<BlockPos, Long> tracked = new HashMap<>();
+        BlockPos inside = new BlockPos(1, 2, 3);
+        BlockPos left = new BlockPos(4, 5, 6);
+        tracked.put(inside.immutable(), 5L);
+        tracked.put(left.immutable(), 5L);
+        long level = THRESHOLD + 12_000L;
+
+        long total = CrystalGenOp.updateTracked(tracked, List.of(inside),
+                pos -> level, pos -> true, THRESHOLD, INTERVAL);
+
+        assertEquals(1, tracked.size());
+        assertTrue(tracked.containsKey(inside.immutable()));
+        assertEquals(level, total);
+    }
+
+    @Test
     void capsTrackedSizeWhenTheEffectCoversTooManyPositions() {
         Map<BlockPos, Long> tracked = new HashMap<>();
         List<BlockPos> inside = new ArrayList<>(1_000);

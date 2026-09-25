@@ -3,13 +3,17 @@ package com.astune.gyromancy.block;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.compile.operator.CrystalGenOp;
 import com.astune.gyromancy.element.ElementStorageManager;
+import com.astune.gyromancy.network.CrystalGrowthPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
@@ -29,7 +33,12 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * the block's own position falls below {@link CrystalGenOp#ELEMENT_THRESHOLD}
  * the crystal shatters and drops its crystal loot.</p>
  */
-public final class CrystalBlock extends Block {
+public final class CrystalBlock extends Block implements EntityBlock {
+    /** Shatter progress gained per scheduled tick while the element is too low. */
+    private static final int SHATTER_PROGRESS_PER_TICK = 25;
+    /** Client-side block crack overlay stages, 0 through 9. */
+    private static final int BREAK_OVERLAY_STAGES = 9;
+
     /**
      * Collision and outline shape assembled from the floating crystal model's
      * element bounds (in model units, {@link Block#box} converts them). Every
@@ -120,19 +129,62 @@ public final class CrystalBlock extends Block {
     }
 
     @Override
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return new CrystalBlockEntity(pos, state);
+    }
+
+    @Override
+    protected RenderShape getRenderShape(BlockState state) {
+        // The crystal is drawn by its block entity renderer so it can grow in.
+        return RenderShape.ENTITYBLOCK_ANIMATED;
+    }
+
+    @Override
     protected void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
         if (!level.isClientSide && !oldState.is(this)) {
             level.scheduleTick(pos, this, CrystalGenOp.SCAN_INTERVAL);
+            if (level instanceof ServerLevel serverLevel) {
+                CrystalGrowthPacket.broadcast(serverLevel, pos);
+            }
         }
     }
 
     @Override
     protected void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         if (!level.getBlockState(pos).is(this)) return;
+        CrystalBlockEntity crystal = level.getBlockEntity(pos) instanceof CrystalBlockEntity entity
+                ? entity : null;
         if (ElementStorageManager.INSTANCE.get(level, pos).get(element) < CrystalGenOp.ELEMENT_THRESHOLD) {
-            level.destroyBlock(pos, true);
+            // Still unsupported: chip away instead of shattering instantly.
+            int progress = (crystal == null ? 0 : crystal.breakProgress())
+                    + SHATTER_PROGRESS_PER_TICK;
+            if (progress >= CrystalBlockEntity.BREAK_PROGRESS_COMPLETE) {
+                stopShattering(level, pos, crystal);
+                level.destroyBlock(pos, true);
+                return;
+            }
+            if (crystal != null) crystal.setBreakProgress(progress);
+            level.destroyBlockProgress(breakerId(pos), pos,
+                    progress * BREAK_OVERLAY_STAGES / CrystalBlockEntity.BREAK_PROGRESS_COMPLETE);
+            level.scheduleTick(pos, this, CrystalGenOp.SCAN_INTERVAL);
             return;
         }
+        // The local concentration recovered: the crystal stops chipping.
+        stopShattering(level, pos, crystal);
         level.scheduleTick(pos, this, CrystalGenOp.SCAN_INTERVAL);
+    }
+
+    /** Clears the shatter progress and its client-side crack overlay. */
+    private static void stopShattering(ServerLevel level, BlockPos pos,
+                                       CrystalBlockEntity crystal) {
+        if (crystal == null || crystal.breakProgress() == 0) return;
+        crystal.setBreakProgress(0);
+        level.destroyBlockProgress(breakerId(pos), pos, -1);
+    }
+
+    /** Stable 0-1023 breaker id so clients render the shatter overlay. */
+    private static int breakerId(BlockPos pos) {
+        long packed = pos.asLong();
+        return (int) ((packed ^ (packed >>> 32)) & 0x3FF);
     }
 }
