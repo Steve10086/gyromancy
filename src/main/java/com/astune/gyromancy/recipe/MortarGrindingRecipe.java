@@ -4,36 +4,35 @@ import com.astune.gyromancy.registry.ModItems;
 import com.astune.gyromancy.registry.ModRecipes;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingBookCategory;
 import net.minecraft.world.item.crafting.CraftingInput;
-import net.minecraft.world.item.crafting.CustomRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeSerializer;
-import net.minecraft.world.level.Level;
+import net.minecraft.world.item.crafting.ShapelessRecipe;
 
 /**
  * Grinds one configurable ingredient together with a mortar.
  *
- * <p>The mortar stays in the grid and loses one durability per craft; the last
- * point of durability breaks it, exactly like a damaged tool. Recipes are
- * data-driven: each powder declares its ingredient and result in JSON.</p>
+ * <p>Extends {@link ShapelessRecipe} so recipe viewers (and Modopedia) can draw
+ * it as a normal crafting recipe. The mortar stays in the grid and loses one
+ * durability per craft; the last point of durability breaks it, exactly like a
+ * damaged tool. Each powder declares its ingredient and result in JSON.</p>
  */
-public final class MortarGrindingRecipe extends CustomRecipe {
+public final class MortarGrindingRecipe extends ShapelessRecipe {
 
     private static final Ingredient MORTAR = Ingredient.of(ModItems.MORTAR.get());
 
     private final Ingredient ingredient;
-    private final ItemStack result;
+    private final ItemStack previewResult;
 
     public MortarGrindingRecipe(CraftingBookCategory category, Ingredient ingredient, ItemStack result) {
-        super(category);
+        super("", category, result, NonNullList.of(Ingredient.EMPTY, ingredient, MORTAR));
         this.ingredient = ingredient;
-        this.result = result;
+        this.previewResult = result;
     }
 
     public Ingredient ingredient() {
@@ -41,54 +40,7 @@ public final class MortarGrindingRecipe extends CustomRecipe {
     }
 
     public ItemStack result() {
-        return result;
-    }
-
-    @Override
-    public boolean matches(CraftingInput input, Level level) {
-        if (input.ingredientCount() != 2) {
-            return false;
-        }
-        boolean mortar = false;
-        boolean ground = false;
-        for (int i = 0; i < input.size(); i++) {
-            ItemStack stack = input.getItem(i);
-            if (stack.isEmpty()) {
-                continue;
-            }
-            if (stack.is(ModItems.MORTAR.get())) {
-                if (mortar) {
-                    return false;
-                }
-                mortar = true;
-            } else if (ingredient.test(stack)) {
-                if (ground) {
-                    return false;
-                }
-                ground = true;
-            } else {
-                return false;
-            }
-        }
-        return mortar && ground;
-    }
-
-    @Override
-    public ItemStack assemble(CraftingInput input, HolderLookup.Provider registries) {
-        return result.copy();
-    }
-
-    @Override
-    public ItemStack getResultItem(HolderLookup.Provider registries) {
-        return result;
-    }
-
-    @Override
-    public NonNullList<Ingredient> getIngredients() {
-        NonNullList<Ingredient> ingredients = NonNullList.create();
-        ingredients.add(ingredient);
-        ingredients.add(MORTAR);
-        return ingredients;
+        return previewResult;
     }
 
     @Override
@@ -107,11 +59,6 @@ public final class MortarGrindingRecipe extends CustomRecipe {
             }
         }
         return remaining;
-    }
-
-    @Override
-    public boolean canCraftInDimensions(int width, int height) {
-        return width * height >= 2;
     }
 
     @Override

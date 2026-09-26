@@ -17,24 +17,23 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingBookCategory;
 import net.minecraft.world.item.crafting.CraftingInput;
-import net.minecraft.world.item.crafting.CustomRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeSerializer;
-import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.common.util.RecipeMatcher;
+import net.minecraft.world.item.crafting.ShapelessRecipe;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Fills or refills an ink bottle with a registered ink.
  *
- * <p>The bottle may be empty or already hold any ink. Matching the recipe's ink
- * stacks charges up to {@link InkBottleItem#MAX_INK}; a different ink (or an
- * empty bottle) is replaced by the recipe's amount. The bottle itself is
- * consumed like any ingredient and the crafted stack carries the new contents.</p>
+ * <p>Extends {@link ShapelessRecipe} so recipe viewers (and Modopedia) can draw
+ * it as a normal crafting recipe. The bottle may be empty or already hold any
+ * ink: mixing the recipe's ink stacks charges up to
+ * {@link InkBottleItem#MAX_INK}, while a different ink (or an empty bottle) is
+ * replaced by the recipe's amount. The bottle itself is consumed like any
+ * ingredient and the crafted stack carries the new contents.</p>
  */
-public final class InkMixingRecipe extends CustomRecipe {
+public final class InkMixingRecipe extends ShapelessRecipe {
 
     private static final Ingredient BOTTLE = Ingredient.of(ModItems.INK_BOTTLE.get());
     private static final Codec<ResourceLocation> INK_CODEC = ResourceLocation.CODEC.validate(id ->
@@ -44,14 +43,23 @@ public final class InkMixingRecipe extends CustomRecipe {
 
     private final ResourceLocation ink;
     private final int amount;
-    private final NonNullList<Ingredient> ingredients;
+    private final NonNullList<Ingredient> extraIngredients;
 
     public InkMixingRecipe(CraftingBookCategory category, ResourceLocation ink, int amount,
                            NonNullList<Ingredient> ingredients) {
-        super(category);
+        super("", category,
+                InkBottleItem.createFilled(ink, Math.min(amount, InkBottleItem.MAX_INK)),
+                withBottle(ingredients));
         this.ink = ink;
         this.amount = amount;
-        this.ingredients = ingredients;
+        this.extraIngredients = ingredients;
+    }
+
+    private static NonNullList<Ingredient> withBottle(NonNullList<Ingredient> extras) {
+        NonNullList<Ingredient> all = NonNullList.create();
+        all.add(BOTTLE);
+        all.addAll(extras);
+        return all;
     }
 
     public ResourceLocation ink() {
@@ -63,27 +71,7 @@ public final class InkMixingRecipe extends CustomRecipe {
     }
 
     public List<Ingredient> ingredientList() {
-        return ingredients;
-    }
-
-    @Override
-    public boolean matches(CraftingInput input, Level level) {
-        if (input.ingredientCount() != 1 + ingredients.size()) {
-            return false;
-        }
-        List<ItemStack> rest = new ArrayList<>(ingredients.size());
-        boolean bottle = false;
-        for (ItemStack stack : input.items()) {
-            if (stack.isEmpty()) {
-                continue;
-            }
-            if (!bottle && stack.is(ModItems.INK_BOTTLE.get())) {
-                bottle = true;
-                continue;
-            }
-            rest.add(stack);
-        }
-        return bottle && RecipeMatcher.findMatches(rest, ingredients) != null;
+        return extraIngredients;
     }
 
     @Override
@@ -94,24 +82,6 @@ public final class InkMixingRecipe extends CustomRecipe {
             }
         }
         return ItemStack.EMPTY;
-    }
-
-    @Override
-    public ItemStack getResultItem(HolderLookup.Provider registries) {
-        return InkBottleItem.createFilled(ink, Math.min(amount, InkBottleItem.MAX_INK));
-    }
-
-    @Override
-    public NonNullList<Ingredient> getIngredients() {
-        NonNullList<Ingredient> all = NonNullList.create();
-        all.add(BOTTLE);
-        all.addAll(ingredients);
-        return all;
-    }
-
-    @Override
-    public boolean canCraftInDimensions(int width, int height) {
-        return width * height >= 1 + ingredients.size();
     }
 
     @Override

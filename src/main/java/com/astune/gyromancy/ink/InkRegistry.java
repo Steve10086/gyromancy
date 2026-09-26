@@ -49,11 +49,11 @@ public final class InkRegistry {
     private static final InkDef[] INKS = {
             new InkDef("mana_ink", 0xFFFFFFFF, MANA_INK_ID, 0xFFFFFFFF),
             new InkDef("water_ink", 0xFF7FC8F8, WATER_INK_ID, 0xFF1E4FBF),
-            new InkDef("fire_ink", 0xFFFF8A80, FIRE_INK_ID, 0xFFFF0000),
+            new InkDef("fire_ink", 0xFFFF8A80, FIRE_INK_ID, 0xFFB30000),
             new InkDef("earth_ink", 0xFFCFA47A, EARTH_INK_ID, 0xFF8B5A2B),
             new InkDef("wind_ink", 0xFFB7E8A0, WIND_INK_ID, 0xFF90EE90),
             new InkDef("water_mana_ink", 0xFF2F6FA8, WATER_MANA_INK_ID, 0xFF1E4FBF),
-            new InkDef("fire_mana_ink", 0xFFC43A2A, FIRE_MANA_INK_ID, 0xFFFF0000),
+            new InkDef("fire_mana_ink", 0xFFC43A2A, FIRE_MANA_INK_ID, 0xFFB30000),
             new InkDef("earth_mana_ink", 0xFF8A6238, EARTH_MANA_INK_ID, 0xFF8B5A2B),
             new InkDef("wind_mana_ink", 0xFF5F9E58, WIND_MANA_INK_ID, 0xFF90EE90),
             new InkDef("light_mana_ink", 0xFFD9B84A, LIGHT_MANA_INK_ID, 0xFFFFE080),
