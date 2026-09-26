@@ -28,6 +28,12 @@ public final class ManaIdTable {
         register(InkRegistry.FIRE_INK_ID, 0, 1, 0, 0, 0, 0, 0, 0, 0);
         register(InkRegistry.EARTH_INK_ID, 0, 0, 0, 1, 0, 0, 0, 0, 0);
         register(InkRegistry.WIND_INK_ID, 1, 0, 0, 0, 0, 0, 0, 0, 0);
+        register(InkRegistry.WATER_MANA_INK_ID, 0, 0, 1, 0, 0, 0, 0, 0, 1);
+        register(InkRegistry.FIRE_MANA_INK_ID, 0, 1, 0, 0, 0, 0, 0, 0, 1);
+        register(InkRegistry.EARTH_MANA_INK_ID, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+        register(InkRegistry.WIND_MANA_INK_ID, 1, 0, 0, 0, 0, 0, 0, 0, 1);
+        register(InkRegistry.LIGHT_MANA_INK_ID, 0, 0, 0, 0, 1, 0, 0, 0, 1);
+        register(InkRegistry.DARK_MANA_INK_ID, 0, 0, 0, 0, 0, 1, 0, 0, 1);
     }
 
     private ManaIdTable() {}

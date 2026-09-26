@@ -131,4 +131,23 @@ public final class ModItems {
 
     public static final DeferredItem<Item> CHARCOAL_POWDER = ITEMS.register(
             "charcoal_powder", () -> new Item(new Item.Properties()));
+
+    /** Mortar-ground element crystal powders; ink mixing inputs. */
+    public static final DeferredItem<Item> FIRE_CRYSTAL_POWDER = ITEMS.register(
+            "fire_crystal_powder", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> WATER_CRYSTAL_POWDER = ITEMS.register(
+            "water_crystal_powder", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> WIND_CRYSTAL_POWDER = ITEMS.register(
+            "wind_crystal_powder", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> EARTH_CRYSTAL_POWDER = ITEMS.register(
+            "earth_crystal_powder", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> LIGHT_CRYSTAL_POWDER = ITEMS.register(
+            "light_crystal_powder", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> DARK_CRYSTAL_POWDER = ITEMS.register(
+            "dark_crystal_powder", () -> new Item(new Item.Properties()));
 }

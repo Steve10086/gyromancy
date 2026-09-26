@@ -1,0 +1,14 @@
+{
+  "type": "gyromancy:ink_mixing",
+  "category": "misc",
+  "ink": "gyromancy:water_mana_ink",
+  "amount": 6400,
+  "ingredients": [
+    {
+      "item": "gyromancy:water_crystal_powder"
+    },
+    {
+      "item": "gyromancy:silver_powder"
+    }
+  ]
+}

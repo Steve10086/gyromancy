@@ -1,0 +1,11 @@
+{
+  "type": "gyromancy:mortar_grinding",
+  "category": "misc",
+  "ingredient": {
+    "item": "gyromancy:dark_crystal"
+  },
+  "result": {
+    "id": "gyromancy:dark_crystal_powder",
+    "count": 1
+  }
+}

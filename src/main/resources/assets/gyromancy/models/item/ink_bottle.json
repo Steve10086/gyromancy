@@ -33,6 +33,42 @@
         "gyromancy:ink": 5
       },
       "model": "gyromancy:item/ink_bottle/wind_ink"
+    },
+    {
+      "predicate": {
+        "gyromancy:ink": 6
+      },
+      "model": "gyromancy:item/ink_bottle/water_mana_ink"
+    },
+    {
+      "predicate": {
+        "gyromancy:ink": 7
+      },
+      "model": "gyromancy:item/ink_bottle/fire_mana_ink"
+    },
+    {
+      "predicate": {
+        "gyromancy:ink": 8
+      },
+      "model": "gyromancy:item/ink_bottle/earth_mana_ink"
+    },
+    {
+      "predicate": {
+        "gyromancy:ink": 9
+      },
+      "model": "gyromancy:item/ink_bottle/wind_mana_ink"
+    },
+    {
+      "predicate": {
+        "gyromancy:ink": 10
+      },
+      "model": "gyromancy:item/ink_bottle/light_mana_ink"
+    },
+    {
+      "predicate": {
+        "gyromancy:ink": 11
+      },
+      "model": "gyromancy:item/ink_bottle/dark_mana_ink"
     }
   ]
 }

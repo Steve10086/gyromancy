@@ -5,6 +5,7 @@ import com.astune.gyromancy.ink.InkRegistry;
 import com.astune.gyromancy.item.InkBottleItem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -31,8 +32,10 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.PEN.get());
                         output.accept(ModItems.COMPASS.get());
                         output.accept(ModItems.INK_BOTTLE.get());
-                        output.accept(InkBottleItem.createFilled(
-                                InkRegistry.MANA_INK, InkBottleItem.MAX_INK));
+                        for (ResourceLocation inkId : InkRegistry.INK_IDS) {
+                            output.accept(InkBottleItem.createFilled(
+                                    inkId, InkBottleItem.MAX_INK));
+                        }
                         output.accept(ModItems.CANVAS.get());
                         output.accept(ModItems.COPPER_RING.get());
                         output.accept(ModItems.COPPER_NUGGET.get());
@@ -58,6 +61,12 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.DEEPSLATE_POWDER.get());
                         output.accept(ModItems.FISH_POWDER.get());
                         output.accept(ModItems.CHARCOAL_POWDER.get());
+                        output.accept(ModItems.FIRE_CRYSTAL_POWDER.get());
+                        output.accept(ModItems.WATER_CRYSTAL_POWDER.get());
+                        output.accept(ModItems.WIND_CRYSTAL_POWDER.get());
+                        output.accept(ModItems.EARTH_CRYSTAL_POWDER.get());
+                        output.accept(ModItems.LIGHT_CRYSTAL_POWDER.get());
+                        output.accept(ModItems.DARK_CRYSTAL_POWDER.get());
                     })
                     .build());
 }

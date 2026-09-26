@@ -1,0 +1,11 @@
+{
+  "type": "gyromancy:mortar_grinding",
+  "category": "misc",
+  "ingredient": {
+    "item": "gyromancy:water_crystal"
+  },
+  "result": {
+    "id": "gyromancy:water_crystal_powder",
+    "count": 1
+  }
+}

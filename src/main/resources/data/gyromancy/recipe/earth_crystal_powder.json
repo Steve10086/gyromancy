@@ -1,0 +1,11 @@
+{
+  "type": "gyromancy:mortar_grinding",
+  "category": "misc",
+  "ingredient": {
+    "item": "gyromancy:earth_crystal"
+  },
+  "result": {
+    "id": "gyromancy:earth_crystal_powder",
+    "count": 1
+  }
+}

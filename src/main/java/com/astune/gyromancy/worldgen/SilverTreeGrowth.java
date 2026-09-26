@@ -23,41 +23,65 @@ import java.util.function.Predicate;
  * faces. Trees smaller than {@link SilverTreeLogic#MIN_TREE_LOGS} logs cannot
  * grow; otherwise the first elevated leaf tip that touches leaves or air becomes
  * the parent. Ground-level root tips are excluded. A new log is placed at a
- * random legal face of that parent and the surrounding 3x3x3 air pocket is
- * filled with silver leaves.</p>
+ * random legal face of that parent and the surrounding 3x3x3 air pocket, minus
+ * its eight corners, is filled with silver leaves.</p>
+ *
+ * <p>Growth never steps downward, and the target position must not touch any
+ * silver log other than its parent. Most crafts grow from a leaf tip; one in
+ * ten instead sprouts from a natural, non-tip log so the tree can branch from
+ * its trunk or from the middle of an arm.</p>
  */
 public final class SilverTreeGrowth {
 
+    /** Chance to grow from a non-tip log instead of a leaf tip. */
+    static final int MIDDLE_GROWTH_CHANCE = 10;
+
     private SilverTreeGrowth() {}
 
-    public static boolean tryGrow(ServerLevel level, BlockPos clickedPos, RandomSource random) {
+    /** Returns the position of the new log when the tree grew. */
+    public static Optional<BlockPos> tryGrow(ServerLevel level, BlockPos clickedPos, RandomSource random) {
+        boolean fromMiddle = random.nextInt(MIDDLE_GROWTH_CHANCE) == 0;
         Optional<BlockPos> target = findGrowthTarget(
                 clickedPos,
                 pos -> SilverTreeLogic.isSilverLog(level.getBlockState(pos)),
-                pos -> SilverTreeLogic.isLeafLog(level, pos),
+                pos -> fromMiddle
+                        ? SilverTreeLogic.isOriginalLog(level, pos)
+                        && !SilverTreeLogic.isLeafLog(level, pos)
+                        : SilverTreeLogic.isLeafLog(level, pos),
                 pos -> SilverTreeLogic.hasLeavesOrAirAdjacent(level, pos));
         if (target.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
         BlockPos parent = target.get();
         List<Direction> legalFaces = new ArrayList<>(Direction.values().length);
         for (Direction direction : Direction.values()) {
-            if (canBeReplacedByLog(level.getBlockState(parent.relative(direction)))) {
+            BlockPos candidate = parent.relative(direction);
+            if (isLegalGrowthFace(direction,
+                    canBeReplacedByLog(level.getBlockState(candidate)),
+                    SilverTreeLogic.countAdjacentLogs(level, candidate))) {
                 legalFaces.add(direction);
             }
         }
         if (legalFaces.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
         Direction direction = legalFaces.get(random.nextInt(legalFaces.size()));
         BlockPos newLogPos = parent.relative(direction);
         BlockState newLog = ModBlocks.SILVER_LOG.get().defaultBlockState()
                 .setValue(RotatedPillarBlock.AXIS, direction.getAxis())
-                .setValue(SilverLogBlock.IS_LEAF, SilverTreeLogic.countAdjacentLogs(level, newLogPos) == 1)
+                .setValue(SilverLogBlock.IS_LEAF, true)
                 .setValue(SilverLogBlock.ORIGINAL, true);
         level.setBlock(newLogPos, newLog, Block.UPDATE_ALL);
         placeLeafPocket(level, newLogPos);
-        return true;
+        return Optional.of(newLogPos);
+    }
+
+    /**
+     * A face may grow when it does not point down, the target is replaceable and
+     * the only silver log touching the target is the parent.
+     */
+    static boolean isLegalGrowthFace(Direction direction, boolean replaceable, int adjacentLogs) {
+        return direction != Direction.DOWN && replaceable && adjacentLogs == 1;
     }
 
     static Optional<BlockPos> findGrowthTarget(BlockPos origin,
@@ -82,9 +106,23 @@ public final class SilverTreeGrowth {
         BlockState leaves = ModBlocks.SILVER_LEAVES.get().defaultBlockState();
         for (BlockPos pos : BlockPos.betweenClosed(
                 center.offset(-1, -1, -1), center.offset(1, 1, 1))) {
-            if (!pos.equals(center) && level.getBlockState(pos).isAir()) {
+            int dx = pos.getX() - center.getX();
+            int dy = pos.getY() - center.getY();
+            int dz = pos.getZ() - center.getZ();
+            if (isLeafPocketPosition(dx, dy, dz) && level.getBlockState(pos).isAir()) {
                 level.setBlock(pos, leaves, Block.UPDATE_ALL);
             }
         }
+    }
+
+    /** The 3x3x3 pocket minus its center and eight corners. */
+    static boolean isLeafPocketPosition(int dx, int dy, int dz) {
+        int ax = Math.abs(dx);
+        int ay = Math.abs(dy);
+        int az = Math.abs(dz);
+        if (ax == 0 && ay == 0 && az == 0) {
+            return false;
+        }
+        return !(ax == 1 && ay == 1 && az == 1);
     }
 }

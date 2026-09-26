@@ -4,6 +4,7 @@ import com.astune.gyromancy.worldgen.SilverTreeGrowth;
 import com.astune.gyromancy.worldgen.SilverTreeLogic;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.ItemInteractionResult;
@@ -25,12 +26,15 @@ import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
 
+import java.util.Optional;
+
 /**
  * Silver tree log.
  *
- * <p>{@code is_leaf} marks a branch tip: a silver log whose six faces touch
- * exactly one other silver log. The stored value is a mirror only; the
- * authoritative check is {@link SilverTreeLogic#isLeafLog}.</p>
+ * <p>{@code is_leaf} marks a branch tip: an {@code original} silver log whose
+ * six faces touch exactly one other silver log. The stored value is a mirror
+ * only; the authoritative check is {@link SilverTreeLogic#isLeafLog}. Mined and
+ * player-placed logs always keep {@code is_leaf} false.</p>
  *
  * <p>{@code original} marks logs that spawned with the tree. Only these
  * respond to bone meal, and placing a dropped log clears the flag.</p>
@@ -60,9 +64,8 @@ public class SilverLogBlock extends RotatedPillarBlock {
         if (state == null) {
             return null;
         }
-        boolean leaf = SilverTreeLogic.countAdjacentLogs(
-                context.getLevel(), context.getClickedPos()) == 1;
-        return state.setValue(IS_LEAF, leaf).setValue(ORIGINAL, false);
+        // Mined and player-placed logs are never branch tips.
+        return state.setValue(IS_LEAF, false).setValue(ORIGINAL, false);
     }
 
     @Override
@@ -96,11 +99,18 @@ public class SilverLogBlock extends RotatedPillarBlock {
         if (!state.getValue(ORIGINAL) || !stack.is(Items.BONE_MEAL)) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
-        if (level instanceof ServerLevel serverLevel && SilverTreeGrowth.tryGrow(serverLevel, pos, level.random)) {
-            if (!player.getAbilities().instabuild) {
-                stack.shrink(1);
+        if (level instanceof ServerLevel serverLevel) {
+            Optional<BlockPos> grown = SilverTreeGrowth.tryGrow(serverLevel, pos, level.random);
+            if (grown.isPresent()) {
+                if (!player.getAbilities().instabuild) {
+                    stack.shrink(1);
+                }
+                BlockPos grownPos = grown.get();
+                level.levelEvent(LevelEvent.PARTICLES_AND_SOUND_PLANT_GROWTH, pos, 15);
+                serverLevel.sendParticles(ParticleTypes.HAPPY_VILLAGER,
+                        grownPos.getX() + 0.5D, grownPos.getY() + 0.5D, grownPos.getZ() + 0.5D,
+                        24, 1.1D, 1.1D, 1.1D, 0.0D);
             }
-            level.levelEvent(LevelEvent.PARTICLES_AND_SOUND_PLANT_GROWTH, pos, 15);
         }
         return ItemInteractionResult.sidedSuccess(level.isClientSide);
     }
@@ -112,7 +122,8 @@ public class SilverLogBlock extends RotatedPillarBlock {
 
     /** Re-derives the stored tip flag and pushes it to clients when it changed. */
     private static void syncIsLeaf(Level level, BlockPos pos, BlockState state) {
-        boolean leaf = SilverTreeLogic.countAdjacentLogs(level, pos) == 1;
+        boolean leaf = state.getValue(ORIGINAL)
+                && SilverTreeLogic.countAdjacentLogs(level, pos) == 1;
         if (state.getValue(IS_LEAF) != leaf) {
             level.setBlock(pos, state.setValue(IS_LEAF, leaf), Block.UPDATE_CLIENTS);
         }

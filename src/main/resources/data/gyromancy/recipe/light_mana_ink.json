@@ -1,0 +1,14 @@
+{
+  "type": "gyromancy:ink_mixing",
+  "category": "misc",
+  "ink": "gyromancy:light_mana_ink",
+  "amount": 6400,
+  "ingredients": [
+    {
+      "item": "gyromancy:light_crystal_powder"
+    },
+    {
+      "item": "gyromancy:silver_powder"
+    }
+  ]
+}

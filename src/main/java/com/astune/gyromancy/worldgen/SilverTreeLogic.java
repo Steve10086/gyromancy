@@ -1,5 +1,6 @@
 package com.astune.gyromancy.worldgen;
 
+import com.astune.gyromancy.block.SilverLogBlock;
 import com.astune.gyromancy.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -20,12 +21,12 @@ import java.util.function.Predicate;
 /**
  * Shared queries for the silver tree shapes.
  *
- * <p>A silver log is a "leaf" log while exactly one of its six faces touches
- * another silver log. The stored {@code is_leaf} property mirrors that value,
- * but every gameplay decision re-derives it from the world: world generation
- * writes into proto chunks, where neither {@code onPlace} nor
- * {@code neighborChanged} fires, so the stored property cannot be trusted
- * before the chunk receives random ticks.</p>
+ * <p>A silver log is a "leaf" log while it is {@code original} and exactly one
+ * of its six faces touches another silver log. The stored {@code is_leaf}
+ * property mirrors that value, but every gameplay decision re-derives it from
+ * the world: world generation writes into proto chunks, where neither
+ * {@code onPlace} nor {@code neighborChanged} fires, so the stored property
+ * cannot be trusted before the chunk receives random ticks.</p>
  */
 public final class SilverTreeLogic {
 
@@ -54,8 +55,22 @@ public final class SilverTreeLogic {
         return count;
     }
 
+    /** True when the log spawned with the tree instead of being placed by a player. */
+    public static boolean isOriginalLog(BlockGetter level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        return isSilverLog(state) && state.getValue(SilverLogBlock.ORIGINAL);
+    }
+
+    /**
+     * A log counts as a leaf tip only when it spawned with the tree
+     * ({@code original}) and exactly one face touches another silver log.
+     * Mined and player-placed logs are never tips.
+     */
     public static boolean isLeafLog(BlockGetter level, BlockPos pos) {
-        return isSilverLog(level.getBlockState(pos)) && countAdjacentLogs(level, pos) == 1;
+        BlockState state = level.getBlockState(pos);
+        return isSilverLog(state)
+                && state.getValue(SilverLogBlock.ORIGINAL)
+                && countAdjacentLogs(level, pos) == 1;
     }
 
     /** True when a non-leaf silver log stands within the support radius. */

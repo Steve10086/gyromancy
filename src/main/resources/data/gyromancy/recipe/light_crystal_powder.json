@@ -1,0 +1,11 @@
+{
+  "type": "gyromancy:mortar_grinding",
+  "category": "misc",
+  "ingredient": {
+    "item": "gyromancy:light_crystal"
+  },
+  "result": {
+    "id": "gyromancy:light_crystal_powder",
+    "count": 1
+  }
+}

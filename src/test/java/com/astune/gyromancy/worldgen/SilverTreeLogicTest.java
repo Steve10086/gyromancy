@@ -1,6 +1,7 @@
 package com.astune.gyromancy.worldgen;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -9,6 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SilverTreeLogicTest {
@@ -122,5 +124,30 @@ class SilverTreeLogicTest {
                 pos -> pos.equals(rootTip) || pos.equals(crownTip), pos -> true);
 
         assertEquals(Optional.of(crownTip), target);
+    }
+
+    @Test
+    void growthNeverStepsDownward() {
+        assertFalse(SilverTreeGrowth.isLegalGrowthFace(Direction.DOWN, true, 1));
+    }
+
+    @Test
+    void growthFaceNeedsAReplaceableTargetTouchingOnlyTheParent() {
+        assertTrue(SilverTreeGrowth.isLegalGrowthFace(Direction.UP, true, 1));
+        assertFalse(SilverTreeGrowth.isLegalGrowthFace(Direction.UP, false, 1));
+        assertFalse(SilverTreeGrowth.isLegalGrowthFace(Direction.UP, true, 0));
+        assertFalse(SilverTreeGrowth.isLegalGrowthFace(Direction.UP, true, 2));
+    }
+
+    @Test
+    void leafPocketSkipsCornersAndItsCenter() {
+        assertFalse(SilverTreeGrowth.isLeafPocketPosition(0, 0, 0));
+        assertFalse(SilverTreeGrowth.isLeafPocketPosition(1, 1, 1));
+        assertFalse(SilverTreeGrowth.isLeafPocketPosition(-1, 1, -1));
+
+        assertTrue(SilverTreeGrowth.isLeafPocketPosition(1, 0, 0));
+        assertTrue(SilverTreeGrowth.isLeafPocketPosition(0, -1, 0));
+        assertTrue(SilverTreeGrowth.isLeafPocketPosition(1, 1, 0));
+        assertTrue(SilverTreeGrowth.isLeafPocketPosition(0, 1, -1));
     }
 }

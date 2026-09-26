@@ -1,0 +1,11 @@
+{
+  "type": "gyromancy:mortar_grinding",
+  "category": "misc",
+  "ingredient": {
+    "item": "gyromancy:wind_crystal"
+  },
+  "result": {
+    "id": "gyromancy:wind_crystal_powder",
+    "count": 1
+  }
+}

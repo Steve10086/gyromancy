@@ -67,6 +67,12 @@ private static final InkDef[] INKS = {
     new InkDef("fire_ink", 0xFFFF8A80, 22, 0xFFFF0000),
     new InkDef("earth_ink", 0xFFCFA47A, 23, 0xFF8B5A2B),
     new InkDef("wind_ink", 0xFFB7E8A0, 24, 0xFF90EE90),
+    new InkDef("water_mana_ink", 0xFF2F6FA8, 25, 0xFF1E4FBF),
+    new InkDef("fire_mana_ink", 0xFFC43A2A, 26, 0xFFFF0000),
+    new InkDef("earth_mana_ink", 0xFF8A6238, 27, 0xFF8B5A2B),
+    new InkDef("wind_mana_ink", 0xFF5F9E58, 28, 0xFF90EE90),
+    new InkDef("light_mana_ink", 0xFFD9B84A, 29, 0xFFFFE080),
+    new InkDef("dark_mana_ink", 0xFF5B3FA8, 30, 0xFF4B2E83),
 };
 ```
 
