@@ -12,10 +12,8 @@ import java.util.Optional;
 /**
  * Growth entry point for the silver tree.
  *
- * <p>The placement shape is not designed yet; {@link #SILVER_TREE} currently
- * points at an oak-shaped configured feature that only swaps in silver log and
- * leaf blocks. Replace {@code data/gyromancy/worldgen/configured_feature/silver_tree.json}
- * (and this class if the grower needs variants) once the final model exists.</p>
+ * <p>The configured feature uses {@link SilverTreeFeature} for both sapling growth
+ * and natural generation.</p>
  */
 public final class SilverTreeGrower {
 

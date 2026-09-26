@@ -37,6 +37,7 @@ public class Gyromancy {
 
         // ── Deferred Registers ──
         ModBlocks.BLOCKS.register(modEventBus);
+        ModFeatures.FEATURES.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
         ModCreativeTabs.CREATIVE_TABS.register(modEventBus);
         ModEntities.ENTITIES.register(modEventBus);

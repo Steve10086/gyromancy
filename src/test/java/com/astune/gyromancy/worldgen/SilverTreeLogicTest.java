@@ -107,4 +107,20 @@ class SilverTreeLogicTest {
 
         assertTrue(target.isEmpty());
     }
+
+    @Test
+    void growthSkipsGroundLevelRootTips() {
+        Set<BlockPos> logs = trunk(10);
+        BlockPos rootTip = new BlockPos(3, 0, 0);
+        logs.add(new BlockPos(1, 0, 0));
+        logs.add(new BlockPos(2, 0, 0));
+        logs.add(rootTip);
+        BlockPos crownTip = new BlockPos(0, 9, 0);
+
+        Optional<BlockPos> target = SilverTreeGrowth.findGrowthTarget(
+                new BlockPos(0, 0, 0), logs::contains,
+                pos -> pos.equals(rootTip) || pos.equals(crownTip), pos -> true);
+
+        assertEquals(Optional.of(crownTip), target);
+    }
 }

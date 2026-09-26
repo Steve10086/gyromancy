@@ -21,9 +21,10 @@ import java.util.function.Predicate;
  *
  * <p>The clicked log's connected component is walked through the six adjacent
  * faces. Trees smaller than {@link SilverTreeLogic#MIN_TREE_LOGS} logs cannot
- * grow; otherwise the first walked log that is a leaf tip and touches leaves or
- * air becomes the parent. A new log is placed at a random legal face of that
- * parent and the surrounding 3x3x3 air pocket is filled with silver leaves.</p>
+ * grow; otherwise the first elevated leaf tip that touches leaves or air becomes
+ * the parent. Ground-level root tips are excluded. A new log is placed at a
+ * random legal face of that parent and the surrounding 3x3x3 air pocket is
+ * filled with silver leaves.</p>
  */
 public final class SilverTreeGrowth {
 
@@ -68,7 +69,9 @@ public final class SilverTreeGrowth {
         if (logs.size() < SilverTreeLogic.MIN_TREE_LOGS) {
             return Optional.empty();
         }
-        return SilverTreeLogic.firstQualifying(logs, pos -> isLeaf.test(pos) && hasLeavesOrAir.test(pos));
+        int lowestY = logs.stream().mapToInt(BlockPos::getY).min().orElse(origin.getY());
+        return SilverTreeLogic.firstQualifying(logs, pos -> pos.getY() >= lowestY + 2
+                && isLeaf.test(pos) && hasLeavesOrAir.test(pos));
     }
 
     private static boolean canBeReplacedByLog(BlockState state) {
