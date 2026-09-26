@@ -2,6 +2,7 @@ package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.api.element.ManaElements;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.compile.CompileDiagnostic;
@@ -26,6 +27,11 @@ public abstract class ProjectileEntityOp  extends EntityEffectOp {
         super(id, element, boundary, matchedInputs, inputs);
     }
 
+    /** Every projectile costs 20 points of its own element instead of the default mana. */
+    @Override
+    public ManaElements getCost() {
+        return elementCost(20.0);
+    }
 
     @Override
     public RuntimeHandle activate(OpRuntimeContext ctx) {

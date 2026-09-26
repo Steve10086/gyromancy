@@ -92,15 +92,55 @@ class ArrayManaCostTest {
     @Test
     void stageTwoAcceptsAnArrayThatCanAffordItsCost() {
         PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1)
-                .withManaElements(mana(20.0));
+                .withManaElements(elements(20.0, ElementType.FIRE, 20.0));
         PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2)
-                .withManaElements(mana(20.0));
+                .withManaElements(elements(20.0, ElementType.FIRE, 20.0));
         GroupNode ast = group(circle, new SymbolNode(fire));
 
         CompileResult<RuntimeModel> result = new ArrayCompilePipeline(
                 OpDefinitionRegistry.definitions()).compile(ast);
 
         assertInstanceOf(CompileResult.Success.class, result);
+    }
+
+    @Test
+    void projectileOpsCostTwentyOfTheirOwnElement() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1)
+                .withManaElements(mana(100.0));
+        PositionedGlyph fire = glyph("fire", SymbolRole.CENTER_SYMBOL, 2)
+                .withManaElements(mana(100.0));
+        GroupNode ast = group(circle, new SymbolNode(fire));
+
+        CompileResult<RuntimeModel> result = new ArrayCompilePipeline(
+                OpDefinitionRegistry.definitions()).compile(ast);
+
+        CompileResult.Failure<RuntimeModel> failure =
+                assertInstanceOf(CompileResult.Failure.class, result);
+        assertTrue(failure.diagnostics().stream()
+                        .anyMatch(diagnostic -> "insufficient_element".equals(diagnostic.code())
+                                && diagnostic.message().contains("fire requires 20")),
+                "fire projectiles must cost 20 fire: " + failure.diagnostics());
+    }
+
+    @Test
+    void fieldOpsCostTwentyOfTheirOwnElement() {
+        PositionedGlyph circle = glyph("circle_outer", SymbolRole.OUTER_CIRCLE, 1)
+                .withManaElements(mana(100.0));
+        PositionedGlyph wind = glyph("wind", SymbolRole.CENTER_SYMBOL, 2)
+                .withManaElements(mana(100.0));
+        PositionedGlyph arrow = glyph("arrow", SymbolRole.PARAMETER_RUNE, 3)
+                .withManaElements(mana(100.0));
+        GroupNode ast = group(circle, new SymbolNode(wind), new SymbolNode(arrow));
+
+        CompileResult<RuntimeModel> result = new ArrayCompilePipeline(
+                OpDefinitionRegistry.definitions()).compile(ast);
+
+        CompileResult.Failure<RuntimeModel> failure =
+                assertInstanceOf(CompileResult.Failure.class, result);
+        assertTrue(failure.diagnostics().stream()
+                        .anyMatch(diagnostic -> "insufficient_element".equals(diagnostic.code())
+                                && diagnostic.message().contains("wind requires 20")),
+                "wind fields must cost 20 wind: " + failure.diagnostics());
     }
 
     @Test
@@ -188,6 +228,13 @@ class ArrayManaCostTest {
     private static ManaElements mana(double mana) {
         double[] values = new double[ElementType.COUNT];
         values[ElementType.MANA.ordinal()] = mana;
+        return new ManaElements(values);
+    }
+
+    private static ManaElements elements(double mana, ElementType type, double amount) {
+        double[] values = new double[ElementType.COUNT];
+        values[ElementType.MANA.ordinal()] = mana;
+        values[type.ordinal()] = amount;
         return new ManaElements(values);
     }
 

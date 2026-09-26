@@ -1,6 +1,7 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.api.element.ManaElements;
 import com.astune.gyromancy.api.field.MagicFieldShape;
 import com.astune.gyromancy.api.field.ShapeOrientation;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
@@ -39,6 +40,12 @@ public abstract class FieldOp extends EntityEffectOp {
     protected FieldOp(ResourceLocation id, ElementType element, PositionedGlyph boundary,
                       List<OpInput> matchedInputs, List<OpInput> inputs) {
         super(id, element, boundary, matchedInputs, inputs);
+    }
+
+    /** Every field costs 20 points of its own element instead of the default mana. */
+    @Override
+    public ManaElements getCost() {
+        return elementCost(20.0);
     }
 
     /** Rebuilds the concrete field Op after its local child inputs are materialized. */

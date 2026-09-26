@@ -1,6 +1,7 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.api.element.ManaElements;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.OpInput;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
@@ -35,6 +36,13 @@ public abstract class EntityEffectOp implements CompiledOp, PersistentOp {
 
     public ElementType primaryElement() {
         return element;
+    }
+
+    /** Builds a cost that charges {@code amount} of this effect's own element. */
+    protected final ManaElements elementCost(double amount) {
+        double[] values = new double[ElementType.COUNT];
+        values[element.ordinal()] = amount;
+        return new ManaElements(values);
     }
 
     public RuntimeHandle activateAt(OpRuntimeContext context, Vec3 origin) {
