@@ -1,0 +1,14 @@
+{
+  "type": "gyromancy:ink_mixing",
+  "category": "misc",
+  "ink": "gyromancy:mana_ink",
+  "amount": 6400,
+  "ingredients": [
+    {
+      "item": "minecraft:ink_sac"
+    },
+    {
+      "item": "gyromancy:silver_powder"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "type": "gyromancy:mortar_grinding",
+  "category": "misc",
+  "ingredient": {
+    "item": "gyromancy:silver_branch"
+  },
+  "result": {
+    "id": "gyromancy:silver_powder",
+    "count": 1
+  }
+}

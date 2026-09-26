@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": {
+    "end": "gyromancy:block/silver_tree_log_top",
+    "side": "gyromancy:block/silver_tree_log_1"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "type": "gyromancy:ink_mixing",
+  "category": "misc",
+  "ink": "gyromancy:earth_ink",
+  "amount": 6400,
+  "ingredients": [
+    {
+      "item": "gyromancy:deepslate_powder"
+    },
+    {
+      "item": "minecraft:ink_sac"
+    },
+    {
+      "item": "gyromancy:silver_powder"
+    }
+  ]
+}

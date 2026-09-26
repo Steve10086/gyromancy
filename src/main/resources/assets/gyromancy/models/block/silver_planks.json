@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "gyromancy:block/silver_tree_planks"
+  }
+}

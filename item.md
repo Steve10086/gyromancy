@@ -36,17 +36,21 @@ The pen provides the brush geometry; the ink bottle provides the color and effec
 | `elementBoost` | `float` (0–2) | Reserved for future element concentration modifier |
 | `manaValue` | `int` | Value written to the `gyromancy:mana` effect layer |
 | `effectKeys` | `Map<String, Integer>` | Additional effect layers to write (empty for base ink) |
+| `overlayTint` | `int` (ARGB) | Tint multiplied onto the bottle's ink overlay layer |
 
 **Builder defaults:**
 
 ```java
 InkType.builder(id)
-    .color(0xFFFFFFFF)   // white
-    .manaValue(20)       // mana per pixel
+    .color(0xFFFFFFFF)     // white
+    .manaValue(20)         // mana per pixel
+    .overlayTint(0xFFFFFFFF) // show the overlay texture as-is
     .build();
 ```
 
 The `effectKey(String key, int value)` builder method accumulates entries into the `effectKeys` map. For the base `mana_ink`, no extra keys are added.
+
+**Overlay tint:** an ink whose overlay texture is grayscale sets `overlayTint` to its color so the layer is tinted; an ink with a fully colored overlay texture keeps `0xFFFFFFFF` and is drawn unchanged.
 
 `manaValue` and `effectKeys` are the extensibility points: a fire ink would set `manaValue(8).effectKey("gyromancy:element", 1)`. The `PenItem` reads these and writes them to the canvas — no code change needed in the pen.
 
@@ -58,11 +62,15 @@ The `effectKey(String key, int value)` builder method accumulates entries into t
 
 ```java
 private static final InkDef[] INKS = {
-    new InkDef("mana_ink", 0xFFFFFFFF, 20),
+    new InkDef("mana_ink", 0xFFFFFFFF, 20, 0xFFFFFFFF),
+    new InkDef("water_ink", 0xFF7FC8F8, 21, 0xFF1E4FBF),
+    new InkDef("fire_ink", 0xFFFF8A80, 22, 0xFFFF0000),
+    new InkDef("earth_ink", 0xFFCFA47A, 23, 0xFF8B5A2B),
+    new InkDef("wind_ink", 0xFFB7E8A0, 24, 0xFF90EE90),
 };
 ```
 
-Each `InkDef` specifies name, ARGB color, and mana value. Registration:
+Each `InkDef` specifies name, canvas ARGB color, mana id, and overlay tint. The mana id is written to the `gyromancy:mana` effect layer and resolved through `ManaIdTable`, whose rows follow `ElementType` order (wind, fire, water, earth, light, dark, space, time, mana) — e.g. id 21 is `0,0,1,0,0,0,0,0,0` for water. Registration order fixes the registry ids, so the element ink registry ids are 1..4 and their model overrides use `2..5`. Registration:
 
 ```java
 event.register(GyromancyRegistries.INK_KEY, registry -> {
@@ -70,6 +78,7 @@ event.register(GyromancyRegistries.INK_KEY, registry -> {
         InkType ink = InkType.builder(rl(def.name))
                 .color(def.color)
                 .manaValue(def.manaValue)
+                .overlayTint(def.overlayTint)
                 .build();
         registry.register(rl(def.name), ink);
     }
@@ -80,22 +89,27 @@ The `INK` registry (defined in `GyromancyRegistries`) is synced to clients. New 
 
 ## 4. Ink Bottle Item
 
-`InkBottleItem` is a simple `Item` that holds two data components:
+`InkBottleItem` is the single item shared by the empty bottle and every ink. It holds two optional data components:
 
 - `INK_TYPE` (`ResourceLocation`) — points into the `gyromancy:ink` registry
-- `INK_REMAINING` (`int`) — remaining paint actions, default `MAX_INK = 64`
+- `INK_REMAINING` (`int`) — remaining paint charges, capacity `MAX_INK = 6400`
 
-**Durability bar:** The item overrides `isBarVisible()`, `getBarWidth()`, and `getBarColor()` to show a cyan bar proportional to remaining ink. The bar is only visible when `INK_REMAINING < MAX_INK`.
+**States:**
 
-**Dynamic name:** `getName()` checks the `INK_TYPE` component. If it is not `"air"`, the name is resolved as:
+| State | Components | Behaviour |
+|-------|------------|-----------|
+| Base (empty) | none | Cannot paint; no durability bar |
+| Filled | `INK_TYPE` + `INK_REMAINING` | Paints; bar shows remaining charges |
 
-```java
-Component.translatable(
-    "item.gyromancy.ink_bottle.filled",
-    Component.translatable("ink.gyromancy." + inkType.getPath()));
-```
+**Mixing:** `mix(bottle, recipeInk, amount)` runs `InkContents.mix`, which stacks charges when the bottle already holds the recipe's ink and replaces the contents otherwise (bounded by `MAX_INK`).
 
-**Extensibility:** To add a new ink, register it in `InkRegistry` and give an ink bottle the matching `INK_TYPE` component. The `InkBottleItem` class itself never changes.
+**Consumption:** `consume(stack, amount)` subtracts charges; when the last charge is spent the components are cleared and the stack reverts to the empty base bottle instead of breaking.
+
+**Durability bar:** `isBarVisible()` is true while ink is present; `getBarWidth()` scales by `MAX_INK` and `getBarColor()` uses the ink's color.
+
+**Names:** the item only has two names — `item.gyromancy.ink_bottle` for a filled bottle and `item.gyromancy.ink_bottle.empty` for the base state. The ink name, its `ManaIdTable` element row (`|` separated, each value colored by `ElementType.color()`) and the remaining charges (`tooltip.gyromancy.ink_remaining`) are shown in the hover tooltip.
+
+**Appearance:** `inkStyleId(stack)` returns `0` for an empty bottle and `inkRegistryId + 1` for a filled one. The client registers it as the `gyromancy:ink` item property; `models/item/ink_bottle.json` overrides select `gyromancy:item/ink_bottle/<ink_path>`, so the ink id alone drives the overlay model and texture.
 
 ## 5. Pen Item
 
@@ -169,30 +183,25 @@ After both gates pass, ink is consumed from the offhand bottle:
 
 ```java
 ItemStack offhand = player.getOffhandItem();
-int remaining = offhand.getOrDefault(ModDataComponents.INK_REMAINING.get(), 0);
-if (remaining <= 0) return false;
+if (!InkBottleItem.hasInk(offhand)) return false;
 
 if (consumeCounter % 10 == 0)
-    offhand.set(ModDataComponents.INK_REMAINING.get(), remaining - 1);
-consumeCounter = consumeCounter + 1 % 10;
+    InkBottleItem.consume(offhand, 1);
+consumeCounter = (consumeCounter + 1) % 10;
 ```
 
-Ink is consumed once every 10 paint actions (every 10th `shouldPaint()` call that reaches this point). This means 64 ink charges support approximately 640 paint strokes before the bottle runs out.
+Ink is consumed once every 10 paint actions (every 10th `shouldPaint()` call that reaches this point). This means 6400 ink charges support approximately 64000 paint strokes before the bottle empties back to its base state.
 
 ### 5.5 Offhand Ink Resolution
 
 ```java
 private static InkType resolveOffhandInk(Player player) {
     ItemStack offhand = player.getOffhandItem();
-    if (offhand.isEmpty() || !(offhand.getItem() instanceof InkBottleItem))
-        return null;
-    ResourceLocation inkId = offhand.get(ModDataComponents.INK_TYPE.get());
-    if (inkId == null) return null;
-    return GyromancyRegistries.INK.get(inkId);
+    return InkBottleItem.hasInk(offhand) ? InkBottleItem.resolveInk(offhand) : null;
 }
 ```
 
-If the offhand is empty, not an ink bottle, or has no `INK_TYPE` component, the pen returns null colors and patterns — no painting occurs.
+If the offhand is empty, not an ink bottle, or holds no charged ink, the pen returns null colors and patterns — no painting occurs. The canvas editor's `canvasStroke` also returns empty for the same reason.
 
 ## 6. Data Components
 
@@ -206,29 +215,51 @@ Three custom data component types are registered in `ModDataComponents`:
 
 All three are persistent and network-synchronized.
 
-## 7. Creative Tab
+## 7. Ink Mixing Recipes
 
-`ModCreativeTabs.GYROMANCY_TAB` includes three items:
+Mixing is a custom data-driven recipe, `gyromancy:ink_mixing` (`InkMixingRecipe`):
+
+```json
+{
+  "type": "gyromancy:ink_mixing",
+  "category": "misc",
+  "ink": "gyromancy:mana_ink",
+  "amount": 6400,
+  "ingredients": [ { "item": "minecraft:ink_sac" }, { "item": "gyromancy:silver_powder" } ]
+}
+```
+
+- Matching requires exactly one ink bottle (any state) plus the listed ingredients, shapeless.
+- `ink` must exist in the `gyromancy:ink` registry (validated at load time); the crafted stack stores that id in `INK_TYPE`.
+- `amount` is bounded to `1..MAX_INK`. Same ink stacks; any other state is replaced.
+- The empty bottle itself is crafted by the shaped recipe `gyromancy:ink` (wooden button + glass bottle, no ink sac).
+
+## 8. Creative Tab
+
+`ModCreativeTabs.GYROMANCY_TAB` includes an empty ink bottle and a full mana ink bottle:
 
 ```java
-output.accept(ModItems.DEBUG_BRUSH.get());
-output.accept(ModItems.PEN.get());
 output.accept(ModItems.INK_BOTTLE.get());
+output.accept(InkBottleItem.createFilled(InkRegistry.MANA_INK, InkBottleItem.MAX_INK));
 ```
 
 The tab icon remains the debug brush.
 
-## 8. Extensibility
+## 9. Extensibility
 
 ### Adding a new ink type
 
-Add one entry to `InkRegistry.INKS`:
+1. Add an entry to `InkRegistry.INKS`:
 
 ```java
-new InkDef("fire_ink", 0xFFFF4400, 8),
+new InkDef("fire_ink", 0xFFFF4400, 8, 0xFFFFFFFF),
 ```
 
-Then create an ink bottle with the matching `INK_TYPE` component. The pen automatically reads it — no code changes in `PenItem` or `InkBottleItem`.
+2. Add a mixing recipe `data/gyromancy/recipe/fire_ink.json` referencing that id.
+3. Add the overlay model `models/item/ink_bottle/fire_ink.json` (layer0 = `gyromancy:item/ink_bottle/fire_ink`, layer1 = `gyromancy:item/ink_bottle`) and its texture.
+4. Add an override entry to `models/item/ink_bottle.json` with predicate `gyromancy:ink` equal to the ink's registry id + 1. Overrides are matched as thresholds, so keep them in ascending order.
+
+The pen reads the stored ink id automatically — no code changes in `PenItem` or `InkBottleItem`.
 
 Optional: add extra effect layers via the builder:
 
@@ -236,6 +267,7 @@ Optional: add extra effect layers via the builder:
 InkType.builder(id)
     .color(0xFFFF4400)
     .manaValue(8)
+    .overlayTint(0xFFFF4400)            // tint a grayscale overlay
     .effectKey("gyromancy:element", 0)  // FIRE ordinal
     .build();
 ```
@@ -244,11 +276,14 @@ InkType.builder(id)
 
 Create a new item registration with modified `PEN_PROPERTIES` defaults. The same `PenItem` class can be reused — just register it under a different name with different component defaults.
 
-## 9. Item Models & Textures
+## 10. Item Models & Textures
 
 | File | Parent | Purpose |
 |------|--------|---------|
 | `models/item/pen.json` | `minecraft:item/handheld` | Held-item rendering for the pen |
-| `models/item/ink_bottle.json` | `minecraft:item/generated` | Flat item rendering for the ink bottle |
+| `models/item/ink_bottle.json` | `minecraft:item/generated` | Empty bottle plus the `gyromancy:ink` model overrides |
+| `models/item/ink_bottle/<ink>.json` | `minecraft:item/generated` | Filled bottle: layer0 = ink layer (below), layer1 = bottle (above) |
 | `textures/item/pen.png` | — | 16×16 brush icon |
 | `textures/item/ink_bottle.png` | — | 16×16 bottle icon |
+| `textures/item/ink_default.png` | — | Shared default ink layer used by untinted inks |
+| `textures/item/ink_bottle/<ink>.png` | — | Per-ink overlay (grayscale or colored) |

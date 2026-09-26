@@ -1,0 +1,17 @@
+{
+  "type": "gyromancy:ink_mixing",
+  "category": "misc",
+  "ink": "gyromancy:water_ink",
+  "amount": 6400,
+  "ingredients": [
+    {
+      "item": "gyromancy:fish_powder"
+    },
+    {
+      "item": "minecraft:ink_sac"
+    },
+    {
+      "item": "gyromancy:silver_powder"
+    }
+  ]
+}

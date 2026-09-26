@@ -20,6 +20,7 @@ public class InkType {
     private final float elementBoost;      // Multiplier for element concentration effects
     private final int manaValue;           // Value written to gyromancy:mana effect layer
     private final Map<String, Integer> effectKeys; // Additional effect layers (e.g. gyromancy:element)
+    private final int overlayTint;         // ARGB tint applied to the bottle's ink overlay layer
 
     private InkType(Builder builder) {
         this.id = builder.id;
@@ -29,6 +30,7 @@ public class InkType {
         this.elementBoost = Math.clamp(builder.elementBoost, 0f, 2f);
         this.manaValue = builder.manaValue;
         this.effectKeys = Collections.unmodifiableMap(new HashMap<>(builder.effectKeys));
+        this.overlayTint = builder.overlayTint;
     }
 
     public ResourceLocation getId() { return id; }
@@ -38,6 +40,13 @@ public class InkType {
     public float getElementBoost() { return elementBoost; }
     public int getManaValue() { return manaValue; }
     public Map<String, Integer> getEffectKeys() { return effectKeys; }
+
+    /**
+     * ARGB color multiplied onto the bottle's ink overlay layer.
+     * Use {@code 0xFFFFFFFF} to show a fully colored overlay texture as-is;
+     * set the ink color to tint a grayscale overlay.
+     */
+    public int getOverlayTint() { return overlayTint; }
 
     public static Builder builder(ResourceLocation id) {
         return new Builder(id);
@@ -51,6 +60,7 @@ public class InkType {
         private float elementBoost = 0.0f;
         private int manaValue = 10;
         private Map<String, Integer> effectKeys = Collections.emptyMap();
+        private int overlayTint = 0xFFFFFFFF;
 
         private Builder(ResourceLocation id) {
             this.id = id;
@@ -66,6 +76,8 @@ public class InkType {
             this.effectKeys.put(key, value);
             return this;
         }
+
+        public Builder overlayTint(int overlayTint) { this.overlayTint = overlayTint; return this; }
 
         public InkType build() {
             return new InkType(this);

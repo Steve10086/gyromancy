@@ -2,5 +2,37 @@
   "parent": "minecraft:item/generated",
   "textures": {
     "layer0": "gyromancy:item/ink_bottle"
-  }
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "gyromancy:ink": 1
+      },
+      "model": "gyromancy:item/ink_bottle/mana_ink"
+    },
+    {
+      "predicate": {
+        "gyromancy:ink": 2
+      },
+      "model": "gyromancy:item/ink_bottle/water_ink"
+    },
+    {
+      "predicate": {
+        "gyromancy:ink": 3
+      },
+      "model": "gyromancy:item/ink_bottle/fire_ink"
+    },
+    {
+      "predicate": {
+        "gyromancy:ink": 4
+      },
+      "model": "gyromancy:item/ink_bottle/earth_ink"
+    },
+    {
+      "predicate": {
+        "gyromancy:ink": 5
+      },
+      "model": "gyromancy:item/ink_bottle/wind_ink"
+    }
+  ]
 }

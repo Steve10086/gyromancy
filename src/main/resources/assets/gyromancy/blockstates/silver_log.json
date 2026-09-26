@@ -1,0 +1,28 @@
+{
+  "variants": {
+    "axis=x,is_leaf=false": {
+      "model": "gyromancy:block/silver_log_horizontal",
+      "x": 90,
+      "y": 90
+    },
+    "axis=y,is_leaf=false": {
+      "model": "gyromancy:block/silver_log"
+    },
+    "axis=z,is_leaf=false": {
+      "model": "gyromancy:block/silver_log_horizontal",
+      "x": 90
+    },
+    "axis=x,is_leaf=true": {
+      "model": "gyromancy:block/silver_log_leaf_horizontal",
+      "x": 90,
+      "y": 90
+    },
+    "axis=y,is_leaf=true": {
+      "model": "gyromancy:block/silver_log_leaf"
+    },
+    "axis=z,is_leaf=true": {
+      "model": "gyromancy:block/silver_log_leaf_horizontal",
+      "x": 90
+    }
+  }
+}

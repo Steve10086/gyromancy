@@ -3,12 +3,10 @@ package com.astune.gyromancy.item;
 import com.astune.gyromancy.api.canvas.CanvasPenTool;
 import com.astune.gyromancy.api.ink.InkType;
 import com.astune.gyromancy.api.ink.PenProperties;
-import com.astune.gyromancy.registry.GyromancyRegistries;
 import com.astune.gyromancy.registry.ModDataComponents;
 import com.astune.gyromancy.symbol.ManaPixelDetector;
 import com.astune.painter.api.*;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -59,8 +57,10 @@ public class PenItem extends Item implements IPaintProvider, CanvasPenTool {
     @Override
     public Optional<Stroke> canvasStroke(ItemStack stack, Player player) {
         InkType ink = resolveOffhandInk(player);
-        int manaId = ink != null ? ink.getManaValue() : DEFAULT_CANVAS_EFFECT;
-        return Optional.of(new Stroke(DEFAULT_CANVAS_COLOR, manaId));
+        if (ink == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new Stroke(DEFAULT_CANVAS_COLOR, ink.getManaValue()));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -154,14 +154,14 @@ public class PenItem extends Item implements IPaintProvider, CanvasPenTool {
 
         // Check and consume ink from offhand
         ItemStack offhand = player.getOffhandItem();
-        if (offhand.isEmpty() || !(offhand.getItem() instanceof InkBottleItem)) {
+        if (!InkBottleItem.hasInk(offhand)) {
             return false;
         }
-        int remaining = offhand.getOrDefault(ModDataComponents.INK_REMAINING.get(), 0);
-        if (remaining <= 0) return false;
 
-        if (consumeCounter % 10 == 0) offhand.set(ModDataComponents.INK_REMAINING.get(), remaining - 1);
-        consumeCounter = consumeCounter + 1 % 10;
+        if (consumeCounter % 10 == 0) {
+            InkBottleItem.consume(offhand, 1);
+        }
+        consumeCounter = (consumeCounter + 1) % 10;
         return true;
     }
 
@@ -172,11 +172,6 @@ public class PenItem extends Item implements IPaintProvider, CanvasPenTool {
     @Nullable
     private static InkType resolveOffhandInk(Player player) {
         ItemStack offhand = player.getOffhandItem();
-        if (offhand.isEmpty() || !(offhand.getItem() instanceof InkBottleItem)) {
-            return null;
-        }
-        ResourceLocation inkId = offhand.get(ModDataComponents.INK_TYPE.get());
-        if (inkId == null) return null;
-        return GyromancyRegistries.INK.get(inkId);
+        return InkBottleItem.hasInk(offhand) ? InkBottleItem.resolveInk(offhand) : null;
     }
 }

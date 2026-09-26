@@ -1,0 +1,17 @@
+{
+  "type": "gyromancy:ink_mixing",
+  "category": "misc",
+  "ink": "gyromancy:wind_ink",
+  "amount": 6400,
+  "ingredients": [
+    {
+      "item": "gyromancy:feather_powder"
+    },
+    {
+      "item": "minecraft:ink_sac"
+    },
+    {
+      "item": "gyromancy:silver_powder"
+    }
+  ]
+}

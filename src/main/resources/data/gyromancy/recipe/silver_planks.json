@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "group": "planks",
+  "ingredients": [
+    {
+      "item": "gyromancy:silver_log"
+    }
+  ],
+  "result": {
+    "id": "gyromancy:silver_planks",
+    "count": 4
+  }
+}

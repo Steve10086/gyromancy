@@ -1,6 +1,8 @@
 package com.astune.gyromancy.registry;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.ink.InkRegistry;
+import com.astune.gyromancy.item.InkBottleItem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
@@ -29,6 +31,8 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.PEN.get());
                         output.accept(ModItems.COMPASS.get());
                         output.accept(ModItems.INK_BOTTLE.get());
+                        output.accept(InkBottleItem.createFilled(
+                                InkRegistry.MANA_INK, InkBottleItem.MAX_INK));
                         output.accept(ModItems.CANVAS.get());
                         output.accept(ModItems.COPPER_RING.get());
                         output.accept(ModItems.COPPER_NUGGET.get());
@@ -42,6 +46,18 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.EARTH_CRYSTAL.get());
                         output.accept(ModItems.LIGHT_CRYSTAL.get());
                         output.accept(ModItems.DARK_CRYSTAL.get());
+                        output.accept(ModItems.SILVER_LOG.get());
+                        output.accept(ModItems.SILVER_PLANKS.get());
+                        output.accept(ModItems.SILVER_LEAVES.get());
+                        output.accept(ModItems.WITHERED_SILVER_LEAVES.get());
+                        output.accept(ModItems.SILVER_SAPLING.get());
+                        output.accept(ModItems.SILVER_BRANCH.get());
+                        output.accept(ModItems.MORTAR.get());
+                        output.accept(ModItems.SILVER_POWDER.get());
+                        output.accept(ModItems.FEATHER_POWDER.get());
+                        output.accept(ModItems.DEEPSLATE_POWDER.get());
+                        output.accept(ModItems.FISH_POWDER.get());
+                        output.accept(ModItems.CHARCOAL_POWDER.get());
                     })
                     .build());
 }

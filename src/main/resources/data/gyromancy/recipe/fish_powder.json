@@ -1,0 +1,11 @@
+{
+  "type": "gyromancy:mortar_grinding",
+  "category": "misc",
+  "ingredient": {
+    "tag": "minecraft:fishes"
+  },
+  "result": {
+    "id": "gyromancy:fish_powder",
+    "count": 1
+  }
+}

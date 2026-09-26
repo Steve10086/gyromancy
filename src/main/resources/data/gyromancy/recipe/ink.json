@@ -3,18 +3,15 @@
   "category": "misc",
   "pattern": [
     " B ",
-    " I ",
+    "   ",
     " D "
   ],
   "key": {
-    "D": {
-      "item": "minecraft:glass_bottle"
-    },
     "B": {
       "tag": "minecraft:wooden_buttons"
     },
-    "I": {
-      "item": "minecraft:ink_sac"
+    "D": {
+      "item": "minecraft:glass_bottle"
     }
   },
   "result": {

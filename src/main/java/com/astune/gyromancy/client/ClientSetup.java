@@ -24,12 +24,15 @@ import com.astune.gyromancy.registry.ModItems;
 import com.astune.gyromancy.registry.ModMenus;
 import com.astune.gyromancy.client.wand.WandScreen;
 import com.astune.gyromancy.client.canvas.RuneCarvingScreen;
+import com.astune.gyromancy.api.ink.InkType;
+import com.astune.gyromancy.item.InkBottleItem;
 import com.astune.painter.api.imageProvider.CanvasImageProviderRegistry;
 import com.astune.painter.api.render.CanvasRendererRegistry;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
+import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
@@ -67,6 +70,10 @@ public final class ClientSetup {
                     ModItems.COMPASS.get(),
                     ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "stored_pen"),
                     (stack, level, entity, seed) -> CompassItem.hasStoredPen(stack) ? 1.0F : 0.0F);
+            ItemProperties.register(
+                    ModItems.INK_BOTTLE.get(),
+                    ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "ink"),
+                    (stack, level, entity, seed) -> InkBottleItem.inkStyleId(stack));
             Gyromancy.LOGGER.info("[Gyromancy] Glyph render pipeline registered");
         });
     }
@@ -80,6 +87,21 @@ public final class ClientSetup {
     static void registerClientTooltipComponents(
             RegisterClientTooltipComponentFactoriesEvent event) {
         event.register(CanvasTooltipImage.class, CanvasTooltipComponent::new);
+    }
+
+    @SubscribeEvent
+    static void registerItemColors(RegisterColorHandlersEvent.Item event) {
+        event.register((stack, tintIndex) -> {
+            if (tintIndex != 0 || !InkBottleItem.hasInk(stack)) {
+                return -1;
+            }
+            InkType ink = InkBottleItem.resolveInk(stack);
+            if (ink == null) {
+                return -1;
+            }
+            int tint = ink.getOverlayTint();
+            return (tint | 0xFF000000) == 0xFFFFFFFF ? -1 : tint;
+        }, ModItems.INK_BOTTLE.get());
     }
 
     @SubscribeEvent

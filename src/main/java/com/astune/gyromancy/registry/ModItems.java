@@ -86,4 +86,49 @@ public final class ModItems {
 
     public static final DeferredItem<Item> DARK_CRYSTAL = ITEMS.register(
             "dark_crystal", () -> new Item(new Item.Properties()));
+
+    /** Placeable silver tree log. */
+    public static final DeferredItem<BlockItem> SILVER_LOG = ITEMS.register(
+            "silver_log", () -> new BlockItem(ModBlocks.SILVER_LOG.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_PLANKS = ITEMS.register(
+            "silver_planks", () -> new BlockItem(ModBlocks.SILVER_PLANKS.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_LEAVES = ITEMS.register(
+            "silver_leaves", () -> new BlockItem(ModBlocks.SILVER_LEAVES.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> WITHERED_SILVER_LEAVES = ITEMS.register(
+            "withered_silver_leaves",
+            () -> new BlockItem(ModBlocks.WITHERED_SILVER_LEAVES.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_SAPLING = ITEMS.register(
+            "silver_sapling", () -> new BlockItem(ModBlocks.SILVER_SAPLING.get(), new Item.Properties()));
+
+    /** Drop of withered silver leaves; grinding input for silver powder. */
+    public static final DeferredItem<Item> SILVER_BRANCH = ITEMS.register(
+            "silver_branch", () -> new Item(new Item.Properties()));
+
+    /** Fixed durability of the crafting mortar. */
+    public static final int MORTAR_DURABILITY = 256;
+
+    /** Crafting mortar used to grind silver materials; damaged instead of consumed. */
+    public static final DeferredItem<Item> MORTAR = ITEMS.register(
+            "mortar", () -> new Item(new Item.Properties().durability(MORTAR_DURABILITY)));
+
+    /** Ground silver tree product; no further use yet. */
+    public static final DeferredItem<Item> SILVER_POWDER = ITEMS.register(
+            "silver_powder", () -> new Item(new Item.Properties()));
+
+    /** Mortar-ground powders; no further use yet. */
+    public static final DeferredItem<Item> FEATHER_POWDER = ITEMS.register(
+            "feather_powder", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> DEEPSLATE_POWDER = ITEMS.register(
+            "deepslate_powder", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> FISH_POWDER = ITEMS.register(
+            "fish_powder", () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> CHARCOAL_POWDER = ITEMS.register(
+            "charcoal_powder", () -> new Item(new Item.Properties()));
 }

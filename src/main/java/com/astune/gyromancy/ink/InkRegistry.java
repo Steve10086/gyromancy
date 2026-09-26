@@ -24,12 +24,28 @@ public final class InkRegistry {
 
     /** Mana id written by the default mana ink; also the wand projection id. */
     public static final int MANA_INK_ID = 20;
+    public static final int WATER_INK_ID = 21;
+    public static final int FIRE_INK_ID = 22;
+    public static final int EARTH_INK_ID = 23;
+    public static final int WIND_INK_ID = 24;
 
+    /** Registry id of the default mana ink, shared with the creative tab. */
+    public static final ResourceLocation MANA_INK =
+            ResourceLocation.fromNamespaceAndPath(Gyromancy.MODID, "mana_ink");
+
+    /**
+     * Registration order defines the ink registry ids and therefore the
+     * {@code gyromancy:ink} model override values (registry id + 1).
+     */
     private static final InkDef[] INKS = {
-            new InkDef("mana_ink", 0xFFFFFFFF, MANA_INK_ID),
+            new InkDef("mana_ink", 0xFFFFFFFF, MANA_INK_ID, 0xFFFFFFFF),
+            new InkDef("water_ink", 0xFF7FC8F8, WATER_INK_ID, 0xFF1E4FBF),
+            new InkDef("fire_ink", 0xFFFF8A80, FIRE_INK_ID, 0xFFFF0000),
+            new InkDef("earth_ink", 0xFFCFA47A, EARTH_INK_ID, 0xFF8B5A2B),
+            new InkDef("wind_ink", 0xFFB7E8A0, WIND_INK_ID, 0xFF90EE90),
     };
 
-    record InkDef(String name, int color, int manaValue) {}
+    record InkDef(String name, int color, int manaValue, int overlayTint) {}
 
     // ═══════════════════ Registration ═══════════════════
 
@@ -41,6 +57,7 @@ public final class InkRegistry {
                 InkType ink = InkType.builder(id)
                         .color(def.color)
                         .manaValue(def.manaValue)
+                        .overlayTint(def.overlayTint)
                         .build();
                 registry.register(id, ink);
             }

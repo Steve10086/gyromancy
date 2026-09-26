@@ -21,8 +21,13 @@ public final class ManaIdTable {
     private static final Set<Integer> WARNED = new HashSet<>();
 
     static {
+        // Rows follow ElementType order: wind, fire, water, earth, light, dark, space, time, mana.
         register(FALLBACK_ID, 1, 1, 1, 1, 1, 1, 1, 1, 1);
         register(InkRegistry.MANA_INK_ID, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        register(InkRegistry.WATER_INK_ID, 0, 0, 1, 0, 0, 0, 0, 0, 0);
+        register(InkRegistry.FIRE_INK_ID, 0, 1, 0, 0, 0, 0, 0, 0, 0);
+        register(InkRegistry.EARTH_INK_ID, 0, 0, 0, 1, 0, 0, 0, 0, 0);
+        register(InkRegistry.WIND_INK_ID, 1, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     private ManaIdTable() {}
