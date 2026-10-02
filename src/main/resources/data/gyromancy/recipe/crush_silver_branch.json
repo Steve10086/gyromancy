@@ -1,0 +1,13 @@
+{
+  "type": "gyromancy:crush",
+  "ingredient": {
+    "item": "gyromancy:silver_branch"
+  },
+  "results": [
+    {
+      "id": "gyromancy:silver_powder",
+      "count": 1
+    }
+  ],
+  "level": 1
+}

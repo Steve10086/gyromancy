@@ -1,0 +1,13 @@
+{
+  "type": "gyromancy:crush",
+  "ingredient": {
+    "item": "gyromancy:earth_crystal"
+  },
+  "results": [
+    {
+      "id": "gyromancy:earth_crystal_powder",
+      "count": 1
+    }
+  ],
+  "level": 2
+}

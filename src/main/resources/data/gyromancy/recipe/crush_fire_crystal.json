@@ -1,0 +1,13 @@
+{
+  "type": "gyromancy:crush",
+  "ingredient": {
+    "item": "gyromancy:fire_crystal"
+  },
+  "results": [
+    {
+      "id": "gyromancy:fire_crystal_powder",
+      "count": 1
+    }
+  ],
+  "level": 2
+}

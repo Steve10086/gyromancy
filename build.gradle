@@ -65,6 +65,8 @@ repositories {
         url = "https://maven.blamejared.com/"
         content {
             includeGroup "foundry.veil"
+            includeGroup "gg.moonflower"
+            includeGroup "io.github.ocelot"
             includeGroup "mezz.jei"
         }
     }

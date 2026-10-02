@@ -1,5 +1,7 @@
 package com.astune.gyromancy.compile.operator;
 
+import com.astune.painter.block.CanvasBlock;
+import com.astune.painter.block.CanvasBlockEntity;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.element.ElementType;
 import com.astune.gyromancy.element.ElementStorageManager;
@@ -12,13 +14,17 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.common.util.FakePlayer;
+import net.neoforged.neoforge.common.util.FakePlayerFactory;
 
 import java.util.List;
 
@@ -68,33 +74,53 @@ public final class CrushOp extends OnEntityTickOp {
 
     @Override
     public void onEntityTick(EntityTickContext ctx) {
-        if (ctx.isClientSide()) return;
+        if (ctx.isClientSide() || !(ctx.level() instanceof ServerLevel serverLevel)) return;
 
         List<BlockPos> positions = MagicBallGeometry.positionsInSphere(center, radius);
         if (positions.isEmpty()) return;
+        FakePlayer harvestPlayer = FakePlayerFactory.getMinecraft(serverLevel);
 
         ElementStorageManager storage = ctx.elementStorage();
-        double average = (double) storage.sum(ctx.level(), positions, ElementType.EARTH)
-                / positions.size();
+        long earthTotal = storage.sum(ctx.level(), positions, ElementType.EARTH);
+        double average = (double) earthTotal / positions.size();
         int strength = CrushLogic.strengthForAverage(average);
+        boolean belowMinimum = storage.anyBelow(ctx.level(), positions, ElementType.EARTH,
+                CrushLogic.MIN_ELEMENT);
+        Gyromancy.LOGGER.debug(
+                "[CrushDebug] execute center={} radius={} sphereBlocks={} earthTotal={} averageEarth={} strength={} belowMinimum={}",
+                center, radius, positions.size(), earthTotal, average, strength, belowMinimum);
 
-        if (storage.anyBelow(ctx.level(), positions, ElementType.EARTH, CrushLogic.MIN_ELEMENT)) {
-            return;
-        }
+        if (belowMinimum) return;
 
         // Pre-existing drops are processed before this crush spawns its own.
         crushItems(ctx, strength);
-        crushBlocks(ctx, positions, strength);
+        crushBlocks(ctx, positions, strength, harvestPlayer);
         damageEntities(ctx, strength);
         storage.consumeFromEach(ctx.level(), positions, ElementType.EARTH,
                 (long) strength * CrushLogic.CONSUME_PER_STRENGTH);
     }
 
-    private void crushBlocks(EntityTickContext ctx, List<BlockPos> positions, int strength) {
+    private void crushBlocks(EntityTickContext ctx, List<BlockPos> positions, int strength,
+                             FakePlayer harvestPlayer) {
         for (BlockPos pos : positions) {
             BlockState state = ctx.level().getBlockState(pos);
-            int level = CrushLogic.shellLevel(radius, center.distanceTo(pos.getCenter()), strength);
-            if (!CrushLogic.canCrush(ctx.level(), pos, state, level)) continue;
+            double distance = center.distanceTo(pos.getCenter());
+            int level = CrushLogic.shellLevel(radius, distance, strength);
+            ItemStack harvestTool = new ItemStack(CrushLogic.harvestToolForLevel(level));
+            harvestPlayer.setItemInHand(InteractionHand.MAIN_HAND, harvestTool);
+            boolean canCrush = CrushLogic.canCrush(ctx.level(), pos, state, harvestPlayer);
+            if (state.is(Blocks.OBSIDIAN) || state.is(Blocks.CRYING_OBSIDIAN)
+                    || state.getBlock() instanceof CanvasBlock) {
+                BlockState mimickedState = ctx.level().getBlockEntity(pos)
+                        instanceof CanvasBlockEntity canvas ? canvas.getMimickedState() : null;
+                Gyromancy.LOGGER.debug(
+                        "[CrushDebug] harvest pos={} state={} mimickedState={} distance={} shellLevel={} tool={} destroyProgress={} canHarvest={} canCrush={}",
+                        pos, state, mimickedState, distance, level, harvestTool,
+                        state.getDestroyProgress(harvestPlayer, ctx.level(), pos),
+                        state.getBlock().canHarvestBlock(state, ctx.level(), pos, harvestPlayer),
+                        canCrush);
+            }
+            if (!canCrush) continue;
             ctx.level().destroyBlock(pos, true);
             spawnCrushParticles(ctx, pos);
         }
@@ -140,11 +166,13 @@ public final class CrushOp extends OnEntityTickOp {
     /** Drops the multiplied result where the consumed stack stood, splitting stacks. */
     private static void dropInPlace(EntityTickContext ctx, Vec3 position, ItemStack result,
                                     int multiplier) {
-        int remaining = result.getCount() * multiplier;
+        if (result.isEmpty() || multiplier <= 0) return;
+
+        long remaining = (long) result.getCount() * multiplier;
         int maxStackSize = Math.max(1, result.getMaxStackSize());
         while (remaining > 0) {
-            int size = Math.min(remaining, maxStackSize);
-            ctx.level().addFreshEntity(new ItemEntity(ctx.level(), position.x, position.y,
+            int size = (int) Math.min(remaining, maxStackSize);
+            ctx.addFreshEntity(new ItemEntity(ctx.level(), position.x, position.y,
                     position.z, result.copyWithCount(size)));
             remaining -= size;
         }

@@ -1,16 +1,17 @@
 package com.astune.gyromancy.compile.operator;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.common.Tags;
 
 /**
- * Pure rules for the crush instant effect: strength, shell-based mining level,
- * vanilla tier requirements, and the arrow-driven centre offset.
+ * Rules for the crush instant effect: strength, shell-based mining level,
+ * position-aware harvesting, and the arrow-driven centre offset.
  */
 public final class CrushLogic {
     /** Minimum earth concentration every cell in range must hold. */
@@ -37,22 +38,28 @@ public final class CrushLogic {
         return Math.max(1, base) + Math.max(0, strength);
     }
 
-    /** Vanilla mining tiers: 0 wood, 1 stone, 2 iron, 3 diamond, 4 netherite. */
-    public static int requiredTier(BlockState state) {
-        if (!state.requiresCorrectToolForDrops()) return 0;
-        if (state.is(Tags.Blocks.NEEDS_NETHERITE_TOOL)) return 4;
-        if (state.is(BlockTags.NEEDS_DIAMOND_TOOL)) return 3;
-        if (state.is(BlockTags.NEEDS_IRON_TOOL)) return 2;
-        if (state.is(BlockTags.NEEDS_STONE_TOOL)) return 1;
-        return 0;
+    /** Maps crush level one through five to the equivalent vanilla pickaxe tier. */
+    public static Item harvestToolForLevel(int level) {
+        return switch (Mth.clamp(level, 1, 5)) {
+            case 1 -> Items.WOODEN_PICKAXE;
+            case 2 -> Items.STONE_PICKAXE;
+            case 3 -> Items.IRON_PICKAXE;
+            case 4 -> Items.DIAMOND_PICKAXE;
+            default -> Items.NETHERITE_PICKAXE;
+        };
     }
 
-    /** A block is crushed when it is breakable and its tier is below the level. */
-    public static boolean canCrush(Level level, BlockPos pos, BlockState state, int tier) {
+    /**
+     * A block is crushed when it is breakable and the representative tool can
+     * harvest it. The position-aware Block API lets wrappers such as canvas
+     * blocks delegate this check to the state they mimic.
+     */
+    public static boolean canCrush(Level level, BlockPos pos, BlockState state,
+                                  Player harvestPlayer) {
         if (state.isAir()) return false;
         if (!state.getFluidState().isEmpty()) return false;
-        if (state.getDestroySpeed(level, pos) < 0.0F) return false;
-        return requiredTier(state) < tier;
+        if (!(state.getDestroyProgress(harvestPlayer, level, pos) > 0.0F)) return false;
+        return state.getBlock().canHarvestBlock(state, level, pos, harvestPlayer);
     }
 
     /**

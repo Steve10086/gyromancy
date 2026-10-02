@@ -1,0 +1,13 @@
+{
+  "type": "gyromancy:crush",
+  "ingredient": {
+    "item": "gyromancy:water_crystal"
+  },
+  "results": [
+    {
+      "id": "gyromancy:water_crystal_powder",
+      "count": 1
+    }
+  ],
+  "level": 2
+}

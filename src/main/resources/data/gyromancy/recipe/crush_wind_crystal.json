@@ -1,0 +1,13 @@
+{
+  "type": "gyromancy:crush",
+  "ingredient": {
+    "item": "gyromancy:wind_crystal"
+  },
+  "results": [
+    {
+      "id": "gyromancy:wind_crystal_powder",
+      "count": 1
+    }
+  ],
+  "level": 2
+}

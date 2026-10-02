@@ -1,0 +1,13 @@
+{
+  "type": "gyromancy:crush",
+  "ingredient": {
+    "item": "minecraft:feather"
+  },
+  "results": [
+    {
+      "id": "gyromancy:feather_powder",
+      "count": 1
+    }
+  ],
+  "level": 1
+}

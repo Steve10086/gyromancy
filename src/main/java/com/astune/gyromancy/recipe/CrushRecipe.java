@@ -17,6 +17,7 @@ import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * One-shot crush recipe: a single input material is pulverized into one or
@@ -33,10 +34,11 @@ public final class CrushRecipe implements Recipe<SingleRecipeInput> {
     private final int requiredLevel;
 
     public CrushRecipe(Ingredient ingredient, List<ItemStack> results, int requiredLevel) {
-        if (results == null || results.isEmpty()) {
-            throw new IllegalArgumentException("Crush recipes need at least one result");
+        this.ingredient = Objects.requireNonNull(ingredient, "ingredient");
+        if (results == null || results.isEmpty()
+                || results.stream().anyMatch(result -> result == null || result.isEmpty())) {
+            throw new IllegalArgumentException("Crush recipes need at least one non-empty result");
         }
-        this.ingredient = ingredient;
         this.results = results.stream().map(ItemStack::copy).toList();
         this.requiredLevel = Math.clamp(requiredLevel, 1, MAX_LEVEL);
     }
@@ -46,9 +48,9 @@ public final class CrushRecipe implements Recipe<SingleRecipeInput> {
         return ingredient;
     }
 
-    /** The products of one crushed input item. */
+    /** Copies of the products of one crushed input item. */
     public List<ItemStack> results() {
-        return results;
+        return results.stream().map(ItemStack::copy).toList();
     }
 
     /** Minimum crushing level at the input's position. */
@@ -73,7 +75,7 @@ public final class CrushRecipe implements Recipe<SingleRecipeInput> {
 
     @Override
     public ItemStack getResultItem(HolderLookup.Provider registries) {
-        return results.getFirst();
+        return results.getFirst().copy();
     }
 
     @Override

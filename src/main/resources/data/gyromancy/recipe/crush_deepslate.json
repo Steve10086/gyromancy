@@ -1,0 +1,13 @@
+{
+  "type": "gyromancy:crush",
+  "ingredient": {
+    "item": "minecraft:deepslate"
+  },
+  "results": [
+    {
+      "id": "gyromancy:deepslate_powder",
+      "count": 1
+    }
+  ],
+  "level": 1
+}

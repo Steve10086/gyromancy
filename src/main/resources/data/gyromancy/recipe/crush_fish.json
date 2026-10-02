@@ -1,0 +1,13 @@
+{
+  "type": "gyromancy:crush",
+  "ingredient": {
+    "tag": "minecraft:fishes"
+  },
+  "results": [
+    {
+      "id": "gyromancy:fish_powder",
+      "count": 1
+    }
+  ],
+  "level": 1
+}

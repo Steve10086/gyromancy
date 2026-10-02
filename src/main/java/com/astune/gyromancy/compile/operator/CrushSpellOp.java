@@ -107,8 +107,16 @@ public final class CrushSpellOp extends EntityEffectOp {
 
         float radius = scale(context);
         Vec3 normal = context.normalFor(boundary);
-        double offset = CrushLogic.centerOffset(upwardComponent(context, normal), radius);
-        Vec3 center = context.positionFor(boundary).add(normal.scale(offset));
+        double arrowResidual = upwardComponent(context, normal);
+        double offset = CrushLogic.centerOffset(arrowResidual, radius);
+        Vec3 origin = context.positionFor(boundary);
+        Vec3 center = origin.add(normal.scale(offset));
+
+        PositionedGlyph liveBoundary = context.liveGlyph(boundary);
+        Gyromancy.LOGGER.debug(
+                "[CrushDebug] activation glyph={} size={}x{} radius={} origin={} normal={} arrowResidual={} offset={} center={}",
+                boundary.glyphUuid(), liveBoundary.length(), liveBoundary.width(), radius,
+                origin, normal, arrowResidual, offset, center);
 
         List<EntityPayload> payloads = payload(List.of(new CrushOp(radius, center)), context);
         new InstantEffect(context.level(), center, radius, normal, payloads).executeOnce();

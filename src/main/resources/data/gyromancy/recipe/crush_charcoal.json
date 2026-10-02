@@ -1,0 +1,13 @@
+{
+  "type": "gyromancy:crush",
+  "ingredient": {
+    "item": "minecraft:charcoal"
+  },
+  "results": [
+    {
+      "id": "gyromancy:charcoal_powder",
+      "count": 1
+    }
+  ],
+  "level": 1
+}

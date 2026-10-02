@@ -1,0 +1,13 @@
+{
+  "type": "gyromancy:crush",
+  "ingredient": {
+    "item": "gyromancy:light_crystal"
+  },
+  "results": [
+    {
+      "id": "gyromancy:light_crystal_powder",
+      "count": 1
+    }
+  ],
+  "level": 2
+}
