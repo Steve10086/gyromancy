@@ -3,7 +3,6 @@ package com.astune.gyromancy.compile.operator;
 import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.api.array.ArrayObject;
 import com.astune.gyromancy.entity.ArrayRelativePosition;
-import com.astune.gyromancy.entity.MagicEntity;
 import com.astune.gyromancy.registry.ModAttachments;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -63,7 +62,7 @@ public final class FollowingOp extends OnEntityTickOp {
             updateArrayRelativePosition(ctx, array);
         } else if (parent instanceof Entity entity) {
             updateEntityRelativePosition(ctx, entity);
-        } else if (ctx.owner() instanceof MagicEntity effect && effect.parentPending()) {
+        } else if (ctx.owner() != null && ctx.owner().parentPending()) {
             return;
         } else {
             stopFollowing();

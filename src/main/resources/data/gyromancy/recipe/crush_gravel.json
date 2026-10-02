@@ -1,0 +1,13 @@
+{
+  "type": "gyromancy:crush",
+  "ingredient": {
+    "item": "minecraft:gravel"
+  },
+  "results": [
+    {
+      "id": "minecraft:sand",
+      "count": 1
+    }
+  ],
+  "level": 2
+}

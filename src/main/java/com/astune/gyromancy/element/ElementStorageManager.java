@@ -142,6 +142,35 @@ public final class ElementStorageManager implements IElementStorage {
         }
     }
 
+    /** Returns whether any supplied position holds less than {@code minimum}. */
+    public boolean anyBelow(
+            Level level, Iterable<BlockPos> positions, ElementType type, long minimum) {
+        try (Batch batch = new Batch(level)) {
+            for (BlockPos pos : positions) {
+                if (batch.get(pos).get(type) < minimum) return true;
+            }
+            return false;
+        }
+    }
+
+    /** Removes up to {@code amount} from every position and returns the total taken. */
+    public long consumeFromEach(
+            Level level, Iterable<BlockPos> positions, ElementType type, long amount) {
+        if (amount <= 0L) return 0L;
+        long consumed = 0L;
+        try (Batch batch = new Batch(level)) {
+            for (BlockPos pos : positions) {
+                ElementConcentrations current = batch.get(pos);
+                long available = Math.max(0L, current.get(type));
+                long taken = Math.min(available, amount);
+                if (taken == 0L) continue;
+                batch.set(pos, current.withValue(type, current.get(type) - taken));
+                consumed += taken;
+            }
+        }
+        return consumed;
+    }
+
     /** Drains every positive value of one element and returns the total. */
     public long drainPositive(
             Level level, Iterable<BlockPos> positions, ElementType type) {

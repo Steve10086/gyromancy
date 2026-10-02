@@ -2,6 +2,8 @@ package com.astune.gyromancy;
 
 import com.astune.gyromancy.command.DebugCommands;
 import com.astune.gyromancy.array.MagicArrayDetector;
+import com.astune.gyromancy.array.compile.OpDefinitionRegistry;
+import com.astune.gyromancy.compile.operator.CrushSpellOp;
 import com.astune.gyromancy.compile.operator.LoopOp;
 import com.astune.gyromancy.compile.operator.TriggerOp;
 import com.astune.gyromancy.element.ElementChunkEventHandler;
@@ -32,6 +34,11 @@ public class Gyromancy {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public Gyromancy(IEventBus modEventBus, ModContainer modContainer) {
+        // Built-in ops register through @RegisteredOp discovery. Development
+        // scan data can lag behind newly added classes, so the newest root op
+        // is also injected explicitly; duplicate registration is a no-op.
+        OpDefinitionRegistry.register(CrushSpellOp.DEFINITION);
+
         // ── FML lifecycle ──
         modEventBus.addListener(this::commonSetup);
 
@@ -46,6 +53,7 @@ public class Gyromancy {
         ModDataComponents.DATA_COMPONENTS.register(modEventBus);
         ModIngredients.INGREDIENT_TYPES.register(modEventBus);
         ModRecipes.RECIPE_SERIALIZERS.register(modEventBus);
+        ModRecipes.RECIPE_TYPES.register(modEventBus);
         ModMenus.MENUS.register(modEventBus);
         ModSymbols.register(modEventBus);
         ModEntityDataSerializers.register(modEventBus);

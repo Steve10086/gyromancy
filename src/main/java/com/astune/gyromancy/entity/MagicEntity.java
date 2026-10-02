@@ -1,8 +1,10 @@
 package com.astune.gyromancy.entity;
 
 import com.astune.gyromancy.api.array.ArrayObject;
+import com.astune.gyromancy.api.effect.MagicEffect;
 import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.EntityTickContext;
+import com.astune.gyromancy.compile.operator.PayloadRunner;
 import com.astune.gyromancy.registry.ModAttachments;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -17,6 +19,7 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
@@ -26,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-public abstract class MagicEntity extends Entity {
+public abstract class MagicEntity extends Entity implements MagicEffect {
     private static final EntityDataAccessor<CompoundTag> DATA_PAYLOAD =
             SynchedEntityData.defineId(MagicEntity.class, EntityDataSerializers.COMPOUND_TAG);
     private static final EntityDataAccessor<CompoundTag> DATA_PAYLOAD_STATES =
@@ -93,6 +96,11 @@ public abstract class MagicEntity extends Entity {
 
     /** The world positions covered by this effect's active geometry. */
     public abstract List<BlockPos> listInside();
+
+    @Override
+    public AABB bounds() {
+        return getBoundingBox();
+    }
 
     protected Map<String, Object> runtimeData() {
         return runtimeData;
@@ -194,12 +202,8 @@ public abstract class MagicEntity extends Entity {
     private void tickPayloads() {
         initializeDefaultPayload();
         EntityTickContext ctx = payloadContext(runtimeData);
-        for (EntityPayload op : payload) {
-            if (level().isClientSide && !op.ticksOnClient()) continue;
-            op.onEntityTick(ctx);
-            if (!isAlive()) return;
-        }
-        if (!level().isClientSide) syncDirtyClientPayloadStates();
+        PayloadRunner.run(payload, ctx);
+        if (isAlive() && !level().isClientSide) syncDirtyClientPayloadStates();
     }
 
     @Override

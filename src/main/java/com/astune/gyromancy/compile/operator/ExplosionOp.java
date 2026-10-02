@@ -41,7 +41,7 @@ public final class ExplosionOp extends TriggerOp {
         if (!ctx.isClientSide()) {
             float power = (float) (ctx.floatValue(EXPLOSION_POWER_KEY, 1.5f) * DAMAGE_FACTOR);
             boolean canDestroyBlocks = ctx.size() > MIN_EXPLOSION_SIZE;
-            ctx.level().explode(ctx.owner(), ctx.owner().getX(), ctx.owner().getY(), ctx.owner().getZ(),
+            ctx.level().explode(ctx.owner().entity(), ctx.position().x, ctx.position().y, ctx.position().z,
                     power, true, canDestroyBlocks
                             ? Level.ExplosionInteraction.MOB
                             : Level.ExplosionInteraction.NONE);
@@ -52,7 +52,7 @@ public final class ExplosionOp extends TriggerOp {
 
     private static void burnEntitiesInPath(EntityTickContext ctx) {
         var searchBox = ctx.bounds().expandTowards(ctx.velocity()).inflate(0.3);
-        ctx.level().getEntitiesOfClass(Entity.class, searchBox, e -> e != ctx.owner()).forEach(target -> {
+        ctx.level().getEntitiesOfClass(Entity.class, searchBox, e -> e != ctx.owner().entity()).forEach(target -> {
             if (target instanceof ItemEntity || target instanceof AbstractArrow) {
                 target.setRemainingFireTicks(200);
             }
@@ -61,7 +61,7 @@ public final class ExplosionOp extends TriggerOp {
 
     private static void igniteNearbyBlocks(EntityTickContext ctx, float power) {
         int radius = Math.max(1, (int)Math.ceil(power));
-        BlockPos center = ctx.owner().blockPosition();
+        BlockPos center = BlockPos.containing(ctx.position());
         for (BlockPos pos : BlockPos.betweenClosed(center.offset(-radius, -radius, -radius),
                 center.offset(radius, radius, radius))) {
             if (!ctx.level().isEmptyBlock(pos)) continue;

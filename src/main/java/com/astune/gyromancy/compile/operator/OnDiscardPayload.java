@@ -1,6 +1,7 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.api.array.ArrayObject;
+import com.astune.gyromancy.api.effect.MagicEffect;
 import com.astune.gyromancy.array.runtime.ArrayEffectLifecycle;
 import com.astune.gyromancy.array.runtime.OpRuntimeFailure;
 import com.astune.gyromancy.array.runtime.OpRuntimeContext;
@@ -13,7 +14,6 @@ import com.astune.gyromancy.registry.ModAttachments;
 import com.mojang.serialization.Codec;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 
 import java.util.UUID;
@@ -68,7 +68,7 @@ public final class OnDiscardPayload extends EntityPayload {
     }
 
     @Override
-    public void onOwnerRemoved(Level level, Entity owner) {
+    public void onOwnerRemoved(Level level, MagicEffect owner) {
         if (triggered || !(level instanceof ServerLevel server)) return;
         triggered = true;
 
@@ -96,7 +96,7 @@ public final class OnDiscardPayload extends EntityPayload {
         }
     }
 
-    private OpRuntimeContext runtimeContext(ServerLevel level, Entity owner) {
+    private OpRuntimeContext runtimeContext(ServerLevel level, MagicEffect owner) {
         OpRuntimeContext runtime = new OpRuntimeContext(level, parentOp, owner.position(), null)
                 .withoutParent();
         if (content.arrayId() == null) return runtime;

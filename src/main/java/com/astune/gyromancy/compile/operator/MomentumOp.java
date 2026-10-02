@@ -1,6 +1,7 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.effect.MagicEffect;
 import com.astune.gyromancy.api.geometry.SurfaceFrame;
 import com.astune.gyromancy.api.symbol.PositionedGlyph;
 import com.astune.gyromancy.array.compile.OpInput;
@@ -13,12 +14,10 @@ import com.astune.gyromancy.compile.vector.VectorContext;
 import com.astune.gyromancy.compile.vector.VectorOp;
 import com.astune.gyromancy.compile.vector.VectorOpDefinitions;
 import com.astune.gyromancy.compile.vector.VectorOpSerialization;
-import com.astune.gyromancy.entity.MagicEntity;
 import com.astune.gyromancy.symbol.SymbolCatalog;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -581,13 +580,12 @@ public final class MomentumOp extends OnEntityTickOp implements CompiledOp,
     }
 
     private static double gravityFor(OpRuntimeContext context) {
-        if (context == null || !(context.parent() instanceof Entity entity)) return 0.0;
-        return gravityFor(entity);
+        if (context == null || !(context.parent() instanceof MagicEffect effect)) return 0.0;
+        return effect.gravity();
     }
 
-    private static double gravityFor(Entity entity) {
-        if (entity instanceof MagicEntity magic) return magic.gravity();
-        return entity == null ? 0.0 : entity.getGravity();
+    private static double gravityFor(MagicEffect effect) {
+        return effect == null ? 0.0 : effect.gravity();
     }
 
     private static Vec3 directionOrZero(Vec3 direction) {

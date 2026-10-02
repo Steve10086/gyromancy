@@ -48,7 +48,7 @@ public final class TornadoImpactOp extends TriggerOp {
         Vec3 center = ctx.position();
         double maxDistanceSqr = radius * radius;
         AABB searchBox = ctx.bounds().inflate(radius);
-        for (Entity target : ctx.level().getEntities(ctx.owner(), searchBox,
+        for (Entity target : ctx.level().getEntities(ctx.owner().entity(), searchBox,
                 entity -> entity.isAlive())) {
             Vec3 offset = target.getBoundingBox().getCenter().subtract(center);
             double distanceSqr = offset.lengthSqr();

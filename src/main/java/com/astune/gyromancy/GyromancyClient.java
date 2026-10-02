@@ -12,6 +12,7 @@ import com.astune.gyromancy.client.canvas.CanvasEditorKeyMappings;
 import com.astune.gyromancy.client.effect.ClientEffectLifecycle;
 import com.astune.gyromancy.client.effect.ClientRayEffects;
 import com.astune.gyromancy.client.effect.FlipbookEffect;
+import com.astune.gyromancy.client.effect.InstantSpellEffects;
 import com.astune.gyromancy.client.effect.PhotonFxWarmup;
 import com.astune.gyromancy.client.effect.PhotonRuntimeFilterLayer;
 import com.astune.gyromancy.client.effect.VortexOrbitEffect;
@@ -111,6 +112,9 @@ public class GyromancyClient {
 
         NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(
                 FlipbookEffect::onRenderLevelStage);
+
+        NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(
+                InstantSpellEffects::onRenderLevelStage);
 
         NeoForge.EVENT_BUS.<RenderLevelStageEvent>addListener(
                 WandProjectionGlowRenderer::onRenderLevelStage);

@@ -98,5 +98,11 @@ public final class ModNetwork {
                 CrystalGrowthPacket.STREAM_CODEC,
                 CrystalGrowthPacket::handleClient
         );
+
+        registrar.playToClient(
+                InstantSpellFxPacket.TYPE,
+                InstantSpellFxPacket.STREAM_CODEC,
+                InstantSpellFxPacket::handleClient
+        );
     }
 }

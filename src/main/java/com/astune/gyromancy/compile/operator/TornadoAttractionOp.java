@@ -91,7 +91,7 @@ public final class TornadoAttractionOp extends OnEntityTickOp {
 
         Vec3 center = ctx.position();
         AABB searchBox = ctx.bounds().inflate(radius);
-        for (Entity target : ctx.level().getEntities(ctx.owner(), searchBox,
+        for (Entity target : ctx.level().getEntities(ctx.owner().entity(), searchBox,
                 entity -> entity.isAlive())) {
             Vec3 radialOffset = target.getBoundingBox().getCenter().subtract(center);
             double distance = radialOffset.length();

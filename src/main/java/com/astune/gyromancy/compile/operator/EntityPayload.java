@@ -1,6 +1,7 @@
 package com.astune.gyromancy.compile.operator;
 
 import com.astune.gyromancy.Gyromancy;
+import com.astune.gyromancy.api.effect.MagicEffect;
 import com.mojang.serialization.Codec;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -8,7 +9,6 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.ArrayList;
@@ -73,7 +73,7 @@ public abstract class EntityPayload {
 
     public void onOwnerRemoved(Level level) {}
 
-    public void onOwnerRemoved(Level level, Entity owner) {
+    public void onOwnerRemoved(Level level, MagicEffect owner) {
         onOwnerRemoved(level);
     }
 

@@ -27,7 +27,7 @@ public class RemoveOnHitOp extends TriggerOp {
         Vec3 velocity = ctx.velocity();
         if(velocity.lengthSqr() <= 1e-8) return false;
         HitResult blockHit = ctx.level().clip(new ClipContext(ctx.position(), ctx.position().add(velocity),
-                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, ctx.owner()));
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, ctx.owner().entity()));
         if (blockHit.getType() != HitResult.Type.MISS) return true;
         return !ctx.level().getEntitiesOfClass(LivingEntity.class,
                 ctx.bounds().expandTowards(velocity).inflate(0.1), LivingEntity::isAlive).isEmpty();

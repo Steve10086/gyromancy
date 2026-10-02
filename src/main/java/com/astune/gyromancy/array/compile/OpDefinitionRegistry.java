@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.jar.JarEntry;
@@ -72,9 +73,50 @@ public final class OpDefinitionRegistry {
     }
 
     private static List<String> discoverOperatorClassNames() {
-        List<String> neoForgeScanData = discoverNeoForgeScanDataClassNames();
-        if (!neoForgeScanData.isEmpty()) return neoForgeScanData;
+        List<String> scanDataClasses = discoverNeoForgeScanDataClassNames();
+        List<String> classpathClasses = discoverClasspathClassNames();
+        if (scanDataClasses.isEmpty()) return classpathClasses;
+        if (classpathClasses.isEmpty()) return scanDataClasses;
 
+        // NeoForge's annotation scan data can lag behind classes added during
+        // development, so both sources are always merged. Registration is
+        // idempotent, and non-annotated classes are skipped by reflection.
+        LinkedHashSet<String> merged = new LinkedHashSet<>(scanDataClasses);
+        merged.addAll(classpathClasses);
+        Gyromancy.LOGGER.debug("[OpDefinitionRegistry] Discovery merged scanData={} classpath={}",
+                scanDataClasses.size(), classpathClasses.size());
+        return merged.stream().sorted().toList();
+    }
+
+    private static List<String> discoverNeoForgeScanDataClassNames() {
+        ModList modList = ModList.get();
+        if (modList == null) return List.of();
+
+        LinkedHashSet<String> classNames = new LinkedHashSet<>();
+        for (ModFileScanData data : modList.getAllScanData()) {
+            data.getAnnotatedBy(RegisteredOp.class, ElementType.TYPE)
+                    .map(annotation -> className(annotation.clazz()))
+                    .filter(OpDefinitionRegistry::isOperatorClass)
+                    .forEach(classNames::add);
+            // Some development scan data records classes without their
+            // annotation set, so every operator-package class is also checked.
+            data.getClasses().stream()
+                    .map(classData -> className(classData.clazz()))
+                    .filter(OpDefinitionRegistry::isOperatorClass)
+                    .forEach(classNames::add);
+        }
+        return List.copyOf(classNames);
+    }
+
+    private static String className(org.objectweb.asm.Type type) {
+        return type.getClassName().replace('/', '.');
+    }
+
+    private static boolean isOperatorClass(String name) {
+        return name.startsWith(OPERATOR_PACKAGE + ".");
+    }
+
+    private static List<String> discoverClasspathClassNames() {
         List<String> classNames = new ArrayList<>();
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
         if (loader == null) loader = OpDefinitionRegistry.class.getClassLoader();
@@ -93,19 +135,6 @@ public final class OpDefinitionRegistry {
             throw new IllegalStateException("Failed to discover operator definitions", e);
         }
         return classNames.stream().distinct().sorted().toList();
-    }
-
-    private static List<String> discoverNeoForgeScanDataClassNames() {
-        ModList modList = ModList.get();
-        if (modList == null) return List.of();
-        return modList.getAllScanData().stream()
-                .flatMap(data -> data.getAnnotatedBy(RegisteredOp.class, ElementType.TYPE))
-                .map(ModFileScanData.AnnotationData::clazz)
-                .map(type -> type.getClassName().replace('/', '.'))
-                .filter(name -> name.startsWith(OPERATOR_PACKAGE + "."))
-                .distinct()
-                .sorted()
-                .toList();
     }
 
     private static List<String> discoverFileClasses(URL resource) {

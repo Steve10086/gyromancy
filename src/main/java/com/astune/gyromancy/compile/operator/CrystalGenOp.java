@@ -1,7 +1,7 @@
 package com.astune.gyromancy.compile.operator;
 
+import com.astune.gyromancy.api.effect.MagicEffect;
 import com.astune.gyromancy.api.element.ElementType;
-import com.astune.gyromancy.entity.MagicEntity;
 import com.astune.gyromancy.network.CrystalSpawnFxPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -22,7 +22,7 @@ import java.util.function.Predicate;
  * their effect's active geometry.
  *
  * <p>The payload keeps a transient map of legal candidate positions inside
- * {@link MagicEntity#listInside()}. Every {@link #SCAN_INTERVAL} ticks the map
+ * {@link MagicEffect#listInside()}. Every {@link #SCAN_INTERVAL} ticks the map
  * is resynchronised against the effect geometry and the element storage:
  * positions that left the geometry or no longer qualify are dropped, and
  * surviving entries have their residency timer advanced by {@link
@@ -75,7 +75,8 @@ public abstract class CrystalGenOp extends OnEntityTickOp {
 
     @Override
     public void onEntityTick(EntityTickContext ctx) {
-        if (ctx.isClientSide() || !(ctx.owner() instanceof MagicEntity effect)) return;
+        MagicEffect effect = ctx.owner();
+        if (ctx.isClientSide() || effect == null) return;
         Level level = ctx.level();
 
         if (pendingCrystal != null) {

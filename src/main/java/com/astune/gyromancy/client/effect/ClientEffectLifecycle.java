@@ -26,6 +26,7 @@ public final class ClientEffectLifecycle {
         ArrayClientState.onLevelUnload(event);
         CanvasClientState.onLevelUnload(event);
         FlipbookEffect.clearAll();
+        InstantSpellEffects.clear();
         EntityEffect.clearAll();
         VortexOrbitEffect.clearAll();
         CrystalSpawnEffects.clear();

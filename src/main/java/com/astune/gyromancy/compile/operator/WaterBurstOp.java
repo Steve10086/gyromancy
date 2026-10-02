@@ -34,7 +34,7 @@ public final class WaterBurstOp extends TriggerOp {
         Vec3 velocity = ctx.velocity();
         if (velocity.lengthSqr() <= 1.0E-8) return false;
         HitResult blockHit = ctx.level().clip(new ClipContext(ctx.position(), ctx.position().add(velocity),
-                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, ctx.owner()));
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, ctx.owner().entity()));
         if (blockHit.getType() != HitResult.Type.MISS) return true;
         return !ctx.level().getEntitiesOfClass(LivingEntity.class,
                 ctx.bounds().expandTowards(velocity).inflate(0.1), LivingEntity::isAlive).isEmpty();
@@ -55,7 +55,7 @@ public final class WaterBurstOp extends TriggerOp {
         double radius = ctx.targetSize() / 2.0;
         Vec3 front = ctx.position().add(0.0, radius, 0.0).add(direction.scale(radius));
         double range = Math.max(1.0, radius);
-        for (Entity entity : ctx.level().getEntities(ctx.owner(),
+        for (Entity entity : ctx.level().getEntities(ctx.owner().entity(),
                 ctx.bounds().inflate(range).expandTowards(direction.scale(range)))) {
             if (!entity.isAlive()
                     || entity instanceof ItemEntity

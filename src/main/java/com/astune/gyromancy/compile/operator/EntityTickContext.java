@@ -1,5 +1,6 @@
 package com.astune.gyromancy.compile.operator;
 
+import com.astune.gyromancy.api.effect.MagicEffect;
 import com.astune.gyromancy.element.ElementStorageManager;
 import com.astune.gyromancy.entity.field.MagicFieldEntity;
 import com.astune.gyromancy.entity.ball.MagicBallEntity;
@@ -15,7 +16,7 @@ import java.util.function.Consumer;
 import java.util.function.DoubleConsumer;
 
 public final class EntityTickContext {
-    private final Entity owner;
+    private final MagicEffect owner;
     private final Object parent;
     private final Level level;
     private final int tickCount;
@@ -39,7 +40,7 @@ public final class EntityTickContext {
     private final BiConsumer<MagicBallEntity, String> bindGeneratedEntity;
     private final DoubleConsumer setTargetVolume;
     private final DoubleConsumer setAverageElementLevel;
-    public EntityTickContext(Entity owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
+    public EntityTickContext(MagicEffect owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
                              Vec3 facing, Vec3 acceleration, AABB bounds, boolean clientSide, boolean alive,
                              boolean fullyGrown, boolean impact, float size, float targetSize,
                              double averageElementLevel, Map<String, Object> data,
@@ -51,7 +52,7 @@ public final class EntityTickContext {
                 bindGeneratedEntity, setTargetVolume, setAverageElementLevel, null);
     }
 
-    public EntityTickContext(Entity owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
+    public EntityTickContext(MagicEffect owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
                              Vec3 facing, Vec3 acceleration, AABB bounds, boolean clientSide, boolean alive,
                              boolean fullyGrown, boolean impact, float size, float targetSize,
                              double averageElementLevel, Map<String, Object> data,
@@ -64,7 +65,7 @@ public final class EntityTickContext {
                 bindGeneratedEntity, setTargetVolume, setAverageElementLevel, arrayFrame, null);
     }
 
-    public EntityTickContext(Entity owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
+    public EntityTickContext(MagicEffect owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
                              Vec3 facing, Vec3 acceleration, AABB bounds, boolean clientSide, boolean alive,
                              boolean fullyGrown, boolean impact, float size, float targetSize,
                              double averageElementLevel, Map<String, Object> data,
@@ -77,7 +78,7 @@ public final class EntityTickContext {
                 bindGeneratedEntity, setTargetVolume, setAverageElementLevel, arrayFrame, parent, false);
     }
 
-    public EntityTickContext(Entity owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
+    public EntityTickContext(MagicEffect owner, Level level, int tickCount, Vec3 position, Vec3 velocity,
                              Vec3 facing, Vec3 acceleration, AABB bounds, boolean clientSide, boolean alive,
                              boolean fullyGrown, boolean impact, float size, float targetSize,
                              double averageElementLevel, Map<String, Object> data,
@@ -122,6 +123,18 @@ public final class EntityTickContext {
                 entity.parent(), entity.hasBlockImpactThisTick());
     }
 
+    /** Builds the single-tick context used by non-entity one-shot effect hosts. */
+    public static EntityTickContext forInstant(MagicEffect effect, Map<String, Object> data,
+                                               Vec3 position, AABB bounds, Vec3 facing,
+                                               float size, double averageElementLevel) {
+        Level level = effect.level();
+        return new EntityTickContext(effect, level, 0, position, Vec3.ZERO, facing, Vec3.ZERO,
+                bounds, false, effect.isAlive(), true, false, size, size, averageElementLevel, data,
+                effect::discard,
+                level == null ? entity -> {} : level::addFreshEntity,
+                (entity, key) -> {}, ignored -> {}, ignored -> {}, null, null, false);
+    }
+
     public static EntityTickContext from(MagicFieldEntity entity, Map<String, Object> data) {
         float size = (float) Math.max(entity.fieldBounds().getXsize(),
                 Math.max(entity.fieldBounds().getYsize(), entity.fieldBounds().getZsize()));
@@ -132,7 +145,7 @@ public final class EntityTickContext {
                 entity::bindGeneratedEntity, ignored -> {}, ignored -> {}, null, entity.parent());
     }
 
-    public Entity owner() { return owner; }
+    public MagicEffect owner() { return owner; }
 
     public Object parent() { return parent; }
 
