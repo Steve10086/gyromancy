@@ -42,6 +42,10 @@ final class FireballRenderColors {
         return transition.color(entity.tickCount + partialTick);
     }
 
+    static int elementColorForAverage(double averageElementLevel) {
+        return elementTargetColor(averageElementLevel);
+    }
+
     private static int elementTargetColor(double averageElementLevel) {
         float tier = (float) Math.sqrt(Math.max(0.0, averageElementLevel) / 1000.0);
         if (tier <= 1.0F) return COLORS[0];

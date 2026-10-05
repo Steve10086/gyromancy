@@ -11,6 +11,7 @@ import com.astune.gyromancy.array.runtime.OpRuntimeContext;
 import com.astune.gyromancy.array.runtime.RuntimeHandle;
 import com.astune.gyromancy.array.runtime.emit.EmitResult;
 import com.astune.gyromancy.array.runtime.emit.EntityEmitter;
+import com.astune.gyromancy.entity.MagicEntity;
 import com.astune.gyromancy.entity.ball.MagicBallEntity;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -70,7 +71,7 @@ public abstract class ProjectileEntityOp  extends EntityEffectOp {
     public final void deactivate(OpRuntimeContext ctx, Map<String, Object> scratchData) {
         for (var emitted : EmitResult.emissions(scratchData)) {
             if (emitted.ref() instanceof ArrayObject.EntityRef ref
-                    && ref.resolve(ctx.level()) instanceof MagicBallEntity entity) {
+                    && ref.resolve(ctx.level()) instanceof MagicEntity entity) {
                 entity.readyToDiscard();
             }
         }

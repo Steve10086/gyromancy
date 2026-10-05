@@ -4,6 +4,7 @@ import com.astune.gyromancy.Gyromancy;
 import com.astune.gyromancy.client.effect.EntityEffect;
 import com.astune.gyromancy.client.effect.VortexOrbitEffect;
 import com.astune.gyromancy.entity.ball.FireballEntity;
+import com.astune.gyromancy.network.FireballStateEventPacket;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.Particle;
@@ -14,6 +15,7 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.Level;
 
 import java.util.Map;
 import java.util.Collections;
@@ -43,8 +45,10 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
 
     private final Map<FireballEntity, Integer> lastParticleTick = new WeakHashMap<>();
     private final Map<FireballEntity, VortexOrbitEffect> vortexEffects = new WeakHashMap<>();
-    private final Map<FireballEntity, EntityEffect> bodyEffects = new WeakHashMap<>();
+    private final Map<FireballEntity, EntityEffect> smallBodyEffects = new WeakHashMap<>();
+    private final Map<FireballEntity, EntityEffect> overlayEffects = new WeakHashMap<>();
     private final Map<FireballEntity, FireballRenderColors.ColorTransition> elementColors = new WeakHashMap<>();
+    private final Set<FireballEntity> terminalEntities = Collections.newSetFromMap(new WeakHashMap<>());
 
     public FireballRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -55,13 +59,43 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
         for (FireballRenderer renderer : Set.copyOf(INSTANCES)) renderer.clearEffects();
     }
 
+    /** Applies an authoritative terminal-state input, even if the tracked entity was already removed. */
+    public static void onStateEvent(FireballStateEventPacket packet) {
+        var client = Minecraft.getInstance();
+        Level level = client.level;
+        if (level == null) return;
+
+        var tracked = level.getEntity(packet.entityId());
+        if (tracked instanceof FireballEntity fireball) {
+            FireballRenderer selected = null;
+            for (FireballRenderer renderer : INSTANCES) {
+                if (selected == null || renderer.smallBodyEffects.containsKey(fireball)) selected = renderer;
+                if (renderer.smallBodyEffects.containsKey(fireball)) break;
+            }
+            if (selected != null) {
+                selected.beginStateEvent(fireball, packet);
+                return;
+            }
+        }
+
+        EntityEffect effect = new EntityEffect(level, packet.position(), FIRE_BALL_FX)
+                .setSize((float) (Math.max(0.1F, packet.ballSize()) * RENDER_SCALE))
+                .setOffset(0, Math.max(0.1F, packet.ballSize()) * MODEL_Y_OFFSET, 0)
+                .setColor(FireballRenderColors.elementColorForAverage(packet.averageElementLevel()));
+        effect.start();
+        if (effect.sendEventAndDetach(packet.eventName(), packet.position()) == 0) effect.stop();
+    }
+
     private void clearEffects() {
-        bodyEffects.values().forEach(EntityEffect::stop);
+        smallBodyEffects.values().forEach(EntityEffect::stop);
+        overlayEffects.values().forEach(EntityEffect::stop);
         vortexEffects.values().forEach(VortexOrbitEffect::kill);
-        bodyEffects.clear();
+        smallBodyEffects.clear();
+        overlayEffects.clear();
         vortexEffects.clear();
         lastParticleTick.clear();
         elementColors.clear();
+        terminalEntities.clear();
     }
 
     @Override
@@ -71,27 +105,46 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
             cleanup(entity);
             return;
         }
+        if (terminalEntities.contains(entity)) return;
 
         float size = max(0.1F, entity.getBallSize());
         boolean growing = !entity.isFullyGrown();
 
-        // ── body: EntityEffect with fire_ball.fx ──
-        EntityEffect body = bodyEffects.get(entity);
-        if (body == null) {
-            body = entity.getTargetBallSize() > SMALL_SIZE ? new EntityEffect(entity, FIRE_BALL_FX) : new EntityEffect(entity, SMALL_FIRE_BALL_FX);
-            body.setSize((float) (size * RENDER_SCALE))
-                    .setOffset(0, size * MODEL_Y_OFFSET, 0);
-            body.setColor(FireballRenderColors.elementColor(entity, partialTick, elementColors));
-            body.start();
-            bodyEffects.put(entity, body);
+        // The small effect is the persistent base layer at every size.
+        EntityEffect smallBody = smallBodyEffects.get(entity);
+        if (smallBody == null) {
+            smallBody = new EntityEffect(entity, SMALL_FIRE_BALL_FX);
+            smallBody.setSize((float) (size * RENDER_SCALE))
+                    .setOffset(0, size * MODEL_Y_OFFSET, 0)
+                    .setColor(FireballRenderColors.elementColor(entity, partialTick, elementColors));
+            smallBody.start();
+            smallBodyEffects.put(entity, smallBody);
         }
-        else if (growing)  {
-            body.setSize((float) (size * RENDER_SCALE)).setOffset(0, size * MODEL_Y_OFFSET, 0);
-            body.setColor(FireballRenderColors.elementColor(entity, partialTick, elementColors));
-            body.tick();
+        if (!smallBody.isDetached()) {
+            smallBody.setSize((float) (size * RENDER_SCALE)).setOffset(0, size * MODEL_Y_OFFSET, 0);
+            smallBody.setColor(FireballRenderColors.elementColor(entity, partialTick, elementColors));
+            smallBody.tick();
+        }
+
+        // Larger fireballs add the stateful effect over the persistent small layer.
+        if (size > SMALL_SIZE) {
+            EntityEffect overlay = overlayEffects.get(entity);
+            if (overlay == null) {
+                overlay = new EntityEffect(entity, FIRE_BALL_FX);
+                overlay.setSize((float) (size * RENDER_SCALE))
+                        .setOffset(0, size * MODEL_Y_OFFSET, 0)
+                        .setColor(FireballRenderColors.elementColor(entity, partialTick, elementColors));
+                overlay.start();
+                overlayEffects.put(entity, overlay);
+            }
+            if (!overlay.isDetached()) {
+                overlay.setSize((float) (size * RENDER_SCALE)).setOffset(0, size * MODEL_Y_OFFSET, 0);
+                overlay.setColor(FireballRenderColors.elementColor(entity, partialTick, elementColors));
+                overlay.tick();
+            }
         } else {
-            body.setColor(FireballRenderColors.elementColor(entity, partialTick, elementColors));
-            body.tick();
+            EntityEffect overlay = overlayEffects.remove(entity);
+            if (overlay != null && !overlay.isDetached()) overlay.stop();
         }
 
         // ── spawn vortex: VortexOrbitEffect during growth ──
@@ -126,11 +179,59 @@ public class FireballRenderer extends EntityRenderer<FireballEntity> {
     }
 
     private void cleanup(FireballEntity entity) {
-        EntityEffect body = bodyEffects.remove(entity);
-        if (body != null) body.stop();
+        EntityEffect smallBody = smallBodyEffects.remove(entity);
+        if (smallBody != null && !smallBody.isDetached()) smallBody.stop();
+        EntityEffect overlay = overlayEffects.remove(entity);
+        if (overlay != null && !overlay.isDetached()) overlay.stop();
         elementColors.remove(entity);
+        terminalEntities.remove(entity);
         VortexOrbitEffect vortex = vortexEffects.remove(entity);
         if (vortex != null) vortex.kill();
+    }
+
+    private void beginStateEvent(FireballEntity entity, FireballStateEventPacket packet) {
+        if (!terminalEntities.add(entity)) return;
+
+        float size = Math.max(0.1F, packet.ballSize());
+        int targets = 0;
+
+        EntityEffect smallBody = smallBodyEffects.get(entity);
+        if (smallBody != null && !smallBody.isDetached()) {
+            smallBody.setSize((float) (size * RENDER_SCALE))
+                    .setOffset(0, size * MODEL_Y_OFFSET, 0)
+                    .setColor(FireballRenderColors.elementColor(entity, 0, elementColors));
+            targets += smallBody.sendEventAndDetach(packet.eventName(), packet.position());
+            if (!smallBody.isDetached()) {
+                smallBodyEffects.remove(entity);
+                smallBody.stop();
+            }
+        }
+
+        EntityEffect overlay = overlayEffects.get(entity);
+        if (overlay != null && !overlay.isDetached()) {
+            overlay.setSize((float) (size * RENDER_SCALE))
+                    .setOffset(0, size * MODEL_Y_OFFSET, 0)
+                    .setColor(FireballRenderColors.elementColor(entity, 0, elementColors));
+            targets += overlay.sendEventAndDetach(packet.eventName(), packet.position());
+            if (!overlay.isDetached()) {
+                overlayEffects.remove(entity);
+                overlay.stop();
+            }
+        }
+
+        if (overlay == null && targets == 0) {
+            EntityEffect terminal = new EntityEffect(entity.level(), packet.position(), FIRE_BALL_FX)
+                    .setSize((float) (size * RENDER_SCALE))
+                    .setOffset(0, size * MODEL_Y_OFFSET, 0)
+                    .setColor(FireballRenderColors.elementColor(entity, 0, elementColors));
+            terminal.start();
+            if (terminal.sendEventAndDetach(packet.eventName(), packet.position()) == 0) terminal.stop();
+        }
+
+        VortexOrbitEffect vortex = vortexEffects.remove(entity);
+        if (vortex != null) vortex.kill();
+        lastParticleTick.remove(entity);
+        elementColors.remove(entity);
     }
 
     private void spawnFlameParticles(FireballEntity entity) {

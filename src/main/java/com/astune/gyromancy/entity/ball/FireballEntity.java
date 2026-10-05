@@ -4,6 +4,7 @@ import com.astune.gyromancy.compile.operator.EntityPayload;
 import com.astune.gyromancy.compile.operator.ExplosionOp;
 import com.astune.gyromancy.compile.operator.FireProjectileOp;
 import com.astune.gyromancy.api.element.ElementType;
+import com.astune.gyromancy.network.FireballStateEventPacket;
 import com.astune.gyromancy.registry.ModEntities;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.EntityType;
@@ -17,6 +18,9 @@ import java.util.List;
 public class FireballEntity extends MagicBallEntity {
     private static final double MAX_SIZE = 4.5;
     private static final float DEFAULT_EXPLOSION_POWER = 1.5F;
+    private boolean clientExplosionPending;
+    private boolean lifetimeDiscardPending;
+    private boolean terminalVisualEventSent;
 
     public FireballEntity(EntityType<FireballEntity> type, Level level) {
         super(type, level, ElementType.FIRE);
@@ -33,8 +37,34 @@ public class FireballEntity extends MagicBallEntity {
 
     @Override
     protected boolean tickBeforePayload() {
+        if (level().isClientSide && clientExplosionPending) return false;
         if (!super.tickBeforePayload()) return false;
         return true;
+    }
+
+    /** Classifies a vanilla discard request without changing generic payload operators. */
+    public boolean onDiscardRequested() {
+        boolean explosionDiscard = !lifetimeDiscardPending
+                && (hasImpactThisTick() || getBallSize() > MAX_SIZE);
+        if (level().isClientSide && explosionDiscard) {
+            clientExplosionPending = true;
+            terminalVisualEventSent = true;
+            return true;
+        }
+        if (explosionDiscard) sendTerminalVisualEvent(true);
+        return false;
+    }
+
+    @Override
+    protected void onDiscardLifetimeExpired() {
+        lifetimeDiscardPending = true;
+        sendTerminalVisualEvent(false);
+    }
+
+    private void sendTerminalVisualEvent(boolean explosion) {
+        if (terminalVisualEventSent) return;
+        terminalVisualEventSent = true;
+        FireballStateEventPacket.broadcast(this, explosion);
     }
 
     private void initRuntimeData(float explosionPower) {

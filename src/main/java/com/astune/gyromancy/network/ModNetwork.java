@@ -104,5 +104,11 @@ public final class ModNetwork {
                 InstantSpellFxPacket.STREAM_CODEC,
                 InstantSpellFxPacket::handleClient
         );
+
+        registrar.playToClient(
+                FireballStateEventPacket.TYPE,
+                FireballStateEventPacket.STREAM_CODEC,
+                FireballStateEventPacket::handleClient
+        );
     }
 }

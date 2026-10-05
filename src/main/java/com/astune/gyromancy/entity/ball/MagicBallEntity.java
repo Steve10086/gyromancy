@@ -110,7 +110,7 @@ public abstract class MagicBallEntity extends MagicEntity {
     }
 
     /** Starts this projectile's deferred cleanup timer. */
-    public final void readyToDiscard() {
+    public void readyToDiscard() {
         if (!launched) {
             lifetime = maxLifetime;
         }else{
@@ -136,9 +136,13 @@ public abstract class MagicBallEntity extends MagicEntity {
     private boolean advanceDiscardTimer() {
         if (level().isClientSide || lifetime <= 0) return false;
         if (++lifetime <= maxLifetime) return false;
+        onDiscardLifetimeExpired();
         discard();
         return true;
     }
+
+    /** Called only when a started ready-to-discard timer reaches its configured limit. */
+    protected void onDiscardLifetimeExpired() {}
 
     @Override
     protected EntityTickContext payloadContext(Map<String, Object> runtimeData) {

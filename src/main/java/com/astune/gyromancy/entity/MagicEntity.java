@@ -42,6 +42,8 @@ public abstract class MagicEntity extends Entity implements MagicEffect {
     private Object parent;
     private boolean parentAssigned;
     private boolean parentBindingAllowed = true;
+    /** Prevents re-triggering subclass discard timers every tick. */
+    private boolean missingArrayParentDiscardRequested;
     private String savedParentType;
     private UUID savedParentArrayId;
     private UUID savedParentEntityId;
@@ -65,9 +67,17 @@ public abstract class MagicEntity extends Entity implements MagicEffect {
             setDeltaMovement(getDeltaMovement().add(0.0, -gravity, 0.0));
         }
     }
-
+    public void readyToDiscard(){
+        this.discard();
+    }
     @Override
     public final void tick() {
+        if (!level().isClientSide && !missingArrayParentDiscardRequested
+                && hasMissingSavedArrayParent()) {
+            missingArrayParentDiscardRequested = true;
+            readyToDiscard();
+            if (!isAlive()) return;
+        }
         if (!tickBeforePayload() || !isAlive()) return;
         tickPayloads();
         if (!isAlive()) return;
@@ -124,6 +134,11 @@ public abstract class MagicEntity extends Entity implements MagicEffect {
     public final boolean parentPending() {
         return parentBindingAllowed && parent == null && parentAssigned
                 && savedParentType != null && !"NONE".equals(savedParentType);
+    }
+
+    private boolean hasMissingSavedArrayParent() {
+        return parentBindingAllowed && parentAssigned && "ARRAY".equals(savedParentType)
+                && savedParentArrayId != null && parent() == null;
     }
 
     /** Controls whether array binding may supply a default parent later. */
